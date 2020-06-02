@@ -21,7 +21,7 @@ import (
 	"encoding/pem"
 	"fmt"
 
-	"github.com/google/gnxi/gnoi/cert/pb"
+	"github.com/neoul/gnxi/gnoi/cert/pb"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 

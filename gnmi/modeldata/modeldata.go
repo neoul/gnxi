@@ -14,44 +14,33 @@ limitations under the License.
 */
 
 // Package modeldata contains the following model data in gnmi proto struct:
-//	openconfig-interfaces 2.0.0,
-//	openconfig-openflow 0.1.0,
-//	openconfig-platform 0.5.0,
-//	openconfig-system 0.2.0.
+//  - openconfig-interfaces.yang 2.4.3
+//  - hfr-oc-dev.yang 0.1.1
+//  - hfr-oc-roe.yang 0.1.1
+//  - hfr-oc-tsn.yang 0.1.1
 package modeldata
 
 import (
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
-const (
-	// OpenconfigInterfacesModel is the openconfig YANG model for interfaces.
-	OpenconfigInterfacesModel = "openconfig-interfaces"
-	// OpenconfigOpenflowModel is the openconfig YANG model for openflow.
-	OpenconfigOpenflowModel = "openconfig-openflow"
-	// OpenconfigPlatformModel is the openconfig YANG model for platform.
-	OpenconfigPlatformModel = "openconfig-platform"
-	// OpenconfigSystemModel is the openconfig YANG model for system.
-	OpenconfigSystemModel = "openconfig-system"
-)
-
 var (
 	// ModelData is a list of supported models.
 	ModelData = []*pb.ModelData{{
-		Name:         OpenconfigInterfacesModel,
+		Name:         "openconfig-interfaces",
 		Organization: "OpenConfig working group",
-		Version:      "2.0.0",
+		Version:      "2.4.3",
 	}, {
-		Name:         OpenconfigOpenflowModel,
-		Organization: "OpenConfig working group",
-		Version:      "0.1.0",
+		Name:         "hfr-oc-dev",
+		Organization: "HFR,Inc. for Mobile Internet",
+		Version:      "0.1.1",
 	}, {
-		Name:         OpenconfigPlatformModel,
-		Organization: "OpenConfig working group",
-		Version:      "0.5.0",
+		Name:         "hfr-oc-roe",
+		Organization: "HFR,Inc. for Mobile Internet",
+		Version:      "0.1.1",
 	}, {
-		Name:         OpenconfigSystemModel,
-		Organization: "OpenConfig working group",
-		Version:      "0.2.0",
+		Name:         "hfr-oc-tsn",
+		Organization: "HFR,Inc. for Mobile Internet",
+		Version:      "0.1.1",
 	}}
 )

@@ -24,8 +24,8 @@ signing authority is recommended.
 ## Install
 
 ```
-go get github.com/google/gnxi/gnoi_cert
-go install github.com/google/gnxi/gnoi_cert
+go get github.com/neoul/gnxi/gnoi_cert
+go install github.com/neoul/gnxi/gnoi_cert
 ```
 
 ## Run

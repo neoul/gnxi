@@ -23,8 +23,8 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	"github.com/google/gnxi/gnoi/cert"
-	"github.com/google/gnxi/utils/entity"
+	"github.com/neoul/gnxi/gnoi/cert"
+	"github.com/neoul/gnxi/utils/entity"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )

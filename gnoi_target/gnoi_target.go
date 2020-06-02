@@ -21,7 +21,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/google/gnxi/gnoi"
+	"github.com/neoul/gnxi/gnoi"
 	"google.golang.org/grpc"
 
 	log "github.com/golang/glog"

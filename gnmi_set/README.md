@@ -5,8 +5,8 @@ A simple shell binary that performs a SET against a gNMI Target.
 ## Install
 
 ```
-go get github.com/google/gnxi/gnmi_set
-go install github.com/google/gnxi/gnmi_set
+go get github.com/neoul/gnxi/gnmi_set
+go install github.com/neoul/gnxi/gnmi_set
 ```
 
 ## Run

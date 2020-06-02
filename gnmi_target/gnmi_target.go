@@ -31,11 +31,11 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
-	"github.com/google/gnxi/gnmi"
-	"github.com/google/gnxi/gnmi/modeldata"
-	"github.com/google/gnxi/gnmi/modeldata/gostruct"
+	"github.com/neoul/gnxi/gnmi"
+	"github.com/neoul/gnxi/gnmi/modeldata"
+	"github.com/neoul/gnxi/gnmi/modeldata/gostruct"
 
-	"github.com/google/gnxi/utils/credentials"
+	"github.com/neoul/gnxi/utils/credentials"
 
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )

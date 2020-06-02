@@ -29,8 +29,8 @@ This Target currently only supports x509 Certificates and RSA Keys.
 ## Install
 
 ```
-go get github.com/google/gnxi/gnoi_target
-go install github.com/google/gnxi/gnoi_target
+go get github.com/neoul/gnxi/gnoi_target
+go install github.com/neoul/gnxi/gnoi_target
 ```
 
 ## Run

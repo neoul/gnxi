@@ -1,7 +1,7 @@
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![GoDoc](https://godoc.org/github.com/google/gnxi?status.svg)](https://godoc.org/github.com/google/gnxi)
-[![Go Report Card](https://goreportcard.com/badge/github.com/google/gnxi)](https://goreportcard.com/report/github.com/google/gnxi)
+[![GoDoc](https://godoc.org/github.com/neoul/gnxi?status.svg)](https://godoc.org/github.com/neoul/gnxi)
+[![Go Report Card](https://goreportcard.com/badge/github.com/neoul/gnxi)](https://goreportcard.com/report/github.com/neoul/gnxi)
 [![Build Status](https://travis-ci.org/google/gnxi.svg?branch=master)](https://travis-ci.org/google/gnxi)
 [![codecov.io](https://codecov.io/github/google/gnxi/coverage.svg?branch=master)](https://codecov.io/github/google/gnxi?branch=master)
 
@@ -43,7 +43,7 @@ Clone the project to your __go__ source folder:
 ```
 mkdir -p $GOPATH/src/github.com/google/
 cd $GOPATH/src/github.com/google/
-git clone https://github.com/google/gnxi.git
+git clone https://github.com/neoul/gnxi.git
 ```
 
 ### Running
@@ -51,7 +51,7 @@ git clone https://github.com/google/gnxi.git
 To run the binaries:
 
 ```
-cd $GOPATH/src/github.com/google/gnxi/gnmi_get
+cd $GOPATH/src/github.com/neoul/gnxi/gnmi_get
 go run ./gnmi_get.go
 ```
 

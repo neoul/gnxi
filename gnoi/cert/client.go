@@ -22,7 +22,7 @@ import (
 	"encoding/pem"
 	"fmt"
 
-	"github.com/google/gnxi/gnoi/cert/pb"
+	"github.com/neoul/gnxi/gnoi/cert/pb"
 	"google.golang.org/grpc"
 )
 
@@ -46,17 +46,17 @@ func (c *Client) Rotate(ctx context.Context, certID string, minKeySize uint32, p
 		RotateRequest: &pb.RotateCertificateRequest_GenerateCsr{
 			GenerateCsr: &pb.GenerateCSRRequest{
 				CsrParams: &pb.CSRParams{
-					Type:       pb.CertificateType_CT_X509,
-					MinKeySize: minKeySize,
-					KeyType:    pb.KeyType_KT_RSA,
-					CommonName: params.CommonName,
+					Type:               pb.CertificateType_CT_X509,
+					MinKeySize:         minKeySize,
+					KeyType:            pb.KeyType_KT_RSA,
+					CommonName:         params.CommonName,
 					Country:            params.Country[0],
 					Organization:       params.Organization[0],
 					OrganizationalUnit: params.OrganizationalUnit[0],
 					State:              params.Province[0],
 					IpAddress:          ipAddress,
 				},
-				CertificateId:certID,
+				CertificateId: certID,
 			},
 		},
 	}); err != nil {
@@ -139,18 +139,18 @@ func (c *Client) Install(ctx context.Context, certID string, minKeySize uint32, 
 	if err = stream.Send(&pb.InstallCertificateRequest{
 		InstallRequest: &pb.InstallCertificateRequest_GenerateCsr{
 			GenerateCsr: &pb.GenerateCSRRequest{CsrParams: &pb.CSRParams{
-				Type:       pb.CertificateType_CT_X509,
-				MinKeySize: minKeySize,
-				KeyType:    pb.KeyType_KT_RSA,
-				CommonName: params.CommonName,
+				Type:               pb.CertificateType_CT_X509,
+				MinKeySize:         minKeySize,
+				KeyType:            pb.KeyType_KT_RSA,
+				CommonName:         params.CommonName,
 				Country:            params.Country[0],
 				Organization:       params.Organization[0],
 				OrganizationalUnit: params.OrganizationalUnit[0],
 				State:              params.Province[0],
 				IpAddress:          ipAddress,
-			  },
-			  CertificateId:certID,
-		  },
+			},
+				CertificateId: certID,
+			},
 		},
 	}); err != nil {
 		return fmt.Errorf("failed to send GenerateCSRRequest: %v", err)

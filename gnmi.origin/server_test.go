@@ -28,8 +28,8 @@ import (
 
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 
-	"github.com/google/gnxi/gnmi/modeldata"
-	"github.com/google/gnxi/gnmi/modeldata/gostruct"
+	"github.com/neoul/gnxi/gnmi/modeldata"
+	"github.com/neoul/gnxi/gnmi/modeldata/gostruct"
 )
 
 var (

@@ -24,12 +24,12 @@ import (
 	"flag"
 	"fmt"
 	"reflect"
-	"time"
 	"strings"
+	"time"
 
-	"github.com/google/gnxi/gnoi/cert"
-	"github.com/google/gnxi/utils/entity"
 	"github.com/kylelemons/godebug/pretty"
+	"github.com/neoul/gnxi/gnoi/cert"
+	"github.com/neoul/gnxi/utils/entity"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -196,20 +196,20 @@ func rotate() {
 
 // revoke revokes a certificate in authenticated mode.
 func revoke() {
-    	var revokeCertIDs  = []string { *certID }
+	var revokeCertIDs = []string{*certID}
 
-    	if *certIDs != "" {
-        	revokeCertIDs  = strings.FieldsFunc(*certIDs, func(r rune) bool { return r == ',' })
-        	if len(revokeCertIDs ) == 0 {
-            		log.Exit("Must specify comma separated certificate IDs when using -cert_ids")
-        	}
-    	} else if *certID == "" {
-               log.Exit("Must set a certificate ID with -cert_id or set multiple IDs with -cert_ids")
+	if *certIDs != "" {
+		revokeCertIDs = strings.FieldsFunc(*certIDs, func(r rune) bool { return r == ',' })
+		if len(revokeCertIDs) == 0 {
+			log.Exit("Must specify comma separated certificate IDs when using -cert_ids")
+		}
+	} else if *certID == "" {
+		log.Exit("Must set a certificate ID with -cert_id or set multiple IDs with -cert_ids")
 	}
 	conn, client := gnoiAuthenticated(*targetCN)
 	defer conn.Close()
 
-	revoked, err := client.RevokeCertificates(ctx, revokeCertIDs )
+	revoked, err := client.RevokeCertificates(ctx, revokeCertIDs)
 	if err != nil {
 		log.Exit("Failed RevokeCertificates:", err)
 	}

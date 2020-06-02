@@ -24,8 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/gnxi/gnoi/cert/pb"
 	"github.com/google/go-cmp/cmp"
+	"github.com/neoul/gnxi/gnoi/cert/pb"
 )
 
 // FilterInternalPB returns true for protobuf internal variables in a path.
