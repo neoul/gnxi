@@ -11,7 +11,7 @@ go install github.com/google/gnxi/gnmi_capabilities
 
 ## Run
 
-```
+```bash
 gnmi_capabilities \
   -target_addr localhost:10161 \
   -target_name hostname.com \
@@ -20,3 +20,17 @@ gnmi_capabilities \
   -ca ca.crt \
   -alsologtostderr
 ```
+
+```bash
+go run gnmi_capabilities.go \
+  -target_addr localhost:10161 \
+  -target_name 192.168.0.77 \
+  -key ../pki/client.key \
+  -cert ../pki/client.crt \
+  -ca ../pki/ca.crt \
+  -alsologtostderr
+```
+
+## To Be Check
+
+- What is target_name?

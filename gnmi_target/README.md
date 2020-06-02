@@ -11,13 +11,25 @@ go install github.com/google/gnxi/gnmi_target
 
 ## Run
 
-```
+```bash
 gnmi_target \
   -bind_address :10161 \
   -config openconfig-openflow.json \
   -key server.key \
   -cert server.crt \
   -ca ca.crt \
+  -username foo \
+  -password bar \
+  -alsologtostderr
+```
+
+```bash
+go run gnmi_target.go \
+  -bind_address :10161 \
+  -config openconfig-openflow.json \
+  -key ../pki/server.key \
+  -cert ../pki/server.crt \
+  -ca ../pki/ca.crt \
   -username foo \
   -password bar \
   -alsologtostderr
