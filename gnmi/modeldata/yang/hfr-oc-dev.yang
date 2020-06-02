@@ -1,0 +1,54 @@
+module hfr-oc-dev {
+
+  yang-version "1";
+
+  // namespace
+  namespace "urn:hfr:ns:hfr-oc-dev";
+
+  // prefix
+  prefix "hfr-oc-dev";
+
+  import openconfig-interfaces { prefix oc-if; }
+  import openconfig-extensions { prefix oc-ext; }
+
+  // meta
+  organization "HFR,Inc. for Mobile Internet";
+
+  contact
+      "HFR,Inc. for Mobile Internet
+
+      Address: Hana EZ tower 5F, 10, Seongnam-daero 43 beon-gil,
+        Bundang-gu, Seongnam-si, Gyeonggi-do, Korea
+      Tel: 82-31-712-7768 (Fax: 82-31-712-7948)
+      E-mail: resonant@hfrnet.com
+      Web: hfrnet.com
+      YANG desgined by: neoul@hfrnet.com";
+
+  description
+    "This module contains YANG deviations for HFR NE OpenConfig
+     Copyright (c) 2019 HFR,Inc. All rights reserved.";
+
+  oc-ext:openconfig-version "0.1.1";
+
+  revision "2020-06-01" {
+    description
+      "Inital model of HFR NE (Network Equipment) YANG model";
+    reference "0.1.1";
+  }
+
+  deviation /oc-if:interfaces/oc-if:interface/oc-if:hold-time {
+    description "Not supported";
+    deviate not-supported;
+  }
+  deviation /oc-if:interfaces/oc-if:interface/oc-if:subinterfaces {
+    description "Not supported";
+    deviate not-supported;
+  }
+  
+  deviation /oc-if:interfaces/oc-if:interface/oc-if:config {
+    description "Not configurable at OpenConfig model";
+    deviate replace {
+      config false;
+    }
+  }
+}

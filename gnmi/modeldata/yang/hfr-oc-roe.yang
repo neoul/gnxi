@@ -1,0 +1,339 @@
+module hfr-oc-roe {
+
+  // namespace
+  namespace "urn:hfr:ns:hfr-oc-roe";
+
+  // prefix
+  prefix "hfr-oc-roe";
+
+  // import some basic types
+  import hfr-oc-types { prefix hfr-oc-types; }
+  import openconfig-yang-types { prefix oc-yang; }
+  import openconfig-interfaces { prefix oc-if; }
+  import openconfig-extensions { prefix oc-ext; }
+
+  // meta
+  organization "HFR,Inc. for Mobile Internet";
+
+  contact 
+      "HFR,Inc. for Mobile Internet
+
+      Address: Hana EZ tower 5F, 10, Seongnam-daero 43 beon-gil,
+        Bundang-gu, Seongnam-si, Gyeonggi-do, Korea
+      Tel: 82-31-712-7768 (Fax: 82-31-712-7948)
+      E-mail: resonant@hfrnet.com
+      Web: hfrnet.com
+      YANG desgined by: neoul@hfrnet.com";
+
+ description
+    "This module contains HFR NE RoE (Radio over Ethernet) YANG model
+    for OpenConfig.
+    Copyright (c) 2019 HFR,Inc. All rights reserved. ";
+
+  oc-ext:openconfig-version "0.1.1";
+
+  revision "2020-06-01" {
+    description
+      "Inital model of HFR NE (Network Equipment) YANG model";
+    reference "0.1.1";
+  }
+
+  // identity statements
+
+  // typedef statements
+
+  typedef roe-mapper-type {
+    description
+      "Types of RoE (Radio Over Ethernet) mapper mode";
+
+    type enumeration {
+      enum AGNOSTIC {
+        description
+          "Structure-Agnostic (CPRI) mapper";
+      }
+      enum AWARE {
+        description
+          "Structure-Aware CPRI mapper";
+      }
+    }
+  }
+
+  typedef number-of-basicframe-type {
+    description
+      "The number of CPRI basicframe encapulated in RoE frames";
+
+    type enumeration {
+      enum NONE {
+        description
+          "Payload not defined";
+      }
+      enum X1 {
+        description
+          "1 basic frame per Packet";
+      }
+      enum X2 {
+        description
+          "2 basic frame per Packet";
+      }
+      enum X4 {
+        description
+          "4 basic frame per Packet";
+      }
+      enum X8 {
+        description
+          "8 basic frame per Packet";
+      }
+    }
+  }
+
+  typedef cpri-option-type {
+    description
+      "Types of RoE CPRI option. Each option has a static line bit rate.";
+
+    type enumeration {
+      enum CPRI_OPTION_3 {
+        description
+          "Line Bit Rate CPRI option 3 - 2457.6 Mbits/s";
+      }
+      enum CPRI_OPTION_5 {
+        description
+          "Line Bit Rate CPRI option 5 - 4915.2 Mbits/s";
+      }
+      enum CPRI_OPTION_7 {
+        description
+          "Line Bit Rate CPRI option 7 - 9830.4 Mbits/s";
+      }
+      enum CPRI_OPTION_8 {
+        description
+          "Line Bit Rate CPRI option 8 - 10137.6 Mbits/s";
+      }
+      enum CPRI_OPTION_10 {
+        description
+          "Line Bit Rate CPRI option 10 - 24330.2 Mbits/s";
+      }
+    }
+  }
+
+  // grouping statements
+  grouping roe-encapsulation-config {
+    description
+      "Top-level grouping for CPRI encapsulation configuration.";
+
+    leaf flow-id {
+      type int32 {
+        range "0..255";
+      }
+      description
+        "Set the flowID in RoE frame header.";
+    }
+
+    leaf destination-mac {
+        type hfr-oc-types:mac-address;
+        description
+          "Set the destination MAC address of the generated RoE frames.";
+    }
+
+    leaf vlan {
+      type hfr-oc-types:vlan-id;
+      description
+        "Set the VLAN-ID of the generated RoE frames";
+    }
+
+    leaf vlan-pri {
+      type hfr-oc-types:vlan-priority;
+      description
+        "Set the VLAN priority of the generated RoE frames";
+    }
+
+    leaf num-of-basic {
+      type number-of-basicframe-type;
+      description 
+        "Set the number of CPRI basic frame encapulated in RoE frames";
+    }
+  }
+
+  grouping roe-encapsulation-state {
+    description
+      "Top-level grouping for CPRI encapsulation configuration.";
+
+    leaf source-mac {
+        type hfr-oc-types:mac-address;
+        config false;
+        description
+          "The source MAC address used in the generated RoE frames.";
+    }
+  }
+
+  grouping roe-agnostic-config {
+    description
+      "Top-level grouping for structure-agnostic RoE service.";
+
+    leaf enabled {
+      type boolean;
+      default false;
+      description
+        "Enable or disable the structure-agnostic RoE service.";
+    }
+
+    leaf tunneling {
+      type boolean;
+      default false;
+      description
+        "Enable or disable the tunneling mode.";
+    }
+
+    leaf presentation-time {
+      type int32;
+      description
+        "Set the presentation (replay) time of the encapsulated 
+        CPRI data to outfacing radio interface at RoE receiver. 
+        The presentation time has to take the entire end to end delay 
+        between the RoE sender and receiver reference planes into 
+        account - not just the network delay.";
+    }
+
+    container encapsulation {
+      description
+        "RoE frame configuration for CPRI encapsulation";
+      uses roe-encapsulation-config;
+    }
+  }
+
+  grouping roe-aware-config {
+    description
+      "Top-level grouping for structure-aware RoE service. [To Be Defined]";
+  }
+
+  grouping roe-config {
+    description
+      "Top-level grouping for RoE service configuration";
+
+    leaf cpri-option {
+      type cpri-option-type;
+      default CPRI_OPTION_3;
+      description
+        "Set the CPRI function split option";
+    }
+
+    leaf roe-mapper-mode {
+      type roe-mapper-type;
+      description
+        "Set the RoE service mapper mode";
+    }
+
+    container structure-agnostic {
+      when "../roe-mapper-mode = 'AGNOSTIC'" {
+        description
+          "This configuration is available on the structure-agnostic mode.";
+      }
+      uses roe-agnostic-config;
+      
+      description
+        "RoE service configuration related to structure-agnostic mode";
+    }
+
+    container structure-aware {
+      when "../roe-mapper-mode = 'AWARE'" {
+        description
+          "This configuration is available on the structure-aware mode.";
+      }
+      uses roe-aware-config;
+      description
+        "RoE service configuration related to structure-aware mode";
+    }
+  }
+
+  grouping roe-statistics {
+    description
+      "Top-level grouping for RoE service statistics";
+    
+    container statistics {
+      config false;
+      description
+        "A collection of RoE traffic statistics";
+      
+      leaf out-mcast-pkts {
+        type oc-yang:counter64;
+      }
+      leaf out-mcast-octets {
+        type oc-yang:counter64;
+      }
+      leaf out-ucast-pkts {
+        type oc-yang:counter64;
+      }
+      leaf out-ucast-octets {
+        type oc-yang:counter64;
+      }
+      leaf out-mcast-drop-pkts {
+        type oc-yang:counter64;
+      }
+      leaf out-mcast-drop-octets {
+        type oc-yang:counter64;
+      }
+      leaf in-drop-pkts {
+        type oc-yang:counter64;
+      }
+      leaf in-drop-octets {
+        type oc-yang:counter64;
+      }
+      leaf in-pkts {
+        type oc-yang:counter64;
+      }
+      leaf in-octets {
+        type oc-yang:counter64;
+      }
+    }
+  }
+
+  grouping roe-top {
+    description
+      "Top-level grouping for RoE service";
+    container radio-over-ethernet {
+      when "../oc-if:config/oc-if:type = 'hfr-oc-types:ROE'" {
+        description
+          "The RoE configuration is just allowed on RoE interfaces.";
+      }
+      container config {
+        description "Configuration data for RoE interfaces";
+      }
+
+      container state {
+
+        config false;
+        description "State variables for RoE interfaces";
+
+        uses roe-config;
+        uses roe-statistics;
+      }
+      description
+        "RoE service configuration related to the interface";
+    }
+  }
+
+  // data definition statements
+
+  // If the module creates a top-level node in the schema
+  // (e.g., at root level), there should be an instantiation of the
+  // top-level '-top' grouping with a 'uses' statement.
+  // uses example-top;
+
+  // augment statements
+
+  augment "/oc-if:interfaces/oc-if:interface" {
+    description "Adds RoE configuration to interfaces model";
+    uses roe-top;
+  }
+
+  augment "/oc-if:interfaces/oc-if:interface/radio-over-ethernet" +
+    "/state/structure-agnostic/encapsulation" {
+    description "Adds RoE encapsulation state";
+    uses roe-encapsulation-state;
+  }
+
+  // If the module defines data that is added as an extension or
+  // additional data to another module, use an augment statement
+  // and instantiate the top-level grouping (or whichever grouping
+  // is to be added to the other module) with a 'uses' statement
+  // within the augment statement.
+
+}
