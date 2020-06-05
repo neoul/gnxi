@@ -33,6 +33,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"github.com/neoul/libydb/go/ydb"
 	"github.com/openconfig/gnmi/value"
 	"github.com/openconfig/ygot/experimental/ygotutils"
 	"github.com/openconfig/ygot/ygot"
@@ -70,9 +71,10 @@ var (
 type Server struct {
 	model    *Model
 	callback ConfigCallback
-
-	config ygot.ValidatedGoStruct
-	mu     sync.RWMutex // mu is the RW lock to protect the access to config
+	db       *ydb.YDB
+	dbclose  func()
+	config   ygot.ValidatedGoStruct
+	mu       sync.RWMutex // mu is the RW lock to protect the access to config
 }
 
 // NewServer creates an instance of Server with given json config.
@@ -81,16 +83,26 @@ func NewServer(model *Model, config []byte, callback ConfigCallback) (*Server, e
 	if err != nil {
 		return nil, err
 	}
+	db, close := ydb.OpenWithTargetStruct("gnmid", rootStruct)
+
 	s := &Server{
 		model:    model,
 		config:   rootStruct,
 		callback: callback,
+		db:       db,
+		dbclose:  close,
 	}
 	if config != nil && s.callback != nil {
 		if err := s.callback(rootStruct); err != nil {
 			return nil, err
 		}
 	}
+	err = db.Connect("uss://openconfig", "sub")
+	if err != nil {
+		close()
+		return nil, err
+	}
+	db.Serve()
 	return s, nil
 }
 

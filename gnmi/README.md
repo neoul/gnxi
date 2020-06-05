@@ -7,5 +7,7 @@
     - Check the revision and openconfig version.
 4. Copy ydb go interface (Updater interface).
 5. Generate test code and verify it.
+    - `Get` test code (done)
+    - `Set` test code [FIXME]
 
 > [FIXME] Need auto generation.

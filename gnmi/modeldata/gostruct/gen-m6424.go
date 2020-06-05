@@ -47,17 +47,3 @@ func (device *Device) Delete(keys []string, key string) error {
 	return err
 	// return nil
 }
-
-// Start - Return mapped target structure with end channel.
-func Start() (Device, chan bool) {
-	done := ydb.SetSignalFilter()
-	device := Device{}
-	db, close := ydb.OpenWithTargetStruct("m6424", &device)
-	defer close()
-	err := db.Connect("uss://openconfig", "pub")
-	if err != nil {
-		log.Error(err)
-	}
-	db.Serve()
-	return device, done
-}
