@@ -14,6 +14,10 @@
 - Add the conversion function of an enum value to an integer for gnmi data construction.
   - `Create()`, `Replace()` and `Delete()` functions for `YDB Update Interface`
 
+## gRPC
+
+- Check the procedure of the process termination.
+
 ## Question
 
 - How to enable the logging of gnxi?

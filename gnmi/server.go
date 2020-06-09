@@ -69,12 +69,11 @@ var (
 //		// Do something ...
 // }
 type Server struct {
-	model    *Model
-	callback ConfigCallback
-	db       *ydb.YDB
-	dbclose  func()
-	config   ygot.ValidatedGoStruct
-	mu       sync.RWMutex // mu is the RW lock to protect the access to config
+	model     *Model
+	callback  ConfigCallback
+	dataBlock *ydb.YDB
+	config    ygot.ValidatedGoStruct
+	mu        sync.RWMutex // mu is the RW lock to protect the access to config
 }
 
 // NewServer creates an instance of Server with given json config.
@@ -83,14 +82,13 @@ func NewServer(model *Model, config []byte, callback ConfigCallback) (*Server, e
 	if err != nil {
 		return nil, err
 	}
-	db, close := ydb.OpenWithTargetStruct("gnmid", rootStruct)
+	db, _ := ydb.OpenWithTargetStruct("gnmid", rootStruct)
 
 	s := &Server{
-		model:    model,
-		config:   rootStruct,
-		callback: callback,
-		db:       db,
-		dbclose:  close,
+		model:     model,
+		config:    rootStruct,
+		callback:  callback,
+		dataBlock: db,
 	}
 	if config != nil && s.callback != nil {
 		if err := s.callback(rootStruct); err != nil {
@@ -99,11 +97,16 @@ func NewServer(model *Model, config []byte, callback ConfigCallback) (*Server, e
 	}
 	err = db.Connect("uss://openconfig", "sub")
 	if err != nil {
-		close()
+		db.Close()
 		return nil, err
 	}
 	db.Serve()
 	return s, nil
+}
+
+// Close the connected YDB instance
+func (s *Server) Close() {
+	s.dataBlock.Close()
 }
 
 // checkEncodingAndModel checks whether encoding and models are supported by the server. Return error if anything is unsupported.
