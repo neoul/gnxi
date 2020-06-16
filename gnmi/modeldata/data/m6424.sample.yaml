@@ -1,0 +1,7 @@
+interfaces: 
+ interface[name=1/1]:
+  name: 1/1
+  config: 
+   name: 1/1
+   enabled: true
+   type: ethernetCsmacd

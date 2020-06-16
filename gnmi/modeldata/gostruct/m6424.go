@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/op/go-logging"
@@ -21,99 +22,113 @@ func init() {
 
 // YDB Go Interface
 
-// Merge - constructs Device
-func Merge(device *Device, keys []string, key string, tag string, value string) error {
-	var pkey string
-	var pv, cv reflect.Value
-	var err error
-	var ok bool
-
-	v := reflect.ValueOf(device)
-	cv = v
-	if len(keys) > 0 {
-		pv, cv, pkey, ok = ydb.FindValueWithParent(cv, cv, keys...)
-		if !cv.IsValid() {
-			return fmt.Errorf("Invalid parent value")
-		}
-		if !ok {
-			return fmt.Errorf("Parent value not found: %s", pkey)
+func keyListing(keys []string, key string) ([]string, string) {
+	var keylist []string
+	if len(key) > 0 {
+		for _, k := range keys {
+			i := strings.Index(k, "[")
+			if i > 0 {
+				ename := k[:i]
+				kname := strings.Trim(k[i:], "[]")
+				i = strings.Index(kname, "=")
+				if i > 0 {
+					kname = kname[i+1:]
+					keylist = append(keylist, ename)
+					keylist = append(keylist, kname)
+					continue
+				}
+			}
+			keylist = append(keylist, k)
 		}
 	}
+	i := strings.Index(key, "[")
+	if i > 0 {
+		ename := key[:i]
+		kname := strings.Trim(key[i:], "[]")
+		i = strings.Index(kname, "=")
+		if i > 0 {
+			kname = kname[i+1:]
+			keylist = append(keylist, ename)
+			key = kname
+		}
+	}
+	return keylist, key
+}
 
-	cv = ydb.GetNonInterfaceValueDeep(cv)
-	if ydb.IsYamlSeq(tag) {
-		nv := reflect.ValueOf([]interface{}{})
-		cv, err = ydb.SetValueChild(cv, nv, key)
-		if err != nil {
+// Merge - constructs Device
+func merge(device *Device, keys []string, key string, tag string, value string) error {
+	keys, key = keyListing(keys, key)
+	fmt.Printf("Device.merge %v %v %v %v\n", keys, key, tag, value)
+	v := reflect.ValueOf(device)
+	for _, k := range keys {
+		cv, ok := ydb.ValFindOrInit(v, k, ydb.SearchByContent)
+		if !ok || !cv.IsValid() {
+			return fmt.Errorf("key %s not found", k)
+		}
+		v = cv
+	}
+	ct, ok := ydb.TypeFind(v.Type(), key)
+	if ok && value != "" {
+		cv, err := ytypes.StringToType(ct, value)
+		if err == nil {
+			_, err = ydb.ValChildDirectSet(v, key, cv)
+			ydb.DebugValueString(cv.Interface(), 1, func(x ...interface{}) { fmt.Print(x...) })
 			return err
+		} else {
+			fmt.Println(err)
 		}
+	}
+	nv, err := ydb.ValChildSet(v, key, value, ydb.SearchByContent)
+	if err == nil {
+		// ydb.DebugValueString(v.Interface(), 1, func(x ...interface{}) { fmt.Print(x...) })
+		ydb.DebugValueString(nv.Interface(), 1, func(x ...interface{}) { fmt.Print(x...) })
 	} else {
-		var values []interface{}
-		// Try to update value via ygot
-		v = ydb.FindValue(cv, key)
-		if v.IsValid() && value != "" {
-			v, err = ytypes.StringToType(v.Type(), value)
-			if err == nil {
-				if cv.Kind() == reflect.Ptr {
-					cv = cv.Elem()
-				}
-				log.Debugf("%T %s", v.Interface(), v)
-				cv, err = ydb.SetValueChild(cv, v, key)
-				return err
-			}
-		}
+		fmt.Println(err)
+	}
+	return nil
+}
 
-		switch tag {
-		case "!!map", "!!imap", "!!omap":
-			values = []interface{}{key, value}
-		case "!!set":
-			values = []interface{}{key}
-		case "!!seq":
-			values = []interface{}{value}
-		default: // other scalar types:
-			if ydb.IsValueSlice(cv) {
-				if key == "" {
-					values = []interface{}{value}
-				} else {
-					values = []interface{}{key}
-				}
-			} else {
-				values = []interface{}{key, value}
-			}
+// Merge - constructs Device
+func delete(device *Device, keys []string, key string) error {
+	keys, key = keyListing(keys, key)
+	fmt.Printf("Device.delete %v %v\n", keys, key)
+	v := reflect.ValueOf(device)
+	for _, k := range keys {
+		cv, ok := ydb.ValFind(v, k, ydb.SearchByContent)
+		if !ok || !cv.IsValid() {
+			return fmt.Errorf("key %s not found", k)
 		}
-
-		nv := ydb.SetValue(cv, values...)
-		if nv.Kind() == reflect.Slice {
-			pv, err = ydb.SetValueChild(pv, nv, pkey)
-			if err != nil {
-				return err
-			}
-		}
+		v = cv
+	}
+	_, err := ydb.ValChildUnset(v, key, ydb.SearchByContent)
+	if err == nil {
+		ydb.DebugValueString(v.Interface(), 1, func(x ...interface{}) { fmt.Print(x...) })
+	} else {
+		fmt.Println(err)
 	}
 	return nil
 }
 
 // Create - constructs Device
 func (device *Device) Create(keys []string, key string, tag string, value string) error {
-	log.Debugf("Device.Create %v %v %v %v {\n", keys, key, tag, value)
-	err := Merge(device, keys, key, tag, value)
-	log.Debug("}", err, "\n")
+	fmt.Printf("Device.Create %v %v %v %v {\n", keys, key, tag, value)
+	err := merge(device, keys, key, tag, value)
+	fmt.Println("}", err)
 	return err
 }
 
 // Replace - constructs Device
 func (device *Device) Replace(keys []string, key string, tag string, value string) error {
-	log.Debugf("Device.Replace %v %v %v %v {\n", keys, key, tag, value)
-	err := Merge(device, keys, key, tag, value)
-	log.Debug("}", err, "\n")
+	fmt.Printf("Device.Replace %v %v %v %v {\n", keys, key, tag, value)
+	err := merge(device, keys, key, tag, value)
+	fmt.Println("}", err)
 	return err
 }
 
 // Delete - constructs Device
 func (device *Device) Delete(keys []string, key string) error {
-	log.Debugf("Device.Delete %v %v {\n", keys, key)
-	v := reflect.ValueOf(device)
-	err := ydb.UnsetValueDeep(v, v, keys, key)
-	log.Debug("}", err, "\n")
+	fmt.Printf("Device.Delete %v %v {\n", keys, key)
+	err := delete(device, keys, key)
+	fmt.Println("}", err)
 	return err
 }

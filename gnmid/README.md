@@ -12,6 +12,10 @@ go install github.com/neoul/gnxi/gnmi_target
 ## Run
 
 ```bash
+ydb -r pub -a uss://openconfig -f ../gnmi/modeldata/data/m6424.sample.yaml -d -v debug
+```
+
+```bash
 gnmi_target \
   -bind_address :10161 \
   -config openconfig-openflow.json \
