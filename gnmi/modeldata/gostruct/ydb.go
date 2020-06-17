@@ -1,5 +1,7 @@
 package gostruct
 
+// YDB Go Interface to update gostruct (ygot)
+
 import (
 	"fmt"
 	"reflect"
@@ -8,11 +10,6 @@ import (
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/openconfig/ygot/ytypes"
 )
-
-// Generate m6424 model
-//go:generate sh -c "cd $GOPATH/src && go run github.com/openconfig/ygot/generator/generator.go -generate_fakeroot -output_file github.com/neoul/gnxi/gnmi/modeldata/gostruct/generated.go -package_name gostruct -exclude_modules ietf-interfaces -path github.com/neoul/gnxi/gnmi/modeldata/yang github.com/neoul/gnxi/gnmi/modeldata/yang/hfr-oc-dev.yang github.com/neoul/gnxi/gnmi/modeldata/yang/hfr-oc-roe.yang github.com/neoul/gnxi/gnmi/modeldata/yang/openconfig-interfaces.yang github.com/neoul/gnxi/gnmi/modeldata/yang/hfr-oc-tsn.yang github.com/neoul/gnxi/gnmi/modeldata/yang/openconfig-messages.yang"
-
-// YDB Go Interface
 
 func keyListing(keys []string, key string) ([]string, string) {
 	var keylist []string

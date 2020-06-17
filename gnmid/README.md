@@ -4,9 +4,9 @@ A simple shell binary that implements a gNMI Target with in-memory configuration
 
 ## Install
 
-```
-go get github.com/neoul/gnxi/gnmi_target
-go install github.com/neoul/gnxi/gnmi_target
+```bash
+go get github.com/neoul/gnxi/gnmid
+go install github.com/neoul/gnxi/gnmid
 ```
 
 ## Run
@@ -16,7 +16,7 @@ ydb -r pub -a uss://openconfig -f ../gnmi/modeldata/data/m6424.sample.yaml -d -v
 ```
 
 ```bash
-gnmi_target \
+gnmid \
   -bind_address :10161 \
   -config openconfig-openflow.json \
   -key server.key \
@@ -28,7 +28,7 @@ gnmi_target \
 ```
 
 ```bash
-go run gnmi_target.go \
+go run gnmid.go \
   -bind_address :10161 \
   -config openconfig-openflow.json \
   -key ../pki/server.key \

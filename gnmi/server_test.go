@@ -26,14 +26,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/neoul/gnxi/gnmi/modeldata"
 	"github.com/neoul/gnxi/gnmi/modeldata/gostruct"
 )
 
 var (
 	// model is the model for test config server.
 	model = &Model{
-		modelData:       modeldata.ModelData,
+		modelData:       gostruct.ΓModelData,
 		structRootType:  reflect.TypeOf((*gostruct.Device)(nil)),
 		schemaTreeRoot:  gostruct.SchemaTree["Device"],
 		jsonUnmarshaler: gostruct.Unmarshal,
@@ -79,7 +78,7 @@ func TestGet(t *testing.T) {
 					"name": "p1",
 					"config": {
 						"name": "p1",
-						"type": "hfr-oc-types:ROE",
+						"type": "iana-if-type:ethernetCsmacd",
 						"mtu": 1516,
 						"loopback-mode": false,
 						"description": "Interface#1",
@@ -151,7 +150,7 @@ func TestGet(t *testing.T) {
 								"name": "p1",
 								"config": {
 									"name": "p1",
-									"type": "hfr-oc-types:ROE",
+									"type": "iana-if-type:ethernetCsmacd",
 									"mtu": 1516,
 									"loopback-mode": false,
 									"description": "Interface#1",
@@ -184,7 +183,7 @@ func TestGet(t *testing.T) {
 				"openconfig-interfaces:name": "p1",
 				"openconfig-interfaces:config": {
 					"name": "p1",
-					"type": "hfr-oc-types:ROE",
+					"type": "iana-if-type:ethernetCsmacd",
 					"mtu": 1516,
 					"loopback-mode": false,
 					"description": "Interface#1",

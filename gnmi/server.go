@@ -476,6 +476,8 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	s.dataBlock.Lock()
+	defer s.dataBlock.Unlock()
 
 	for i, path := range paths {
 		// Get schema node for path from config struct.
@@ -581,6 +583,8 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.dataBlock.Lock()
+	defer s.dataBlock.Unlock()
 
 	jsonTree, err := ygot.ConstructIETFJSON(s.config, &ygot.RFC7951JSONConfig{})
 	if err != nil {
@@ -635,6 +639,8 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 
 // Subscribe method is not implemented.
 func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
+	s.dataBlock.Lock()
+	defer s.dataBlock.Unlock()
 	return status.Error(codes.Unimplemented, "Subscribe is not implemented.")
 }
 
@@ -643,5 +649,7 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 func (s *Server) InternalUpdate(fp func(config ygot.ValidatedGoStruct) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.dataBlock.Lock()
+	defer s.dataBlock.Unlock()
 	return fp(s.config)
 }

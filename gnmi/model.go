@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"sort"
 
+	"github.com/neoul/gnxi/gnmi/modeldata/gostruct"
 	"github.com/openconfig/goyang/pkg/yang"
 	"github.com/openconfig/ygot/experimental/ygotutils"
 	"github.com/openconfig/ygot/ygot"
@@ -46,9 +47,9 @@ type Model struct {
 }
 
 // NewModel returns an instance of Model struct.
-func NewModel(m []*pb.ModelData, t reflect.Type, r *yang.Entry, f JSONUnmarshaler, e GoStructEnumData) *Model {
+func NewModel(t reflect.Type, r *yang.Entry, f JSONUnmarshaler, e GoStructEnumData) *Model {
 	return &Model{
-		modelData:       m,
+		modelData:       gostruct.ΓModelData,
 		structRootType:  t,
 		schemaTreeRoot:  r,
 		jsonUnmarshaler: f,

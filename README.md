@@ -64,3 +64,17 @@ go run ./gnmi_get.go
 *  This is not an official Google product.
 *  See [how to contribute](CONTRIBUTING.md).
 
+
+## gNMI ProtoBuf UML generation
+
+```bash
+# Download and install protodot and graphviz
+# https://github.com/seamia/protodot
+
+protodot -src ../../go/src/github.com/openconfig/gnmi/proto/gnmi/gnmi.proto -inc ../../go/src/google/protobuf -output gnmi
+protodot -src ../../go/src/github.com/openconfig/gnmi/proto/gnmi/gnmi.proto -inc ../../go/src/google/protobuf -output gnmi.Subscribe -select .Subscribe
+protodot -src ../../go/src/github.com/openconfig/gnmi/proto/gnmi/gnmi.proto -inc ../../go/src/google/protobuf -output gnmi.Set -select .Set
+protodot -src ../../go/src/github.com/openconfig/gnmi/proto/gnmi/gnmi.proto -inc ../../go/src/google/protobuf -output gnmi.Get -select .Get
+protodot -src ../../go/src/github.com/openconfig/gnmi/proto/gnmi/gnmi.proto -inc ../../go/src/google/protobuf -output gnmi.Capabilities -select .Capabilities
+
+```

@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/neoul/gnxi/gnmi"
-	"github.com/neoul/gnxi/gnmi/modeldata"
 	"github.com/neoul/gnxi/gnmi/modeldata/gostruct"
 
 	"github.com/neoul/gnxi/utils/credentials"
@@ -80,7 +79,7 @@ func (s *server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 }
 
 func main() {
-	model := gnmi.NewModel(modeldata.ModelData,
+	model := gnmi.NewModel(
 		reflect.TypeOf((*gostruct.Device)(nil)),
 		gostruct.SchemaTree["Device"],
 		gostruct.Unmarshal,
