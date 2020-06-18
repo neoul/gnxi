@@ -1,0 +1,53 @@
+interfaces: 
+ interface[name=eth0]:
+  name: eth0
+  config: 
+   name: eth0
+   enabled: true
+   type: ethernetCsmacd
+   loopback-mode: false
+   description: "ethernet card #1"
+   mtu: 1516
+  state:
+   name: eth0
+   type: ethernetCsmacd
+   mtu: 1516
+   loopback-mode: false
+   oper-status: UP
+   admin-status: UP
+   logical: false
+   counters:
+    in-octets:  1
+    in-pkts:  2
+    in-unicast-pkts:  3
+    in-broadcast-pkts:  4
+    in-multicast-pkts:  5
+    in-discards:  6
+    in-errors:  7
+    in-unknown-protos:  8
+    in-fcs-errors:  9
+    out-octets: 10
+    out-pkts: 11
+    out-unicast-pkts: 12
+    out-broadcast-pkts: 13
+    out-multicast-pkts: 14
+    out-discards: 15
+    out-errors: 16
+    carrier-transitions:  17
+ interface[name=eth1]:
+  name: eth1
+  config: 
+   name: eth1
+   enabled: true
+   type: ethernetCsmacd
+   loopback-mode: false
+   description: "ethernet card #2"
+   mtu: 1516
+  state:
+   name: eth1
+   type: ethernetCsmacd
+   mtu: 1516
+   loopback-mode: false
+   oper-status: UP
+   admin-status: UP
+   logical: false

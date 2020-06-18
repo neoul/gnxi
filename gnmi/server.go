@@ -76,6 +76,9 @@ type Server struct {
 	mu        sync.RWMutex // mu is the RW lock to protect the access to config
 }
 
+// Disable YDB update procedure
+var disableYdbChannel bool
+
 // NewServer creates an instance of Server with given json config.
 func NewServer(model *Model, config []byte, callback ConfigCallback) (*Server, error) {
 	rootStruct, err := model.NewConfigStruct(config)
@@ -95,12 +98,14 @@ func NewServer(model *Model, config []byte, callback ConfigCallback) (*Server, e
 			return nil, err
 		}
 	}
-	err = db.Connect("uss://openconfig", "sub")
-	if err != nil {
-		db.Close()
-		return nil, err
+	if !disableYdbChannel {
+		err = db.Connect("uss://openconfig", "sub")
+		if err != nil {
+			db.Close()
+			return nil, err
+		}
+		db.Serve()
 	}
-	db.Serve()
 	return s, nil
 }
 

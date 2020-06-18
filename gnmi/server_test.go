@@ -17,6 +17,7 @@ package gnmi
 
 import (
 	"encoding/json"
+	"os"
 	"reflect"
 	"testing"
 
@@ -100,6 +101,7 @@ func TestGet(t *testing.T) {
 		}
 	}`
 
+	disableYdbChannel = true
 	s, err := NewServer(model, []byte(jsonConfigRoot), nil)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
@@ -316,6 +318,119 @@ func runTestGet(t *testing.T, s *Server, textPbPath string, wantRetCode codes.Co
 
 	if !reflect.DeepEqual(gotVal, wantRespVal) {
 		t.Errorf("got: %v (%T),\nwant %v (%T)", gotVal, gotVal, wantRespVal, wantRespVal)
+	}
+}
+
+func TestGetWithYdb(t *testing.T) {
+
+	disableYdbChannel = true
+	s, err := NewServer(model, nil, nil)
+	if err != nil {
+		t.Fatalf("error in creating server: %v", err)
+	}
+	r, err := os.Open("modeldata/data/sample.yaml")
+	defer r.Close()
+	if err != nil {
+		t.Fatalf("test data load failed: %v", err)
+	}
+	dec := s.dataBlock.NewDecoder(r)
+	dec.Decode()
+
+	tds := []struct {
+		desc        string
+		textPbPath  string
+		modelData   []*pb.ModelData
+		wantRetCode codes.Code
+		wantRespVal interface{}
+	}{{
+		desc: "get valid but non-existing node",
+		textPbPath: `
+			elem: <name: "system" >
+		`,
+		wantRetCode: codes.NotFound,
+	}, {
+		desc: "node with attribute",
+		textPbPath: `
+								elem: <name: "interfaces" >
+								elem: <
+									name: "interface"
+									key: <key: "name" value: "eth1" >
+								>
+								elem: <name: "config" >`,
+		wantRetCode: codes.OK,
+		wantRespVal: `{
+				"openconfig-interfaces:name": "eth1",
+				"openconfig-interfaces:type": "iana-if-type:ethernetCsmacd",
+				"openconfig-interfaces:mtu": 1516,
+				"openconfig-interfaces:loopback-mode": false,
+				"openconfig-interfaces:description": "ethernet card #2",
+				"openconfig-interfaces:enabled": true
+			}`,
+	}, {
+		desc: "node with attribute in its parent",
+		textPbPath: `
+								elem: <name: "interfaces" >
+								elem: <
+									name: "interface"
+									key: <key: "name" value: "eth1" >
+								>
+								elem: <name: "config" >
+								elem: <name: "type" >`,
+		wantRetCode: codes.OK,
+		wantRespVal: `ethernetCsmacd`,
+	}, {
+		desc: "ref leaf node",
+		textPbPath: `
+								elem: <name: "interfaces" >
+								elem: <
+									name: "interface"
+									key: <key: "name" value: "eth0" >
+								>
+								elem: <name: "name" >`,
+		wantRetCode: codes.OK,
+		wantRespVal: "eth0",
+	}, {
+		desc: "regular leaf node",
+		textPbPath: `
+								elem: <name: "interfaces" >
+								elem: <
+									name: "interface"
+									key: <key: "name" value: "eth0" >
+								>
+								elem: <name: "config" >
+								elem: <name: "name" >`,
+		wantRetCode: codes.OK,
+		wantRespVal: "eth0",
+	}, {
+		desc: "non-existing node: wrong path name",
+		textPbPath: `
+								elem: <name: "interfaces" >
+								elem: <
+									name: "interface"
+									key: <key: "name" value: "eth0" >
+								>
+								elem: <name: "bar" >`,
+		wantRetCode: codes.NotFound,
+	}, {
+		desc: "non-existing node: wrong path attribute",
+		textPbPath: `
+								elem: <name: "interfaces" >
+								elem: <
+									name: "interface"
+									key: <key: "foo" value: "eth0" >
+								>
+								elem: <name: "name" >`,
+		wantRetCode: codes.NotFound,
+	}, {
+		desc:        "use of model data not supported",
+		modelData:   []*pb.ModelData{&pb.ModelData{}},
+		wantRetCode: codes.Unimplemented,
+	}}
+
+	for _, td := range tds {
+		t.Run(td.desc, func(t *testing.T) {
+			runTestGet(t, s, td.textPbPath, td.wantRetCode, td.wantRespVal, td.modelData)
+		})
 	}
 }
 
