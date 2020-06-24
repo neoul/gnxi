@@ -79,6 +79,7 @@ func (s *server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 }
 
 func main() {
+
 	model := gnmi.NewModel(
 		reflect.TypeOf((*gostruct.Device)(nil)),
 		gostruct.SchemaTree["Device"],
@@ -110,8 +111,10 @@ func main() {
 	}
 	s, err := newServer(model, configData)
 	if err != nil {
-		log.Exitf("error in creating gnmi target: %v", err)
+		log.Exitf("error in creating gnmid: %v", err)
 	}
+	// defer s.Close()
+
 	pb.RegisterGNMIServer(g, s)
 	reflection.Register(g)
 

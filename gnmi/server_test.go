@@ -17,6 +17,7 @@ package gnmi
 
 import (
 	"encoding/json"
+	"flag"
 	"os"
 	"reflect"
 	"testing"
@@ -42,6 +43,7 @@ var (
 )
 
 func TestCapabilities(t *testing.T) {
+	flag.Set("disable-ydb", "true")
 	s, err := NewServer(model, nil, nil)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
@@ -101,7 +103,7 @@ func TestGet(t *testing.T) {
 		}
 	}`
 
-	disableYdbChannel = true
+	flag.Set("disable-ydb", "true")
 	s, err := NewServer(model, []byte(jsonConfigRoot), nil)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
@@ -323,7 +325,7 @@ func runTestGet(t *testing.T, s *Server, textPbPath string, wantRetCode codes.Co
 
 func TestGetWithYdb(t *testing.T) {
 
-	disableYdbChannel = true
+	flag.Set("disable-ydb", "true")
 	s, err := NewServer(model, nil, nil)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)

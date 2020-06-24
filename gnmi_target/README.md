@@ -4,12 +4,16 @@ A simple shell binary that implements a gNMI Target with in-memory configuration
 
 ## Install
 
-```
+```bash
 go get github.com/neoul/gnxi/gnmi_target
 go install github.com/neoul/gnxi/gnmi_target
 ```
 
 ## Run
+
+```bash
+ydb -r pub -a uss://openconfig -f ../gnmi/modeldata/data/m6424.sample.yaml -d -v debug
+```
 
 ```bash
 gnmi_target \

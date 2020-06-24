@@ -20,8 +20,10 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"reflect"
 	"strconv"
 	"sync"
@@ -33,6 +35,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"github.com/neoul/gnxi/utils"
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/openconfig/gnmi/value"
 	"github.com/openconfig/ygot/experimental/ygotutils"
@@ -49,6 +52,11 @@ type ConfigCallback func(ygot.ValidatedGoStruct) error
 var (
 	pbRootPath         = &pb.Path{}
 	supportedEncodings = []pb.Encoding{pb.Encoding_JSON, pb.Encoding_JSON_IETF}
+
+	// YAML file for target startup configuration
+	yamlFile = flag.String("yaml-config", "", "YAML file for target startup configuration")
+	// Disable YDB update procedure
+	disableYdbChannel = flag.Bool("disable-ydb", false, "Disable YAML Datablock interface")
 )
 
 // Server struct maintains the data structure for device config and implements the interface of gnmi server. It supports Capabilities, Get, and Set APIs.
@@ -76,9 +84,6 @@ type Server struct {
 	mu        sync.RWMutex // mu is the RW lock to protect the access to config
 }
 
-// Disable YDB update procedure
-var disableYdbChannel bool
-
 // NewServer creates an instance of Server with given json config.
 func NewServer(model *Model, config []byte, callback ConfigCallback) (*Server, error) {
 	rootStruct, err := model.NewConfigStruct(config)
@@ -98,7 +103,19 @@ func NewServer(model *Model, config []byte, callback ConfigCallback) (*Server, e
 			return nil, err
 		}
 	}
-	if !disableYdbChannel {
+	if *yamlFile != "" {
+		r, err := os.Open(*yamlFile)
+		defer r.Close()
+		if err != nil {
+			return nil, err
+		}
+		dec := db.NewDecoder(r)
+		err = dec.Decode()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !(*disableYdbChannel) {
 		err = db.Connect("uss://openconfig", "sub")
 		if err != nil {
 			db.Close()
@@ -475,6 +492,9 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 		return nil, status.Error(codes.Unimplemented, err.Error())
 	}
 
+	// NewSession(ctx)
+	utils.PrintProto(req)
+
 	prefix := req.GetPrefix()
 	paths := req.GetPath()
 	notifications := make([]*pb.Notification, len(paths))
@@ -590,6 +610,7 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 	defer s.mu.Unlock()
 	s.dataBlock.Lock()
 	defer s.dataBlock.Unlock()
+	utils.PrintProto(req)
 
 	jsonTree, err := ygot.ConstructIETFJSON(s.config, &ygot.RFC7951JSONConfig{})
 	if err != nil {
@@ -644,6 +665,15 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 
 // Subscribe method is not implemented.
 func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
+	req, err := stream.Recv()
+	if err != nil {
+		msg := fmt.Sprintf("error in receiving: %v", err)
+		log.Error(msg)
+		return status.Error(codes.Internal, msg)
+	}
+	utils.PrintProto(req)
+	// log.Info(req)
+
 	s.dataBlock.Lock()
 	defer s.dataBlock.Unlock()
 	return status.Error(codes.Unimplemented, "Subscribe is not implemented.")
