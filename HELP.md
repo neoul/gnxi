@@ -31,3 +31,9 @@ gnmi -addr 192.168.0.77:10161 -tls -keyfile ../pki/client.key -cafile ../pki/ca.
 ```bash
 gnmi_cli -address 192.168.0.77:10161 -target 192.168.0.77 -ca_crt pki/ca.crt -client_crt pki/client.crt -client_key pki/client.key -capabilities
 ```
+
+### [gRPC Web UI Client (grpcui)](https://github.com/fullstorydev/grpcui)
+
+```bash
+grpcui -cacert github.com/neoul/gnxi/pki/ca.crt -cert github.com/neoul/gnxi/pki/client.crt -key github.com/neoul/gnxi/pki/client.key -proto github.com/openconfig/gnmi/proto/gnmi_ext/gnmi_ext.proto -proto github.com/openconfig/gnmi/proto/gnmi/gnmi.proto 192.168.0.77:10161
+```

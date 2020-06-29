@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -492,8 +493,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 		return nil, status.Error(codes.Unimplemented, err.Error())
 	}
 
-	// NewSession(ctx)
-	utils.PrintProto(req)
+	// utils.PrintProto(req)
 
 	prefix := req.GetPrefix()
 	paths := req.GetPath()
@@ -663,20 +663,68 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 	}, nil
 }
 
-// Subscribe method is not implemented.
+// Subscribe implements the Subscribe RPC in gNMI spec.
 func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
-	req, err := stream.Recv()
-	if err != nil {
-		msg := fmt.Sprintf("error in receiving: %v", err)
+	sub := addSubscription(stream.Context())
+	if sub == nil {
+		msg := fmt.Sprintf("error in subscription init")
 		log.Error(msg)
 		return status.Error(codes.Internal, msg)
 	}
-	utils.PrintProto(req)
-	// log.Info(req)
+	utils.PrintStruct(sub, "LoginTime")
+	for {
+		req, err := stream.Recv()
+		if err != nil {
+			log.Error(err)
+			deleteSubscription(sub)
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		// aliases := req.GetAliases()
+		// pollMode := req.GetPoll()
+		// extension := req.GetExtension()
 
-	s.dataBlock.Lock()
-	defer s.dataBlock.Unlock()
-	return status.Error(codes.Unimplemented, "Subscribe is not implemented.")
+		// subscriptionList := req.GetSubscribe()
+		// prefix := subscriptionList.GetPrefix()
+		// allowAggregation := subscriptionList.GetAllowAggregation()
+		// updateOnly := subscriptionList.GetUpdatesOnly()
+		// encoding := subscriptionList.GetEncoding()
+		// mode := subscriptionList.GetMode()
+		// qos := subscriptionList.GetQos()
+		// useAliases := subscriptionList.GetUseAliases()
+		// useModules := subscriptionList.GetUseModels()
+		// subscription := subscriptionList.GetSubscription()
+		// for i, sub := range subscription {
+		// 	path := sub.GetPath()
+		// 	submod := sub.GetMode()
+		// 	sampleInterval := sub.GetSampleInterval()
+		// 	supressRedundant := sub.GetSuppressRedundant()
+		// 	heartBeatInterval := sub.GetHeartbeatInterval()
+		// }
+		// Save the above message for SubscribeResponse.
+		// Get schema node for path from config struct.
+		// fullPath := path
+		// if prefix != nil {
+		// 	fullPath = gnmiFullPath(prefix, path)
+		// }
+		// if fullPath.GetElem() == nil && fullPath.GetElement() != nil {
+		// 	return nil, status.Error(codes.Unimplemented, "deprecated path element type is unsupported")
+		// }
+		// node, stat := ygotutils.GetNode(s.model.schemaTreeRoot, s.config, fullPath)
+		// if isNil(node) || stat.GetCode() != int32(cpb.Code_OK) {
+		// 	return nil, status.Errorf(codes.NotFound, "path %v not found", fullPath)
+		// }
+
+		s.mu.Lock()
+		s.dataBlock.Lock()
+		// [FIXME] Build SubscribeResponse!!! here
+		s.dataBlock.Unlock()
+		s.mu.Unlock()
+		utils.PrintProto(req)
+		stream.Send(&pb.SubscribeResponse{})
+	}
 }
 
 // InternalUpdate is an experimental feature to let the server update its

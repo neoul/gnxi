@@ -99,6 +99,8 @@ func main() {
 	flag.Parse()
 
 	opts := credentials.ServerCredentials()
+	opts = append(opts, grpc.UnaryInterceptor(credentials.UnaryInterceptor))
+	opts = append(opts, grpc.StreamInterceptor(credentials.StreamInterceptor))
 	g := grpc.NewServer(opts...)
 
 	var configData []byte
