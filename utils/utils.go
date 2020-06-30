@@ -25,6 +25,6 @@ func PrintProto(m proto.Message) {
 
 // PrintStruct - print the type and value of the input structure with well-formed display.
 func PrintStruct(value interface{}, excludedField ...string) {
-	ydb.DebugValueString(value, 1, func(x ...interface{}) { fmt.Print(x...) }, excludedField...)
+	ydb.DebugValueString(value, 2, func(x ...interface{}) { fmt.Print(x...) }, excludedField...)
 	fmt.Println()
 }

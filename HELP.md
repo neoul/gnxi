@@ -14,22 +14,31 @@ protodot -src ../../go/src/github.com/openconfig/gnmi/proto/gnmi/gnmi.proto -inc
 
 ```
 
-## gNMI client
-
-### aristanetworks gNMI client
-
-https://github.com/aristanetworks/goarista/tree/master/cmd/gnmi
-
-```bash
-gnmi -addr 192.168.0.77:10161 -tls -keyfile ../pki/client.key -cafile ../pki/ca.crt -certfile ../pki/client.crt -compression "" capabilities
-gnmi -addr 192.168.0.77:10161 -tls -keyfile ../pki/client.key -cafile ../pki/ca.crt -certfile ../pki/client.crt -compression "" get '/interfaces/interface[name=eth0]'
-gnmi -addr 192.168.0.77:10161 -tls -keyfile ../pki/client.key -cafile ../pki/ca.crt -certfile ../pki/client.crt -compression "" subscribe '/interfaces/interface[name=eth0]'
-```
-
 ### OpenConf gNMI client
 
 ```bash
-gnmi_cli -address 192.168.0.77:10161 -target 192.168.0.77 -ca_crt pki/ca.crt -client_crt pki/client.crt -client_key pki/client.key -capabilities
+
+## Capabilities
+gnmi_cli -address 192.168.0.77:10161 -ca_crt pki/ca.crt -client_crt pki/client.crt -client_key pki/client.key -capabilities
+
+## Get
+gnmi_cli -address 192.168.0.77:10161 -ca_crt pki/ca.crt -client_crt pki/client.crt -client_key pki/client.key -get -proto \
+'path: <
+  elem: <
+    name: "interfaces"
+  >
+  elem: <
+    name: "interface"
+    key: <
+      key: "name"
+      value: "eth0"
+    >
+  >
+>'
+
+## SubscribeRequest
+gnmi_cli -address 192.168.0.77:10161 -ca_crt pki/ca.crt -client_crt pki/client.crt -client_key pki/client.key -alsologtostderr -stderrthreshold 0 -v 2 -query "/interfaces/interface"
+
 ```
 
 ### [gRPC Web UI Client (grpcui)](https://github.com/fullstorydev/grpcui)
