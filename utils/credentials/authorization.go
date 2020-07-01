@@ -2,7 +2,7 @@
 package credentials
 
 import (
-	log "github.com/golang/glog"
+	"github.com/golang/glog"
 	"github.com/neoul/gnxi/utils"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -20,11 +20,7 @@ var (
 )
 
 // validateUser validates the user.
-func validateUser(ctx context.Context) error {
-	m, ok := utils.GetMetadata(ctx)
-	if !ok {
-		return errMissingMetadata
-	}
+func validateUser(m map[string]string) error {
 	if _, ok := m["username"]; !ok {
 		return errMissingUsername
 	}
@@ -40,14 +36,23 @@ func validateUser(ctx context.Context) error {
 
 // UnaryInterceptor - used to validate authentication
 func UnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	err := validateUser(ctx)
+	meta, ok := utils.GetMetadata(ctx)
+	if !ok {
+		return nil, errMissingMetadata
+	}
+	address, ok := meta["peer"]
+	if !ok {
+		address = "unknown"
+	}
+	err := validateUser(meta)
 	if err != nil {
-		log.Error(err)
+		glog.Errorf("[%s] %v", address, err)
+		return nil, err
 	}
 	resp, err := handler(ctx, req)
-	// if err != nil {
-	// 	log.Error(err)
-	// }
+	if err != nil {
+		glog.Errorf("[%s] %v", address, err)
+	}
 	return resp, err
 }
 
@@ -58,12 +63,10 @@ type wrappedStream struct {
 }
 
 func (w *wrappedStream) RecvMsg(m interface{}) error {
-	// logger("Receive a message (Type: %T) at %s", m, time.Now().Format(time.RFC3339))
 	return w.ServerStream.RecvMsg(m)
 }
 
 func (w *wrappedStream) SendMsg(m interface{}) error {
-	// logger("Send a message (Type: %T) at %v", m, time.Now().Format(time.RFC3339))
 	return w.ServerStream.SendMsg(m)
 }
 
@@ -73,13 +76,22 @@ func newWrappedStream(s grpc.ServerStream) grpc.ServerStream {
 
 // StreamInterceptor - used to validate authentication
 func StreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	err := validateUser(ss.Context())
+	meta, ok := utils.GetMetadata(ss.Context())
+	if !ok {
+		return errMissingMetadata
+	}
+	address, ok := meta["peer"]
+	if !ok {
+		address = "unknown"
+	}
+	err := validateUser(meta)
 	if err != nil {
-		log.Error(err)
+		glog.Errorf("[%s] %v", address, err)
+		return err
 	}
 	err = handler(srv, newWrappedStream(ss))
-	// if err != nil {
-	// 	log.Error(err)
-	// }
+	if err != nil {
+		glog.Errorf("[%s] %v", address, err)
+	}
 	return err
 }

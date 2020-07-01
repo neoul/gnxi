@@ -86,6 +86,7 @@ type Server struct {
 	// Server optional configuration
 	useAliases bool
 	alias      map[string]*pb.Alias
+	Sessions   map[string]*Session
 }
 
 // NewServer creates an instance of Server with given json config.
@@ -101,6 +102,8 @@ func NewServer(model *Model, config []byte, callback ConfigCallback) (*Server, e
 		config:    rootStruct,
 		callback:  callback,
 		dataBlock: db,
+		alias:     map[string]*pb.Alias{},
+		Sessions:  map[string]*Session{},
 	}
 	if config != nil && s.callback != nil {
 		if err := s.callback(rootStruct); err != nil {
@@ -675,7 +678,7 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 		return status.Error(codes.Internal, msg)
 	}
 	for {
-		request, err := stream.Recv()
+		req, err := stream.Recv()
 		if err != nil {
 			log.Error(err)
 			deleteStreamConn(sconn)
@@ -684,18 +687,18 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 			}
 			return err
 		}
-		fmt.Println(proto.MarshalTextString(request))
+		fmt.Println(proto.MarshalTextString(req))
 		sub := newSubscription(s)
-		responses, err := sub.updateSubscription(sconn, request)
+		resps, err := sub.updateSubscription(sconn, req)
 		if err != nil {
 			return err
 		}
 
 		s.mu.Lock()
 		s.dataBlock.Lock()
-		for _, response := range responses {
-			fmt.Println(proto.MarshalTextString(response))
-			stream.Send(response)
+		for _, resp := range resps {
+			fmt.Println(proto.MarshalTextString(resp))
+			stream.Send(resp)
 		}
 		s.dataBlock.Unlock()
 		s.mu.Unlock()

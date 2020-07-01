@@ -3,9 +3,11 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 )
 
 // GetMetadata checks for valid credentials in the context Metadata.
@@ -19,5 +21,14 @@ func GetMetadata(ctx context.Context) (map[string]string, bool) {
 		k := strings.Trim(k, ":")
 		m[k] = v[0]
 	}
+	p, ok := peer.FromContext(ctx)
+	if ok {
+		m["protocol"] = p.Addr.Network()
+		m["peer"] = p.Addr.String()
+		index := strings.LastIndex(p.Addr.String(), ":")
+		m["peer-address"] = p.Addr.String()[:index]
+		m["peer-port"] = p.Addr.String()[index+1:]
+	}
+	fmt.Println("metadata", m)
 	return m, true
 }

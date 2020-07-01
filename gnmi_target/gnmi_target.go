@@ -24,12 +24,10 @@ import (
 	"os"
 	"reflect"
 
-	log "github.com/golang/glog"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
-	"google.golang.org/grpc/status"
 
 	"github.com/neoul/gnxi/gnmi"
 	"github.com/neoul/gnxi/gnmi/modeldata/gostruct"
@@ -56,30 +54,83 @@ func newServer(model *gnmi.Model, config []byte) (*server, error) {
 	return &server{Server: s}, nil
 }
 
-// Get overrides the Get func of gnmi.Target to provide user auth.
-func (s *server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
-	msg, ok := credentials.AuthorizeUser(ctx)
-	if !ok {
-		log.Infof("denied a Get request: %v", msg)
-		return nil, status.Error(codes.PermissionDenied, msg)
-	}
-	log.Infof("allowed a Get request: %v", msg)
-	return s.Server.Get(ctx, req)
+// validateUser validates the user.
+func authorizeUser(session *gnmi.Session) error {
+	return nil
+	// if session.Username == "" {
+	// 	return status.Errorf(codes.InvalidArgument, "missing username")
+	// }
+	// if session.Password == "" {
+	// 	return status.Errorf(codes.InvalidArgument, "missing password")
+	// }
+	// // [FIXME] authorize user here
+	// return status.Errorf(codes.Unauthenticated, "authentication failed")
 }
 
-// Set overrides the Set func of gnmi.Target to provide user auth.
-func (s *server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, error) {
-	msg, ok := credentials.AuthorizeUser(ctx)
-	if !ok {
-		log.Infof("denied a Set request: %v", msg)
-		return nil, status.Error(codes.PermissionDenied, msg)
+// Capabilities - Wrapping function for creating session info.
+func (s *server) Capabilities(ctx context.Context, req *pb.CapabilityRequest) (*pb.CapabilityResponse, error) {
+	var resp *pb.CapabilityResponse
+	session, err := s.NewSession(ctx)
+	if err != nil {
+		return nil, err
 	}
-	log.Infof("allowed a Set request: %v", msg)
-	return s.Server.Set(ctx, req)
+	err = authorizeUser(session)
+	if err == nil {
+		resp, err = s.Server.Capabilities(ctx, req)
+	}
+	glog.Infof("[%s] result = '%v'", session.SID, err)
+	s.CloseSession(session)
+	return resp, err
+}
+
+// Get - Wrapping function for creating session info.
+func (s *server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
+	var resp *pb.GetResponse
+	session, err := s.NewSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = authorizeUser(session)
+	if err == nil {
+		resp, err = s.Server.Get(ctx, req)
+	}
+	glog.Infof("[%s] result = '%v'", session.SID, err)
+	s.CloseSession(session)
+	return resp, err
+}
+
+// Set - Wrapping function for creating session info.
+func (s *server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, error) {
+	var resp *pb.SetResponse
+	session, err := s.NewSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = authorizeUser(session)
+	if err == nil {
+		resp, err = s.Server.Set(ctx, req)
+	}
+	glog.Infof("[%s] result = '%v'", session.SID, err)
+	s.CloseSession(session)
+	return resp, err
+}
+
+// Subscribe - Wrapping function for creating session info.
+func (s *server) Subscribe(stream pb.GNMI_SubscribeServer) error {
+	session, err := s.NewSession(stream.Context())
+	if err != nil {
+		return err
+	}
+	err = authorizeUser(session)
+	if err == nil {
+		err = s.Server.Subscribe(stream)
+	}
+	glog.Infof("[%s] result = '%v'", session.SID, err)
+	s.CloseSession(session)
+	return err
 }
 
 func main() {
-
 	model := gnmi.NewModel(
 		reflect.TypeOf((*gostruct.Device)(nil)),
 		gostruct.SchemaTree["Device"],
@@ -99,8 +150,8 @@ func main() {
 	flag.Parse()
 
 	opts := credentials.ServerCredentials()
-	opts = append(opts, grpc.UnaryInterceptor(credentials.UnaryInterceptor))
-	opts = append(opts, grpc.StreamInterceptor(credentials.StreamInterceptor))
+	// opts = append(opts, grpc.UnaryInterceptor(credentials.UnaryInterceptor))
+	// opts = append(opts, grpc.StreamInterceptor(credentials.StreamInterceptor))
 	g := grpc.NewServer(opts...)
 
 	var configData []byte
@@ -108,26 +159,26 @@ func main() {
 		var err error
 		configData, err = ioutil.ReadFile(*configFile)
 		if err != nil {
-			log.Exitf("error in reading config file: %v", err)
+			glog.Exitf("error in reading config file: %v", err)
 		}
 	}
 	s, err := newServer(model, configData)
 	if err != nil {
-		log.Exitf("error in creating gnmid: %v", err)
+		glog.Exitf("error in creating gnmid: %v", err)
 	}
-	// defer s.Close()
+	defer s.Close()
 
 	pb.RegisterGNMIServer(g, s)
 	reflection.Register(g)
 
-	log.Infof("starting to listen on %s", *bindAddr)
+	glog.Infof("starting to listen on %s", *bindAddr)
 	listen, err := net.Listen("tcp", *bindAddr)
 	if err != nil {
-		log.Exitf("failed to listen: %v", err)
+		glog.Exitf("failed to listen: %v", err)
 	}
 
-	log.Info("starting to serve")
+	glog.Info("starting to serve")
 	if err := g.Serve(listen); err != nil {
-		log.Exitf("failed to serve: %v", err)
+		glog.Exitf("failed to serve: %v", err)
 	}
 }
