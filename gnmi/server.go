@@ -668,8 +668,8 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 
 // Subscribe implements the Subscribe RPC in gNMI spec.
 func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
-	sub := newSubscription(stream.Context(), s)
-	if sub == nil {
+	sconn := newStreamConn(stream.Context(), s)
+	if sconn == nil {
 		msg := fmt.Sprintf("error in subscription init")
 		log.Error(msg)
 		return status.Error(codes.Internal, msg)
@@ -678,37 +678,27 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 		request, err := stream.Recv()
 		if err != nil {
 			log.Error(err)
-			deleteSubscription(sub)
+			deleteStreamConn(sconn)
 			if err == io.EOF {
 				return nil
 			}
 			return err
 		}
 		fmt.Println(proto.MarshalTextString(request))
-		sub.updateSubscription(request)
-
-		// // Save the above message for SubscribeResponse.
-		// // Get schema node for path from config struct.
-		// fullPath := path
-		// if prefix != nil {
-		// 	fullPath = gnmiFullPath(prefix, path)
-		// }
-		// if fullPath.GetElem() == nil && fullPath.GetElement() != nil {
-		// 	return nil, status.Error(codes.Unimplemented, "deprecated path element type is unsupported")
-		// }
-		// GetNode upon SubscribeResponse!!!
-		// node, stat := ygotutils.GetNode(s.model.schemaTreeRoot, s.config, fullPath)
-		// if isNil(node) || stat.GetCode() != int32(cpb.Code_OK) {
-		// 	return nil, status.Errorf(codes.NotFound, "path %v not found", fullPath)
-		// }
+		sub := newSubscription(s)
+		responses, err := sub.updateSubscription(sconn, request)
+		if err != nil {
+			return err
+		}
 
 		s.mu.Lock()
 		s.dataBlock.Lock()
-		// [FIXME] Build SubscribeResponse!!! here
+		for _, response := range responses {
+			fmt.Println(proto.MarshalTextString(response))
+			stream.Send(response)
+		}
 		s.dataBlock.Unlock()
 		s.mu.Unlock()
-		fmt.Println(proto.MarshalTextString(request))
-		stream.Send(&pb.SubscribeResponse{})
 	}
 }
 
