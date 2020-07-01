@@ -291,13 +291,15 @@ SubscribeRequest: # !!oneof
   - [ ] For ONCE and POLL modes, this causes the server to send only the sync message (Sec. 3.5.2.3), before proceeding to process poll requests (in the case of POLL) or closing the RPC (in the case of ONCE).
   - [ ] `updates_only(bool)`가 설정된 `SubscribeRequest`가 수신되면, gnmi_target은 inital updates (SubscribeResponse) message를 보내지 않고, initial updates complete message (SubscribeResponse{sync_response:true})만 전송한다. 그 뒤 변경된 data에 대해서 updates message (SubscribeResponse)를 보낸다.
 
+> // https://github.com/openconfig/gnmi/issues/45 - QoSMarking seems to be deprecated
+
 ### SubscribeResponse message
 
 A `SubscribeResponse` message is the telemetry updates that is transmitted by a target to a client over an established Subscribe RPC for a specified set of paths.
 
 ```yaml
 SubscribeResponse: # !!oneof
-  update(Notification):
+  update(Notification): # not list!!
     timestamp(int64):
     prefix(Path):
     alias(string):

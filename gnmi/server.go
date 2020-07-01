@@ -83,6 +83,9 @@ type Server struct {
 	dataBlock *ydb.YDB
 	config    ygot.ValidatedGoStruct
 	mu        sync.RWMutex // mu is the RW lock to protect the access to config
+	// Server optional configuration
+	useAliases bool
+	alias      map[string]*pb.Alias
 }
 
 // NewServer creates an instance of Server with given json config.
@@ -665,7 +668,7 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 
 // Subscribe implements the Subscribe RPC in gNMI spec.
 func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
-	sub := CreateSubscription(stream.Context())
+	sub := newSubscription(stream.Context(), s)
 	if sub == nil {
 		msg := fmt.Sprintf("error in subscription init")
 		log.Error(msg)
@@ -675,39 +678,14 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 		request, err := stream.Recv()
 		if err != nil {
 			log.Error(err)
-			DeleteSubscription(sub)
+			deleteSubscription(sub)
 			if err == io.EOF {
 				return nil
 			}
 			return err
 		}
 		fmt.Println(proto.MarshalTextString(request))
-
-		// Poll Subscription
-		pollMode := request.GetPoll()
-		if pollMode != nil {
-			CreatePollSubscription(sub)
-			continue
-		}
-		// Subscription requests for aliases update
-		aliases := request.GetAliases()
-		if aliases != nil {
-			UpdateAliases(aliases)
-			continue
-		}
-		// extension := request.GetExtension()
-		subscriptionList := request.GetSubscribe()
-		if subscriptionList == nil {
-			msg := fmt.Sprintf("no subscribe field(SubscriptionList)")
-			log.Error(msg)
-			return status.Error(codes.InvalidArgument, msg)
-		}
-		mode := subscriptionList.GetMode()
-		if mode == pb.SubscriptionList_ONCE || mode == pb.SubscriptionList_POLL {
-			// CreateOnceSubscription(sub)
-			continue
-		}
-		CreateStreamSubscription(sub, subscriptionList)
+		sub.updateSubscription(request)
 
 		// // Save the above message for SubscribeResponse.
 		// // Get schema node for path from config struct.
