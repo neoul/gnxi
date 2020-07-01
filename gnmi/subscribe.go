@@ -1,14 +1,11 @@
 package gnmi
 
 import (
-	"encoding/json"
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
 	pb "github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/openconfig/gnmi/value"
 	"github.com/openconfig/ygot/experimental/ygotutils"
 	"github.com/openconfig/ygot/ygot"
 	cpb "google.golang.org/genproto/googleapis/rpc/code"
@@ -183,67 +180,11 @@ func (sub *Subscription) onceSubscription(request *pb.SubscribeRequest) ([]*pb.S
 		if isNil(node) || stat.GetCode() != int32(cpb.Code_OK) {
 			return nil, status.Errorf(codes.NotFound, "path %v not found", fullPath)
 		}
-
-		nodeStruct, ok := node.(ygot.GoStruct)
-		// Return leaf node.
-		if !ok {
-			var val *pb.TypedValue
-			switch kind := reflect.ValueOf(node).Kind(); kind {
-			case reflect.Ptr, reflect.Interface:
-				var err error
-				val, err = value.FromScalar(reflect.ValueOf(node).Elem().Interface())
-				if err != nil {
-					msg := fmt.Sprintf("leaf node %v does not contain a scalar type value: %v", path, err)
-					return nil, status.Error(codes.Internal, msg)
-				}
-			case reflect.Int64:
-				enumMap, ok := server.model.enumData[reflect.TypeOf(node).Name()]
-				if !ok {
-					return nil, status.Error(codes.Internal, "not a GoStruct enumeration type")
-				}
-				val = &pb.TypedValue{
-					Value: &pb.TypedValue_StringVal{
-						StringVal: enumMap[reflect.ValueOf(node).Int()].Name,
-					},
-				}
-			default:
-				return nil, status.Errorf(codes.Internal, "unexpected kind of leaf node type: %v %v", node, kind)
-			}
-			update[i] = &pb.Update{Path: path, Val: val}
-			continue
-		}
-
-		// Return IETF JSON by default.
-		jsonEncoder := func() (map[string]interface{}, error) {
-			return ygot.ConstructIETFJSON(nodeStruct, &ygot.RFC7951JSONConfig{AppendModuleName: true})
-		}
-		jsonType := "IETF"
-		buildUpdate := func(b []byte) *pb.Update {
-			return &pb.Update{Path: path, Val: &pb.TypedValue{Value: &pb.TypedValue_JsonIetfVal{JsonIetfVal: b}}}
-		}
-
-		if encoding == pb.Encoding_JSON {
-			jsonEncoder = func() (map[string]interface{}, error) {
-				return ygot.ConstructInternalJSON(nodeStruct)
-			}
-			jsonType = "Internal"
-			buildUpdate = func(b []byte) *pb.Update {
-				return &pb.Update{Path: path, Val: &pb.TypedValue{Value: &pb.TypedValue_JsonVal{JsonVal: b}}}
-			}
-		}
-
-		jsonTree, err := jsonEncoder()
+		typedValue, err := ygot.EncodeTypedValue(node, encoding)
 		if err != nil {
-			msg := fmt.Sprintf("error in constructing %s JSON tree from requested node: %v", jsonType, err)
-			return nil, status.Error(codes.Internal, msg)
+			return nil, status.Errorf(codes.Internal, err.Error())
 		}
-
-		jsonDump, err := json.Marshal(jsonTree)
-		if err != nil {
-			msg := fmt.Sprintf("error in marshaling %s JSON tree to bytes: %v", jsonType, err)
-			return nil, status.Error(codes.Internal, msg)
-		}
-		update[i] = buildUpdate(jsonDump)
+		update[i] = &pb.Update{Path: path, Val: typedValue}
 	}
 	notification := pb.Notification{
 		Timestamp: timepstamp,

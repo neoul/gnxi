@@ -3,7 +3,6 @@ package utils
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"google.golang.org/grpc/metadata"
@@ -29,6 +28,6 @@ func GetMetadata(ctx context.Context) (map[string]string, bool) {
 		m["peer-address"] = p.Addr.String()[:index]
 		m["peer-port"] = p.Addr.String()[index+1:]
 	}
-	fmt.Println("metadata", m)
+	// fmt.Println("metadata", m)
 	return m, true
 }

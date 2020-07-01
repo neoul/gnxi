@@ -1,6 +1,7 @@
 package gnmi
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -96,6 +97,7 @@ func (s *Server) NewSession(ctx context.Context) (*Session, error) {
 	}
 	session.entrance++
 	s.Sessions[peer] = session
+	fmt.Printf("session[%s] opened\n", peer)
 	return session, nil
 }
 
@@ -109,5 +111,6 @@ func (s *Server) CloseSession(session *Session) {
 	if session.entrance <= 0 {
 		peer := session.SID
 		delete(s.Sessions, peer)
+		fmt.Printf("session[%s] closed\n", peer)
 	}
 }
