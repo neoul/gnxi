@@ -9,6 +9,35 @@ import (
 	"golang.org/x/net/context"
 )
 
+// StreamProtocol - The type of the subscription protocol
+type StreamProtocol int
+
+const (
+	// StreamUserDefined - Stream subscription over user-defined RPC
+	StreamUserDefined StreamProtocol = iota
+	// StreamSSH - Stream subscription over SSH
+	StreamSSH
+	// StreamGRPC - Stream subscription over GRPC
+	StreamGRPC
+	// StreamJSONRPC - Stream subscription over JSON RPC
+	StreamJSONRPC
+	// StreamThriftRPC - Stream subscription over ThriftRPC
+	StreamThriftRPC
+	// StreamWebsocketRPC - Stream subscription over WebsocketRPC
+	StreamWebsocketRPC
+)
+
+var streamProtocolStr = [...]string{
+	"STREAM_USER_DEFINED_RPC",
+	"STREAM_SSH",
+	"STREAM_GRPC",
+	"STREAM_JSON_RPC",
+	"STREAM_THRIFT_RPC",
+	"STREAM_WEBSOCKET_RPC",
+}
+
+func (s StreamProtocol) String() string { return streamProtocolStr[s%5] }
+
 // Session - gNMI gRPC Session information managed by server
 type Session struct {
 	ID                 uint64          `json:"id,omitempty"`

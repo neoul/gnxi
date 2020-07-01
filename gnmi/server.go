@@ -83,10 +83,11 @@ type Server struct {
 	dataBlock *ydb.YDB
 	config    ygot.ValidatedGoStruct
 	mu        sync.RWMutex // mu is the RW lock to protect the access to config
-	// Server optional configuration
-	useAliases bool
-	alias      map[string]*pb.Alias
-	Sessions   map[string]*Session
+
+	useAliases    bool
+	alias         map[string]*pb.Alias
+	Sessions      map[string]*Session
+	Subscriptions []*Subscription
 }
 
 // NewServer creates an instance of Server with given json config.
@@ -95,7 +96,7 @@ func NewServer(model *Model, config []byte, callback ConfigCallback) (*Server, e
 	if err != nil {
 		return nil, err
 	}
-	db, _ := ydb.OpenWithTargetStruct("gnmid", rootStruct)
+	db, _ := ydb.OpenWithTargetStruct("gnmi_target", rootStruct)
 
 	s := &Server{
 		model:     model,
@@ -148,7 +149,8 @@ func (s *Server) checkEncodingAndModel(encoding pb.Encoding, models []*pb.ModelD
 		}
 	}
 	if !hasSupportedEncoding {
-		return fmt.Errorf("unsupported encoding: %s", pb.Encoding_name[int32(encoding)])
+		err := fmt.Errorf("unsupported encoding: %s", pb.Encoding_name[int32(encoding)])
+		return status.Error(codes.Unimplemented, err.Error())
 	}
 	for _, m := range models {
 		isSupported := false
@@ -159,7 +161,8 @@ func (s *Server) checkEncodingAndModel(encoding pb.Encoding, models []*pb.ModelD
 			}
 		}
 		if !isSupported {
-			return fmt.Errorf("unsupported model: %v", m)
+			err := fmt.Errorf("unsupported model: %v", m)
+			return status.Error(codes.Unimplemented, err.Error())
 		}
 	}
 	return nil
@@ -496,7 +499,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 		return nil, status.Errorf(codes.Unimplemented, "unsupported request type: %s", pb.GetRequest_DataType_name[int32(req.GetType())])
 	}
 	if err := s.checkEncodingAndModel(req.GetEncoding(), req.GetUseModels()); err != nil {
-		return nil, status.Error(codes.Unimplemented, err.Error())
+		return nil, err
 	}
 
 	fmt.Println(proto.MarshalTextString(req))
@@ -671,37 +674,34 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 
 // Subscribe implements the Subscribe RPC in gNMI spec.
 func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
-	sconn := newStreamConn(stream.Context(), s)
-	if sconn == nil {
-		msg := fmt.Sprintf("error in subscription init")
-		log.Error(msg)
-		return status.Error(codes.Internal, msg)
+	session, err := s.NewSession(stream.Context())
+	if err != nil {
+		return err
 	}
 	for {
 		req, err := stream.Recv()
 		if err != nil {
-			log.Error(err)
-			deleteStreamConn(sconn)
+			s.CloseSession(session)
 			if err == io.EOF {
 				return nil
 			}
 			return err
 		}
 		fmt.Println(proto.MarshalTextString(req))
-		sub := newSubscription(s)
-		resps, err := sub.updateSubscription(sconn, req)
+		s.mu.RLock()
+		s.dataBlock.Lock()
+		sub := newSubscription(session)
+		resps, err := sub.handleSubscription(req)
+		s.dataBlock.Unlock()
+		s.mu.RUnlock()
 		if err != nil {
+			s.CloseSession(session)
 			return err
 		}
-
-		s.mu.Lock()
-		s.dataBlock.Lock()
 		for _, resp := range resps {
 			fmt.Println(proto.MarshalTextString(resp))
 			stream.Send(resp)
 		}
-		s.dataBlock.Unlock()
-		s.mu.Unlock()
 	}
 }
 
