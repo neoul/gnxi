@@ -63,14 +63,10 @@ var (
 
 // NewSession - Get the Session. Create new Session if not exists.
 func (s *Server) NewSession(ctx context.Context) (*Session, error) {
-	if ctx == nil {
-		return nil, errMissingMetadata
-	}
-	m, ok := utils.GetMetadata(ctx)
+	peer, ok := utils.QueryMetadata(ctx, "peer")
 	if !ok {
 		return nil, errMissingMetadata
 	}
-	peer := m["peer"]
 	s.mu.Lock()
 	s.dataBlock.Lock()
 	defer s.mu.Unlock()
@@ -81,6 +77,11 @@ func (s *Server) NewSession(ctx context.Context) (*Session, error) {
 		session.entrance++
 		return session, nil
 	}
+	m, ok := utils.GetMetadata(ctx)
+	if !ok {
+		return nil, errMissingMetadata
+	}
+
 	sessionID++
 	username, _ := m["username"]
 	password, _ := m["password"]
