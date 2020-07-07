@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/neoul/gnxi/utils"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/experimental/ygotutils"
 	"github.com/openconfig/ygot/ygot"
@@ -167,15 +168,10 @@ func (sub *Subscription) onceSubscription(request *pb.SubscribeRequest) ([]*pb.S
 	for i, subentity := range sub.SubscribedEntity {
 		// Get schema node for path from config struct.
 		path := subentity.Path
-		fullPath := path
-		if prefix != nil {
-			fullPath = gnmiFullPath(prefix, path)
-		}
-
+		fullPath := utils.GetGNMIFullPath(prefix, path)
 		if fullPath.GetElem() == nil && fullPath.GetElement() != nil {
 			return nil, status.Error(codes.Unimplemented, "deprecated path element")
 		}
-		fmt.Println("fullPath", fullPath)
 		node, stat := ygotutils.GetNode(server.model.schemaTreeRoot, server.config, fullPath)
 		if isNil(node) || stat.GetCode() != int32(cpb.Code_OK) {
 			return nil, status.Errorf(codes.NotFound, "path %v not found", fullPath)

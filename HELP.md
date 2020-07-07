@@ -46,3 +46,32 @@ gnmi_cli -address 192.168.0.77:10161 -ca_crt pki/ca.crt -client_crt pki/client.c
 ```bash
 grpcui -cacert github.com/neoul/gnxi/pki/ca.crt -cert github.com/neoul/gnxi/pki/client.crt -key github.com/neoul/gnxi/pki/client.key -proto github.com/openconfig/gnmi/proto/gnmi_ext/gnmi_ext.proto -proto github.com/openconfig/gnmi/proto/gnmi/gnmi.proto 192.168.0.77:10161
 ```
+
+
+```text
+gnmipath -> schema path (yang.Entry) ->  full path (element name and key) for gnmipath ->
+
+pathEntity struct {
+    origin string
+    target string
+    prefix []string
+    path []string (wildcard *, ...) 로 변환
+}
+
+
+yang:prefix는 삭제
+
+map[string]interface{}
+    interface{} = map[string]interface{}
+        ... []*Subscription
+
+elem ->
+* ->
+... ->
+add(prefix, path, yang.Entry, *Subscription)
+del(prefix, path, yang.Entry, *Subscription) 
+search(path []string) []*Subscription
+
+
+path.go
+```

@@ -514,11 +514,9 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	defer s.dataBlock.Unlock()
 
 	for i, path := range paths {
+		// path.CompletePath()
 		// Get schema node for path from config struct.
-		fullPath := path
-		if prefix != nil {
-			fullPath = gnmiFullPath(prefix, path)
-		}
+		fullPath := utils.GetGNMIFullPath(prefix, path)
 		if fullPath.GetElem() == nil && fullPath.GetElement() != nil {
 			return nil, status.Error(codes.Unimplemented, "deprecated path element type is unsupported")
 		}
