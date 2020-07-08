@@ -84,10 +84,10 @@ type Server struct {
 	config    ygot.ValidatedGoStruct
 	mu        sync.RWMutex // mu is the RW lock to protect the access to config
 
-	useAliases    bool
-	alias         map[string]*pb.Alias
-	Sessions      map[string]*Session
-	Subscriptions []*Subscription
+	useAliases bool
+	alias      map[string]*pb.Alias
+	Sessions   map[string]*Session
+	TSub       []*TelemetrySubscription
 }
 
 // NewServer creates an instance of Server with given json config.

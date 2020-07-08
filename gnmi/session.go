@@ -43,17 +43,17 @@ func (s StreamProtocol) String() string { return streamProtocolStr[s%5] }
 
 // Session - gNMI gRPC Session information managed by server
 type Session struct {
-	ID                 uint64          `json:"id,omitempty"`
-	SID                string          `json:"sid,omitempty"`
-	Username           string          `json:"username,omitempty"`
-	Password           string          `json:"password,omitempty"`
-	GrpcVer            string          `json:"grpc-ver,omitempty"`
-	ContentType        string          `json:"content-type,omitempty"`
-	LoginTime          time.Time       `json:"login-time,omitempty"`
-	DestinationAddress string          `json:"destination-address,omitempty"`
-	DestinationPort    uint16          `json:"destination-port,omitempty"`
-	Protocol           StreamProtocol  `json:"protocol,omitempty"`
-	Subscriptions      []*Subscription `json:"subscriptions,omitempty"`
+	ID                 uint64                   `json:"id,omitempty"`
+	SID                string                   `json:"sid,omitempty"`
+	Username           string                   `json:"username,omitempty"`
+	Password           string                   `json:"password,omitempty"`
+	GrpcVer            string                   `json:"grpc-ver,omitempty"`
+	ContentType        string                   `json:"content-type,omitempty"`
+	LoginTime          time.Time                `json:"login-time,omitempty"`
+	DestinationAddress string                   `json:"destination-address,omitempty"`
+	DestinationPort    uint16                   `json:"destination-port,omitempty"`
+	Protocol           StreamProtocol           `json:"protocol,omitempty"`
+	TelemetrySub       []*TelemetrySubscription `json:"telemetry-subscriptions,omitempty"`
 	alias              map[string]*pb.Alias
 	server             *Server
 	valid              bool
@@ -84,7 +84,7 @@ func (s *Server) Started(local, remote net.Addr) {
 		DestinationAddress: destinationAddress,
 		DestinationPort:    uint16(destinationPort),
 		Protocol:           StreamUserDefined,
-		Subscriptions:      []*Subscription{},
+		TelemetrySub:       []*TelemetrySubscription{},
 		alias:              map[string]*pb.Alias{},
 		server:             s, SID: remoteaddr,
 	}

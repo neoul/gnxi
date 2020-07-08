@@ -21,14 +21,14 @@ type SubscriptionEntity struct {
 	SampleInterval    uint64              `json:"sample_interval,omitempty"` // ns between samples in SAMPLE mode.
 	SuppressRedundant bool                `json:"suppress_redundant,omitempty"`
 	HeartbeatInterval uint64              `json:"heartbeat_interval,omitempty"`
-	subscription      *Subscription
+	tsub              *TelemetrySubscription
 	// [FIXME]
 	// 1. Ticker (Timer)
 	// 2. keys (The path to the subscription data)
 }
 
-// Subscription - Default structure for DynamicSubscription
-type Subscription struct {
+// TelemetrySubscription - Default structure for Telemetry Update Subscription
+type TelemetrySubscription struct {
 	Prefix           *pb.Path                 `json:"prefix,omitempty"`
 	UseAliases       bool                     `json:"use_aliases,omitempty"`
 	Mode             pb.SubscriptionList_Mode `json:"mode,omitempty"`
@@ -46,23 +46,23 @@ type Subscription struct {
 	// Alias            []*pb.Alias              `json:"alias,omitempty"`
 }
 
-func (s *Server) addSubscription(sub *Subscription) {
-	s.Subscriptions = append(s.Subscriptions, sub)
+func (s *Server) addSubscription(sub *TelemetrySubscription) {
+	s.TSub = append(s.TSub, sub)
 }
 
-func (s *Server) delSubscription(sub *Subscription) {
-	for i, se := range s.Subscriptions {
+func (s *Server) delSubscription(sub *TelemetrySubscription) {
+	for i, se := range s.TSub {
 		if se == sub {
-			s.Subscriptions =
-				append(s.Subscriptions[:i], s.Subscriptions[i+1:]...)
+			s.TSub =
+				append(s.TSub[:i], s.TSub[i+1:]...)
 			break
 		}
 	}
 }
 
-// newSubscription - Create new Subscription
-func newSubscription(session *Session) *Subscription {
-	s := Subscription{
+// newSubscription - Create new TelemetrySubscription
+func newSubscription(session *Session) *TelemetrySubscription {
+	s := TelemetrySubscription{
 		Prefix: nil, UseAliases: false, Mode: pb.SubscriptionList_STREAM,
 		AllowAggregation: false, Encoding: pb.Encoding_JSON_IETF, UpdatesOnly: false,
 		SubscribedEntity: []*SubscriptionEntity{}, isPolling: false, session: session,
@@ -71,7 +71,7 @@ func newSubscription(session *Session) *Subscription {
 	return &s
 }
 
-func (sub *Subscription) handleSubscription(request *pb.SubscribeRequest) ([]*pb.SubscribeResponse, error) {
+func (sub *TelemetrySubscription) handleSubscription(request *pb.SubscribeRequest) ([]*pb.SubscribeResponse, error) {
 	server := sub.server
 	// Poll Subscription indication
 	pollMode := request.GetPoll()
@@ -116,7 +116,7 @@ func (sub *Subscription) handleSubscription(request *pb.SubscribeRequest) ([]*pb
 		heartBeatInterval := entity.GetHeartbeatInterval()
 		fmt.Println("SubscriptionList:", i, prefix, path, submod, sampleInterval, supressRedundant, heartBeatInterval)
 		subentity := SubscriptionEntity{
-			subscription: sub, Path: path, Mode: submod, SampleInterval: sampleInterval,
+			tsub: sub, Path: path, Mode: submod, SampleInterval: sampleInterval,
 			SuppressRedundant: supressRedundant, HeartbeatInterval: heartBeatInterval}
 		sub.SubscribedEntity = append(sub.SubscribedEntity, &subentity)
 		if mode == pb.SubscriptionList_STREAM {
@@ -138,7 +138,7 @@ func (sub *Subscription) handleSubscription(request *pb.SubscribeRequest) ([]*pb
 	return nil, nil
 }
 
-func (sub *Subscription) updateClientAliases(aliases *pb.AliasList) error {
+func (sub *TelemetrySubscription) updateClientAliases(aliases *pb.AliasList) error {
 	aliaslist := aliases.GetAlias()
 	for _, alias := range aliaslist {
 		name := alias.GetAlias()
@@ -151,11 +151,11 @@ func (sub *Subscription) updateClientAliases(aliases *pb.AliasList) error {
 	return nil
 }
 
-func (sub *Subscription) updateSeverliases(aliases *pb.AliasList) error {
+func (sub *TelemetrySubscription) updateSeverliases(aliases *pb.AliasList) error {
 	return nil
 }
 
-func (sub *Subscription) onceSubscription(request *pb.SubscribeRequest) ([]*pb.SubscribeResponse, error) {
+func (sub *TelemetrySubscription) onceSubscription(request *pb.SubscribeRequest) ([]*pb.SubscribeResponse, error) {
 	server := sub.server
 	alias := ""
 	prefix := sub.Prefix
@@ -197,7 +197,7 @@ func (sub *Subscription) onceSubscription(request *pb.SubscribeRequest) ([]*pb.S
 	return updates, nil
 }
 
-func (sub *Subscription) pollSubscription(request *pb.SubscribeRequest) ([]*pb.SubscribeResponse, error) {
+func (sub *TelemetrySubscription) pollSubscription(request *pb.SubscribeRequest) ([]*pb.SubscribeResponse, error) {
 	// updates := pb.SubscribeResponse{Response: &pb.SubscribeResponse_Update{
 	// 	Update: &pb.Notification{
 	// 		Timestamp: 200,
@@ -212,7 +212,7 @@ func (sub *Subscription) pollSubscription(request *pb.SubscribeRequest) ([]*pb.S
 	return nil, nil
 }
 
-func (sub *Subscription) streamSubscription(request *pb.SubscribeRequest) ([]*pb.SubscribeResponse, error) {
+func (sub *TelemetrySubscription) streamSubscription(request *pb.SubscribeRequest) ([]*pb.SubscribeResponse, error) {
 
 	return nil, nil
 }
