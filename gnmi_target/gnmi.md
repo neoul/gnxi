@@ -280,7 +280,7 @@ SubscribeRequest: # !!oneof
 - [ ] **ONCE Subscriptions**: A subscription operating in the ONCE mode acts as a single request/response channel. The target creates the relevant update messages, transmits them, and subsequently closes the RPC.
   - [ ] ONCE Subscription MUST start on the reception of `SubscribeRequest` message with the `mode(Mode)` field set to `ONCE` and then the `SubscribeResponse` messages corresponding to the subscription MUST be transmitted to the client.
   - [ ] **ONCE Subscription termination**: ~~Following the transmission of all updates which correspond to data items within the set of paths specified within the subscription list,~~ After all Updates (`SubscribeResponse`) are transmitted, a `SubscribeResponse` message with the `sync_response` field set to true MUST be transmitted, and the RPC via which the `SubscribeRequest` was received MUST be closed.
-
+  - [ ] If `updates_only` is set in the SubscribeRequest message, only a `SubscribeResponse(sync_resonse)` will be sent for a `ONCE` or `POLL` mode.
 - [ ] **Cancel subscription**: Subscriptions are created for a set of paths - which cannot be modified throughout the lifetime of the subscription. In order to cancel a subscription, the client cancels the Subscribe RPC associated with the subscription, or terminates the entire gRPC session.
   - Need to check how to cancel Subscribe RPC (https://github.com/grpc/grpc-java/issues/3095)
 - [ ] **Subscription aggregation**:

@@ -38,7 +38,7 @@ type TelemetrySubscription struct {
 	SubscribedEntity []*SubscriptionEntity    `json:"subscribed_entity,omitempty"` // Set of subscriptions to create.
 	isPolling        bool
 	session          *Session
-	server           *Server
+	// server           *Server
 
 	// // https://github.com/openconfig/gnmi/issues/45 - QoSMarking seems to be deprecated
 	// Qos              *pb.QOSMarking           `json:"qos,omitempty"`          // DSCP marking to be used.
@@ -66,13 +66,12 @@ func newSubscription(session *Session) *TelemetrySubscription {
 		Prefix: nil, UseAliases: false, Mode: pb.SubscriptionList_STREAM,
 		AllowAggregation: false, Encoding: pb.Encoding_JSON_IETF, UpdatesOnly: false,
 		SubscribedEntity: []*SubscriptionEntity{}, isPolling: false, session: session,
-		server: session.server,
 	}
 	return &s
 }
 
 func (sub *TelemetrySubscription) handleSubscription(request *pb.SubscribeRequest) ([]*pb.SubscribeResponse, error) {
-	server := sub.server
+	server := sub.session.server
 	// Poll Subscription indication
 	pollMode := request.GetPoll()
 	if pollMode != nil {
@@ -127,8 +126,8 @@ func (sub *TelemetrySubscription) handleSubscription(request *pb.SubscribeReques
 	}
 	// Build SubscribeResponses using the Subscription object
 	if mode == pb.SubscriptionList_ONCE {
-		subscribeResponses, err := sub.onceSubscription(request)
-		return subscribeResponses, err
+		// subscribeResponses, err := sub.onceSubscription(request)
+		// return subscribeResponses, err
 	} else if mode == pb.SubscriptionList_POLL {
 		sub.pollSubscription(request)
 	} else {
@@ -146,7 +145,7 @@ func (sub *TelemetrySubscription) updateClientAliases(aliases *pb.AliasList) err
 			msg := fmt.Sprintf("invalid alias(Alias): Alias must start with '#'")
 			return status.Error(codes.InvalidArgument, msg)
 		}
-		sub.server.alias[name] = alias
+		sub.session.server.alias[name] = alias
 	}
 	return nil
 }
@@ -155,24 +154,50 @@ func (sub *TelemetrySubscription) updateSeverliases(aliases *pb.AliasList) error
 	return nil
 }
 
-func (sub *TelemetrySubscription) onceSubscription(request *pb.SubscribeRequest) ([]*pb.SubscribeResponse, error) {
-	server := sub.server
+// initTelemetryUpdate - Process and generate responses for a init update.
+func (ss *Session) initTelemetryUpdate(req *pb.SubscribeRequest) ([]*pb.SubscribeResponse, error) {
+	s := ss.server
+	subscriptionList := req.GetSubscribe()
+	subList := subscriptionList.GetSubscription()
+	if subList == nil || len(subList) <= 0 {
+		err := fmt.Errorf("no subscription field(Subscription)")
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	updateOnly := subscriptionList.GetUpdatesOnly()
+	if updateOnly {
+		updates := []*pb.SubscribeResponse{
+			{Response: &pb.SubscribeResponse_SyncResponse{
+				SyncResponse: true,
+			}},
+		}
+		return updates, nil
+	}
+	prefix := subscriptionList.GetPrefix()
+	encoding := subscriptionList.GetEncoding()
+	useAliases := subscriptionList.GetUseAliases()
+	mode := subscriptionList.GetMode()
 	alias := ""
-	prefix := sub.Prefix
-	encoding := sub.Encoding
-	timepstamp := time.Now().UnixNano()
-	// if sub.UseAliases {
-	// 	prefix = nil
-	// }
-	update := make([]*pb.Update, len(sub.SubscribedEntity))
-	for i, subentity := range sub.SubscribedEntity {
+	// [FIXME] Are they different?
+	switch mode {
+	case pb.SubscriptionList_POLL:
+	case pb.SubscriptionList_ONCE:
+	case pb.SubscriptionList_STREAM:
+	}
+	if useAliases {
+		// 1. lookup the prefix in the session.alias for client.alias.
+		// 1. lookup the prefix in the server.alias for server.alias.
+		// prefix = nil
+		// alias = xxx
+	}
+	update := make([]*pb.Update, len(subList))
+	for i, updateEntry := range subList {
 		// Get schema node for path from config struct.
-		path := subentity.Path
+		path := updateEntry.Path
 		fullPath := utils.GetGNMIFullPath(prefix, path)
 		if fullPath.GetElem() == nil && fullPath.GetElement() != nil {
-			return nil, status.Error(codes.Unimplemented, "deprecated path element")
+			return nil, status.Error(codes.Unimplemented, "deprecated path element used")
 		}
-		node, stat := ygotutils.GetNode(server.model.schemaTreeRoot, server.config, fullPath)
+		node, stat := ygotutils.GetNode(s.model.schemaTreeRoot, s.config, fullPath)
 		if isNil(node) || stat.GetCode() != int32(cpb.Code_OK) {
 			return nil, status.Errorf(codes.NotFound, "path %v not found", fullPath)
 		}
@@ -183,7 +208,7 @@ func (sub *TelemetrySubscription) onceSubscription(request *pb.SubscribeRequest)
 		update[i] = &pb.Update{Path: path, Val: typedValue}
 	}
 	notification := pb.Notification{
-		Timestamp: timepstamp,
+		Timestamp: time.Now().UnixNano(),
 		Prefix:    prefix,
 		Alias:     alias,
 		Update:    update,
@@ -192,6 +217,9 @@ func (sub *TelemetrySubscription) onceSubscription(request *pb.SubscribeRequest)
 	updates := []*pb.SubscribeResponse{
 		{Response: &pb.SubscribeResponse_Update{
 			Update: &notification,
+		}},
+		{Response: &pb.SubscribeResponse_SyncResponse{
+			SyncResponse: true,
 		}},
 	}
 	return updates, nil
@@ -219,5 +247,103 @@ func (sub *TelemetrySubscription) streamSubscription(request *pb.SubscribeReques
 
 func (sentity *SubscriptionEntity) registerStreamSubscription() error {
 	// status.Error(codes.InvalidArgument, err.Error())
+	return nil
+}
+
+// newSubscription - Create new TelemetrySubscription
+func newTelemetrySubscription(ss *Session) *TelemetrySubscription {
+	s := TelemetrySubscription{
+		Prefix: nil, UseAliases: false, Mode: pb.SubscriptionList_STREAM,
+		AllowAggregation: false, Encoding: pb.Encoding_JSON_IETF, UpdatesOnly: false,
+		SubscribedEntity: []*SubscriptionEntity{}, isPolling: false, session: ss,
+	}
+	return &s
+}
+
+func (ss *Session) updateAliases(aliaslist []*pb.Alias) error {
+	for _, alias := range aliaslist {
+		name := alias.GetAlias()
+		if !strings.HasPrefix(name, "#") {
+			msg := fmt.Sprintf("invalid alias(Alias): Alias must start with '#'")
+			return status.Error(codes.InvalidArgument, msg)
+		}
+		ss.alias[name] = alias
+	}
+	return nil
+}
+
+func (ss *Session) processSR(req *pb.SubscribeRequest, rchan chan *pb.SubscribeResponse) error {
+	// SubscribeRequest for poll Subscription indication
+	pollMode := req.GetPoll()
+	if pollMode != nil {
+		tsub := newTelemetrySubscription(ss)
+		tsub.isPolling = true
+		tsub.Mode = pb.SubscriptionList_POLL
+		ss.server.addSubscription(tsub)
+		return nil
+	}
+	// SubscribeRequest for aliases update
+	aliases := req.GetAliases()
+	if aliases != nil {
+		// process client aliases
+		aliaslist := aliases.GetAlias()
+		return ss.updateAliases(aliaslist)
+	}
+	// extension := req.GetExtension()
+	subscriptionList := req.GetSubscribe()
+	if subscriptionList == nil {
+		return status.Errorf(codes.InvalidArgument, "no subscribe(SubscriptionList)")
+	}
+	encoding := subscriptionList.GetEncoding()
+	useModules := subscriptionList.GetUseModels()
+	if err := ss.server.checkEncodingAndModel(encoding, useModules); err != nil {
+		return err
+	}
+	mode := subscriptionList.GetMode()
+	if mode == pb.SubscriptionList_ONCE || mode == pb.SubscriptionList_POLL {
+		resps, err := ss.initTelemetryUpdate(req)
+		for _, resp := range resps {
+			rchan <- resp
+		}
+		return err
+	}
+
+	// prefix := subscriptionList.GetPrefix()
+	// useAliases := subscriptionList.GetUseAliases()
+	// allowAggregation = subscriptionList.GetAllowAggregation()
+	// updatesOnly = subscriptionList.GetUpdatesOnly()
+
+	// subList := subscriptionList.GetSubscription()
+	// if subList == nil || len(subList) <= 0 {
+	// 	err := fmt.Errorf("no subscription field(Subscription)")
+	// 	return nil, status.Error(codes.InvalidArgument, err.Error())
+	// }
+	// for i, entity := range subList {
+	// 	path := entity.GetPath()
+	// 	submod := entity.GetMode()
+	// 	sampleInterval := entity.GetSampleInterval()
+	// 	supressRedundant := entity.GetSuppressRedundant()
+	// 	heartBeatInterval := entity.GetHeartbeatInterval()
+	// 	fmt.Println("SubscriptionList:", i, prefix, path, submod, sampleInterval, supressRedundant, heartBeatInterval)
+	// 	subentity := SubscriptionEntity{
+	// 		tsub: sub, Path: path, Mode: submod, SampleInterval: sampleInterval,
+	// 		SuppressRedundant: supressRedundant, HeartbeatInterval: heartBeatInterval}
+	// 	sub.SubscribedEntity = append(sub.SubscribedEntity, &subentity)
+	// 	if mode == pb.SubscriptionList_STREAM {
+	// 		if err := subentity.registerStreamSubscription(); err != nil {
+	// 			return nil, err
+	// 		}
+	// 	}
+	// }
+	// // Build SubscribeResponses using the Subscription object
+	// if mode == pb.SubscriptionList_ONCE {
+	// 	subscribeResponses, err := sub.onceSubscription(request)
+	// 	return subscribeResponses, err
+	// } else if mode == pb.SubscriptionList_POLL {
+	// 	sub.pollSubscription(request)
+	// } else {
+	// 	server.addSubscription(sub)
+	// 	sub.streamSubscription(request)
+	// }
 	return nil
 }

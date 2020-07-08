@@ -83,7 +83,7 @@ func (s *Server) Started(local, remote net.Addr) {
 		LoginTime:          time.Now(),
 		DestinationAddress: destinationAddress,
 		DestinationPort:    uint16(destinationPort),
-		Protocol:           StreamUserDefined,
+		Protocol:           StreamGRPC,
 		TelemetrySub:       []*TelemetrySubscription{},
 		alias:              map[string]*pb.Alias{},
 		server:             s, SID: remoteaddr,

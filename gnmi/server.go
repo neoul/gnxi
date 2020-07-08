@@ -482,15 +482,6 @@ func setPathWithoutAttribute(op pb.UpdateResult_Operation, curNode map[string]in
 
 // Capabilities returns supported encodings and supported models.
 func (s *Server) Capabilities(ctx context.Context, req *pb.CapabilityRequest) (*pb.CapabilityResponse, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	s.dataBlock.Lock()
-	defer s.dataBlock.Unlock()
-
-	_, err := s.getSession(ctx)
-	if err != nil {
-		return nil, err
-	}
 	ver, err := getGNMIServiceVersion()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "error in getting gnmi service version: %v", err)
@@ -509,10 +500,6 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	s.dataBlock.Lock()
 	defer s.dataBlock.Unlock()
 
-	_, err := s.getSession(ctx)
-	if err != nil {
-		return nil, err
-	}
 	if req.GetType() != pb.GetRequest_ALL {
 		return nil, status.Errorf(codes.Unimplemented, "unsupported request type: %s", pb.GetRequest_DataType_name[int32(req.GetType())])
 	}
@@ -558,11 +545,6 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 	defer s.mu.Unlock()
 	s.dataBlock.Lock()
 	defer s.dataBlock.Unlock()
-
-	_, err := s.getSession(ctx)
-	if err != nil {
-		return nil, err
-	}
 
 	utils.PrintProto(req)
 
@@ -664,15 +646,11 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 		fmt.Println(proto.MarshalTextString(req))
 		s.mu.RLock()
 		s.dataBlock.Lock()
-		sub := newSubscription(ss)
-		resps, err := sub.handleSubscription(req)
+		err = ss.processSR(req, rchan)
 		s.dataBlock.Unlock()
 		s.mu.RUnlock()
 		if err != nil {
 			return err
-		}
-		for _, resp := range resps {
-			rchan <- resp
 		}
 	}
 }
