@@ -1,7 +1,6 @@
 package gnmi
 
 import (
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -54,6 +53,7 @@ type Session struct {
 	DestinationPort    uint16                   `json:"destination-port,omitempty"`
 	Protocol           StreamProtocol           `json:"protocol,omitempty"`
 	TelemetrySub       []*TelemetrySubscription `json:"telemetry-subscriptions,omitempty"`
+	respchannel        chan *pb.SubscribeResponse
 	alias              map[string]*pb.Alias
 	server             *Server
 	valid              bool
@@ -89,13 +89,13 @@ func (s *Server) Started(local, remote net.Addr) {
 		server:             s, SID: remoteaddr,
 	}
 	s.Sessions[remoteaddr] = session
-	fmt.Printf("session[%s] Started\n", remoteaddr)
+	// fmt.Printf("session[%s] Started\n", remoteaddr)
 }
 
 // Closed - netsession interface to receive the session closed event
 func (s *Server) Closed(local, remote net.Addr) {
 	remoteaddr := remote.String()
-	fmt.Printf("session[%s] Closed\n", remoteaddr)
+	// fmt.Printf("session[%s] Closed\n", remoteaddr)
 	s.mu.Lock()
 	s.dataBlock.Lock()
 	delete(s.Sessions, remoteaddr)
@@ -124,7 +124,7 @@ func (s *Server) updateSession(ctx context.Context, SID string) (*Session, error
 	session.ContentType = contentType
 	session.Protocol = StreamGRPC
 	session.valid = true
-	fmt.Printf("session[%s] updated\n", SID)
+	// fmt.Printf("session[%s] updated\n", SID)
 	return session, nil
 }
 

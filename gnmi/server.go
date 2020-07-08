@@ -619,10 +619,40 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 
 // Subscribe implements the Subscribe RPC in gNMI spec.
 func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
+	var wg sync.WaitGroup
+	s.mu.Lock()
+	s.dataBlock.Lock()
 	ss, err := s.getSession(stream.Context())
 	if err != nil {
 		return err
 	}
+	done := make(chan bool, 1)
+	rchan := make(chan *pb.SubscribeResponse, 256)
+	ss.respchannel = rchan
+	s.dataBlock.Unlock()
+	s.mu.Unlock()
+
+	// run stream responsor
+	go func(
+		stream pb.GNMI_SubscribeServer,
+		response <-chan *pb.SubscribeResponse,
+		done <-chan bool) {
+		defer wg.Done()
+		for {
+			select {
+			case resp := <-response:
+				fmt.Println(proto.MarshalTextString(resp))
+				stream.Send(resp)
+			case <-done:
+				return
+			}
+		}
+	}(stream, rchan, done)
+	wg.Add(1)
+	defer func() {
+		done <- true
+		wg.Wait()
+	}()
 	for {
 		req, err := stream.Recv()
 		if err != nil {
@@ -642,8 +672,7 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 			return err
 		}
 		for _, resp := range resps {
-			fmt.Println(proto.MarshalTextString(resp))
-			stream.Send(resp)
+			rchan <- resp
 		}
 	}
 }
