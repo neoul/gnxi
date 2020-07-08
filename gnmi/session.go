@@ -2,7 +2,9 @@ package gnmi
 
 import (
 	"fmt"
+	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/neoul/gnxi/utils"
@@ -54,64 +56,98 @@ type Session struct {
 	Subscriptions      []*Subscription `json:"subscriptions,omitempty"`
 	alias              map[string]*pb.Alias
 	server             *Server
-	entrance           int
+	valid              bool
 }
 
 var (
 	sessionID uint64
 )
 
-// NewSession - Get the Session. Create new Session if not exists.
-func (s *Server) NewSession(ctx context.Context) (*Session, error) {
-	peer, ok := utils.QueryMetadata(ctx, "peer")
-	if !ok {
-		return nil, errMissingMetadata
-	}
+// Started - netsession interface to receive the session started event
+func (s *Server) Started(local, remote net.Addr) {
 	s.mu.Lock()
 	s.dataBlock.Lock()
 	defer s.mu.Unlock()
 	defer s.dataBlock.Unlock()
-
-	session, ok := s.Sessions[peer]
+	remoteaddr := remote.String()
+	session, ok := s.Sessions[remoteaddr]
 	if ok {
-		session.entrance++
-		return session, nil
+		return
+	}
+	sessionID++
+	index := strings.LastIndex(remoteaddr, ":")
+	destinationAddress := remoteaddr[:index]
+	destinationPort, _ := strconv.ParseUint(remoteaddr[index+1:], 0, 16)
+	session = &Session{
+		ID:                 sessionID,
+		LoginTime:          time.Now(),
+		DestinationAddress: destinationAddress,
+		DestinationPort:    uint16(destinationPort),
+		Protocol:           StreamUserDefined,
+		Subscriptions:      []*Subscription{},
+		alias:              map[string]*pb.Alias{},
+		server:             s, SID: remoteaddr,
+	}
+	s.Sessions[remoteaddr] = session
+	fmt.Printf("session[%s] Started\n", remoteaddr)
+}
+
+// Closed - netsession interface to receive the session closed event
+func (s *Server) Closed(local, remote net.Addr) {
+	remoteaddr := remote.String()
+	fmt.Printf("session[%s] Closed\n", remoteaddr)
+	s.mu.Lock()
+	s.dataBlock.Lock()
+	delete(s.Sessions, remoteaddr)
+	defer s.mu.Unlock()
+	defer s.dataBlock.Unlock()
+}
+
+// updateSession - Updated and Validate the session user
+func (s *Server) updateSession(ctx context.Context, SID string) (*Session, error) {
+	session, ok := s.Sessions[SID]
+	if !ok {
+		return nil, errInvalidSession
 	}
 	m, ok := utils.GetMetadata(ctx)
 	if !ok {
 		return nil, errMissingMetadata
 	}
 
-	sessionID++
 	username, _ := m["username"]
 	password, _ := m["password"]
 	userAgent, _ := m["user-agent"]
 	contentType, _ := m["content-type"]
-	destinationAddress := m["peer-address"]
-	destinationPort, _ := strconv.ParseUint(m["peer-port"], 0, 16)
-	session = &Session{
-		ID: sessionID, Username: username, Password: password,
-		GrpcVer: userAgent, ContentType: contentType, LoginTime: time.Now(),
-		DestinationAddress: destinationAddress, DestinationPort: uint16(destinationPort), Protocol: StreamGRPC,
-		Subscriptions: []*Subscription{}, alias: map[string]*pb.Alias{},
-		server: s, SID: peer,
-	}
-	session.entrance++
-	s.Sessions[peer] = session
-	fmt.Printf("session[%s] opened\n", peer)
+	session.Username = username
+	session.Password = password
+	session.GrpcVer = userAgent
+	session.ContentType = contentType
+	session.Protocol = StreamGRPC
+	session.valid = true
+	fmt.Printf("session[%s] updated\n", SID)
 	return session, nil
 }
 
-// CloseSession - Close the session
-func (s *Server) CloseSession(session *Session) {
-	s.mu.Lock()
-	s.dataBlock.Lock()
-	defer s.mu.Unlock()
-	defer s.dataBlock.Unlock()
-	session.entrance--
-	if session.entrance <= 0 {
-		peer := session.SID
-		delete(s.Sessions, peer)
-		fmt.Printf("session[%s] closed\n", peer)
+// getSession - Updated and Validate the session user
+func (s *Server) getSession(ctx context.Context) (*Session, error) {
+	peer, ok := utils.QueryMetadata(ctx, "peer")
+	if !ok {
+		return nil, errMissingMetadata
 	}
+	session, ok := s.Sessions[peer]
+	if !ok {
+		localaddr, remoteaddr, ok := utils.QueryAddr(ctx)
+		if !ok {
+			return nil, errMissingMetadata
+		}
+		s.Started(localaddr, remoteaddr)
+		s.updateSession(ctx, peer)
+		session, ok = s.Sessions[peer]
+		if !ok {
+			return nil, errInvalidSession
+		}
+	} else if !session.valid {
+		s.updateSession(ctx, peer)
+	}
+	return session, nil
 }

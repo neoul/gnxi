@@ -124,7 +124,7 @@ func NewServer(model *Model, config []byte, callback ConfigCallback) (*Server, e
 		}
 	}
 	if !(*disableYdbChannel) {
-		err = db.Connect("uss://openconfig", "sub")
+		err = db.Connect("uss://openconfig", "pub")
 		if err != nil {
 			db.Close()
 			return nil, err
@@ -232,7 +232,7 @@ func (s *Server) doReplaceOrUpdate(jsonTree map[string]interface{}, op pb.Update
 	fullPath := gnmiFullPath(prefix, path)
 	emptyNode, stat := ygotutils.NewNode(s.model.structRootType, fullPath)
 	if stat.GetCode() != int32(cpb.Code_OK) {
-		return nil, status.Errorf(codes.NotFound, "path %v is not found in the config structure: %v", fullPath, stat)
+		return nil, status.Errorf(codes.NotFound, "path %v is not found in the config structure: %d %s", fullPath, stat.GetCode(), stat.GetMessage())
 	}
 	var nodeVal interface{}
 	nodeStruct, ok := emptyNode.(ygot.ValidatedGoStruct)
@@ -482,6 +482,15 @@ func setPathWithoutAttribute(op pb.UpdateResult_Operation, curNode map[string]in
 
 // Capabilities returns supported encodings and supported models.
 func (s *Server) Capabilities(ctx context.Context, req *pb.CapabilityRequest) (*pb.CapabilityResponse, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	s.dataBlock.Lock()
+	defer s.dataBlock.Unlock()
+
+	_, err := s.getSession(ctx)
+	if err != nil {
+		return nil, err
+	}
 	ver, err := getGNMIServiceVersion()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "error in getting gnmi service version: %v", err)
@@ -495,6 +504,15 @@ func (s *Server) Capabilities(ctx context.Context, req *pb.CapabilityRequest) (*
 
 // Get implements the Get RPC in gNMI spec.
 func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	s.dataBlock.Lock()
+	defer s.dataBlock.Unlock()
+
+	_, err := s.getSession(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if req.GetType() != pb.GetRequest_ALL {
 		return nil, status.Errorf(codes.Unimplemented, "unsupported request type: %s", pb.GetRequest_DataType_name[int32(req.GetType())])
 	}
@@ -507,11 +525,6 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	prefix := req.GetPrefix()
 	paths := req.GetPath()
 	notifications := make([]*pb.Notification, len(paths))
-
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	s.dataBlock.Lock()
-	defer s.dataBlock.Unlock()
 
 	for i, path := range paths {
 		// path.CompletePath()
@@ -545,6 +558,12 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 	defer s.mu.Unlock()
 	s.dataBlock.Lock()
 	defer s.dataBlock.Unlock()
+
+	_, err := s.getSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	utils.PrintProto(req)
 
 	jsonTree, err := ygot.ConstructIETFJSON(s.config, &ygot.RFC7951JSONConfig{})
@@ -600,14 +619,13 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 
 // Subscribe implements the Subscribe RPC in gNMI spec.
 func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
-	session, err := s.NewSession(stream.Context())
+	ss, err := s.getSession(stream.Context())
 	if err != nil {
 		return err
 	}
 	for {
 		req, err := stream.Recv()
 		if err != nil {
-			s.CloseSession(session)
 			if err == io.EOF {
 				return nil
 			}
@@ -616,12 +634,11 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 		fmt.Println(proto.MarshalTextString(req))
 		s.mu.RLock()
 		s.dataBlock.Lock()
-		sub := newSubscription(session)
+		sub := newSubscription(ss)
 		resps, err := sub.handleSubscription(req)
 		s.dataBlock.Unlock()
 		s.mu.RUnlock()
 		if err != nil {
-			s.CloseSession(session)
 			return err
 		}
 		for _, resp := range resps {

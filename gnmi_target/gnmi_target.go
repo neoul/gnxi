@@ -20,12 +20,10 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"reflect"
 
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
@@ -33,6 +31,7 @@ import (
 	"github.com/neoul/gnxi/gnmi/modeldata/gostruct"
 
 	"github.com/neoul/gnxi/utils/credentials"
+	"github.com/neoul/gnxi/utils/netsession"
 
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )
@@ -52,82 +51,6 @@ func newServer(model *gnmi.Model, config []byte) (*server, error) {
 		return nil, err
 	}
 	return &server{Server: s}, nil
-}
-
-// validateUser validates the user.
-func authorizeUser(session *gnmi.Session) error {
-	return nil
-	// if session.Username == "" {
-	// 	return status.Errorf(codes.InvalidArgument, "missing username")
-	// }
-	// if session.Password == "" {
-	// 	return status.Errorf(codes.InvalidArgument, "missing password")
-	// }
-	// // [FIXME] authorize user here
-	// return status.Errorf(codes.Unauthenticated, "authentication failed")
-}
-
-// Capabilities - Wrapping function for creating session info.
-func (s *server) Capabilities(ctx context.Context, req *pb.CapabilityRequest) (*pb.CapabilityResponse, error) {
-	var resp *pb.CapabilityResponse
-	session, err := s.NewSession(ctx)
-	if err != nil {
-		return nil, err
-	}
-	err = authorizeUser(session)
-	if err == nil {
-		resp, err = s.Server.Capabilities(ctx, req)
-	}
-	glog.Infof("[%s] result = '%v'", session.SID, err)
-	s.CloseSession(session)
-	return resp, err
-}
-
-// Get - Wrapping function for creating session info.
-func (s *server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
-	var resp *pb.GetResponse
-	session, err := s.NewSession(ctx)
-	if err != nil {
-		return nil, err
-	}
-	err = authorizeUser(session)
-	if err == nil {
-		resp, err = s.Server.Get(ctx, req)
-	}
-	glog.Infof("[%s] result = '%v'", session.SID, err)
-	s.CloseSession(session)
-	return resp, err
-}
-
-// Set - Wrapping function for creating session info.
-func (s *server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, error) {
-	var resp *pb.SetResponse
-	session, err := s.NewSession(ctx)
-	if err != nil {
-		return nil, err
-	}
-	err = authorizeUser(session)
-	if err == nil {
-		resp, err = s.Server.Set(ctx, req)
-	}
-	glog.Infof("[%s] result = '%v'", session.SID, err)
-	s.CloseSession(session)
-	return resp, err
-}
-
-// Subscribe - Wrapping function for creating session info.
-func (s *server) Subscribe(stream pb.GNMI_SubscribeServer) error {
-	session, err := s.NewSession(stream.Context())
-	if err != nil {
-		return err
-	}
-	err = authorizeUser(session)
-	if err == nil {
-		err = s.Server.Subscribe(stream)
-	}
-	glog.Infof("[%s] result = '%v'", session.SID, err)
-	s.CloseSession(session)
-	return err
 }
 
 func main() {
@@ -172,11 +95,7 @@ func main() {
 	reflection.Register(g)
 
 	glog.Infof("starting to listen on %s", *bindAddr)
-	listen, err := net.Listen("tcp", *bindAddr)
-	if err != nil {
-		glog.Exitf("failed to listen: %v", err)
-	}
-
+	listen, err := netsession.Listen("tcp", *bindAddr, s)
 	glog.Info("starting to serve")
 	if err := g.Serve(listen); err != nil {
 		glog.Exitf("failed to serve: %v", err)

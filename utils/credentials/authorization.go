@@ -21,17 +21,18 @@ var (
 
 // validateUser validates the user.
 func validateUser(m map[string]string) error {
-	if _, ok := m["username"]; !ok {
-		return errMissingUsername
-	}
-	if _, ok := m["password"]; !ok {
-		return errMissingpassword
-	}
-	// [FIXME] Need to add user validation
-	if len(m["username"]) > 0 && len(m["username"]) > 0 {
-		return nil
-	}
-	return errAuthFailed
+	return nil
+	// if _, ok := m["username"]; !ok {
+	// 	return errMissingUsername
+	// }
+	// if _, ok := m["password"]; !ok {
+	// 	return errMissingpassword
+	// }
+	// // [FIXME] Need to add user validation
+	// if len(m["username"]) > 0 && len(m["username"]) > 0 {
+	// 	return nil
+	// }
+	// return errAuthFailed
 }
 
 // UnaryInterceptor - used to validate authentication

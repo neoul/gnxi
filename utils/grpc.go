@@ -3,6 +3,7 @@ package utils
 
 import (
 	"context"
+	"net"
 	"strings"
 
 	"google.golang.org/grpc/metadata"
@@ -56,4 +57,38 @@ func QueryMetadata(ctx context.Context, name string) (string, bool) {
 		}
 	}
 	return "", true
+}
+
+type QueryAddress struct {
+	address string
+	network string
+}
+
+func (a QueryAddress) Network() string {
+	return a.network
+}
+
+func (a QueryAddress) String() string {
+	return a.address
+}
+
+// QueryAddr - Query Local and Remote Address from context
+func QueryAddr(ctx context.Context) (net.Addr, net.Addr, bool) {
+	peeraddr, ok := peer.FromContext(ctx)
+	if !ok {
+		return nil, nil, false
+	}
+	headers, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, nil, false
+	}
+	found, ok := headers[":authority"]
+	if !ok {
+		return nil, nil, false
+	}
+	localaddr := QueryAddress{
+		address: found[0],
+		network: peeraddr.Addr.Network(),
+	}
+	return localaddr, peeraddr.Addr, true
 }
