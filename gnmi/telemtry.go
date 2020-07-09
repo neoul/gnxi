@@ -3,7 +3,6 @@ package gnmi
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/neoul/gnxi/utils"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
@@ -58,83 +57,6 @@ func (s *Server) delSubscription(sub *TelemetrySubscription) {
 			break
 		}
 	}
-}
-
-// newSubscription - Create new TelemetrySubscription
-func newSubscription(session *Session) *TelemetrySubscription {
-	s := TelemetrySubscription{
-		Prefix: nil, UseAliases: false, Mode: pb.SubscriptionList_STREAM,
-		AllowAggregation: false, Encoding: pb.Encoding_JSON_IETF, UpdatesOnly: false,
-		SubscribedEntity: []*SubscriptionEntity{}, isPolling: false, session: session,
-	}
-	return &s
-}
-
-func (sub *TelemetrySubscription) handleSubscription(request *pb.SubscribeRequest) ([]*pb.SubscribeResponse, error) {
-	server := sub.session.server
-	// Poll Subscription indication
-	pollMode := request.GetPoll()
-	if pollMode != nil {
-		sub.isPolling = true
-		sub.Mode = pb.SubscriptionList_POLL
-		server.addSubscription(sub)
-		return nil, nil
-	}
-	// Subscription requests for aliases update
-	aliases := request.GetAliases()
-	if aliases != nil {
-		return nil, sub.updateClientAliases(aliases)
-	}
-	// extension := request.GetExtension()
-	subscriptionList := request.GetSubscribe()
-	if subscriptionList == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "no subscribe(SubscriptionList)")
-	}
-	encoding := subscriptionList.GetEncoding()
-	useModules := subscriptionList.GetUseModels()
-	if err := server.checkEncodingAndModel(encoding, useModules); err != nil {
-		return nil, err
-	}
-	mode := subscriptionList.GetMode()
-	prefix := subscriptionList.GetPrefix()
-	sub.Encoding = encoding
-	sub.Prefix = prefix
-	sub.UseAliases = subscriptionList.GetUseAliases()
-	sub.AllowAggregation = subscriptionList.GetAllowAggregation()
-	sub.UpdatesOnly = subscriptionList.GetUpdatesOnly()
-	subList := subscriptionList.GetSubscription()
-	if subList == nil || len(subList) <= 0 {
-		err := fmt.Errorf("no subscription field(Subscription)")
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-	for i, entity := range subList {
-		path := entity.GetPath()
-		submod := entity.GetMode()
-		sampleInterval := entity.GetSampleInterval()
-		supressRedundant := entity.GetSuppressRedundant()
-		heartBeatInterval := entity.GetHeartbeatInterval()
-		fmt.Println("SubscriptionList:", i, prefix, path, submod, sampleInterval, supressRedundant, heartBeatInterval)
-		subentity := SubscriptionEntity{
-			tsub: sub, Path: path, Mode: submod, SampleInterval: sampleInterval,
-			SuppressRedundant: supressRedundant, HeartbeatInterval: heartBeatInterval}
-		sub.SubscribedEntity = append(sub.SubscribedEntity, &subentity)
-		if mode == pb.SubscriptionList_STREAM {
-			if err := subentity.registerStreamSubscription(); err != nil {
-				return nil, err
-			}
-		}
-	}
-	// Build SubscribeResponses using the Subscription object
-	if mode == pb.SubscriptionList_ONCE {
-		// subscribeResponses, err := sub.onceSubscription(request)
-		// return subscribeResponses, err
-	} else if mode == pb.SubscriptionList_POLL {
-		sub.pollSubscription(request)
-	} else {
-		server.addSubscription(sub)
-		sub.streamSubscription(request)
-	}
-	return nil, nil
 }
 
 func (sub *TelemetrySubscription) updateClientAliases(aliases *pb.AliasList) error {
@@ -207,22 +129,8 @@ func (ss *Session) initTelemetryUpdate(req *pb.SubscribeRequest) ([]*pb.Subscrib
 		}
 		update[i] = &pb.Update{Path: path, Val: typedValue}
 	}
-	notification := pb.Notification{
-		Timestamp: time.Now().UnixNano(),
-		Prefix:    prefix,
-		Alias:     alias,
-		Update:    update,
-	}
 
-	updates := []*pb.SubscribeResponse{
-		{Response: &pb.SubscribeResponse_Update{
-			Update: &notification,
-		}},
-		{Response: &pb.SubscribeResponse_SyncResponse{
-			SyncResponse: true,
-		}},
-	}
-	return updates, nil
+	return buildSubscribeResponse(prefix, alias, update, *disableBundling, true)
 }
 
 func (sub *TelemetrySubscription) pollSubscription(request *pb.SubscribeRequest) ([]*pb.SubscribeResponse, error) {

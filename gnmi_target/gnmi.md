@@ -16,6 +16,7 @@
   - [Subscrbe RPC](#subscrbe-rpc)
     - [SubscribeRequest message](#subscriberequest-message)
     - [SubscribeResponse message](#subscriberesponse-message)
+    - [3.5.2.1 Bundling of Telemetry Updates](#3521-bundling-of-telemetry-updates)
 
 ## [Path message](https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-path-conventions.md)
 
@@ -284,6 +285,8 @@ SubscribeRequest: # !!oneof
 - [ ] **Cancel subscription**: Subscriptions are created for a set of paths - which cannot be modified throughout the lifetime of the subscription. In order to cancel a subscription, the client cancels the Subscribe RPC associated with the subscription, or terminates the entire gRPC session.
   - Need to check how to cancel Subscribe RPC (https://github.com/grpc/grpc-java/issues/3095)
 - [ ] **Subscription aggregation**:
+  - [ ] In some cases, however, elements of the data tree may be known to change together, or need to be interpreted by the subscriber together. Such data MUST be explicitly marked in the schema as being eligible to be aggregated when being published. [Need To Check] telemetry-automic in openconfig-extension.yang?
+  - [ ] https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-specification.md#35-subscribing-to-telemetry-updates 에서 aggregation으로 동작 확인
   - `allow_aggregation`: 해당 subscription의 telemetry update가 다른 update와 combine 될 수 있음을 설정. (보통 사용 X)
 - [ ] **A difference to Get RPC**: The target does not need to coalesce values into a single snapshot view, or create an in-memory representation of the subtree at the time of the request, and subsequently transmit this entire view to the client. By default a target MUST NOT aggregate values within an update message.
 - [ ] **updates_only(bool)**: An optional field to specify that only updates to current state should be sent to a client.
@@ -321,3 +324,10 @@ SubscribeResponse: # !!oneof
   - [ ] **Reporting init updates are completed**: When gnmi_target has transmitted the initial updates for all paths specified within the subscription, a SubscribeResponse message with the `sync_response` field set to true MUST be transmitted to the client to indicate that the initial transmission of updates has concluded. This provides an indication to the client that all of the existing data for the subscription has been sent at least once. For STREAM subscriptions, such messages are not required for subsequent updates. For POLL subscriptions, after each set of updates for individual poll request, a SubscribeResponse message with the `sync_response` field set to true MUST be generated.
   - [ ] In the case where the `updates_only` field in the `SubscribeRequest` message has been set, a `sync_response` is sent as the first message on the stream, followed by any updates representing subsequent changes to current state. For a `POLL` or `ONCE` mode, this means that only a `sync_resonse` will be sent. The `updates_only` field allows a client to only watch for changes, e.g. an update to configuration.
 - [ ] `update(Notification)` field is also utilised when a target wishes to create an alias within a subscription, as described in [3.5.2.2 Target-defined Aliases within a Subscription](https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-specification.md#3522-target-defined-aliases-within-a-subscription).
+
+
+### 3.5.2.1 Bundling of Telemetry Updates
+
+Since multiple Notification messages can be included in the update field of a SubscribeResponse message, it is possible for a target to bundle messages such that fewer messages are sent to the client. The advantage of such bundling is clearly to reduce the number of bytes on the wire (caused by message overhead). Since Notification messages contain the timestamp at which an event occurred, or a sample was taken, such bundling does not affect the sample accuracy to the client. However, bundling does have a negative impact on the freshness of the data in the client - and on the client's ability to react to events on the target.
+
+Since it is not possible for the target to infer whether its clients are sensitive to the latency introduced by bundling, if a target implements optimizations such that multiple Notification messages are bundled together, it MUST provide an ability to disable this functionality within the configuration of the gNMI service. Additionally, a target SHOULD provide means by which the operator can control the maximum number of updates that are to be bundled into a single message, This configuration is expected to be implemented out-of-band to the gNMI protocol itself.

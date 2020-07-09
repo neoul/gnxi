@@ -58,6 +58,7 @@ var (
 	yamlFile = flag.String("yaml-config", "", "YAML file for target startup configuration")
 	// Disable YDB update procedure
 	disableYdbChannel = flag.Bool("disable-ydb", false, "Disable YAML Datablock interface")
+	disableBundling   = flag.Bool("disable-update-bundling", false, "Disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1")
 )
 
 // Server struct maintains the data structure for device config and implements the interface of gnmi server. It supports Capabilities, Get, and Set APIs.
