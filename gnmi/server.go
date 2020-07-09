@@ -37,6 +37,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/neoul/gnxi/utils"
+	"github.com/neoul/gnxi/utils/xpath"
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/openconfig/gnmi/value"
 	"github.com/openconfig/ygot/experimental/ygotutils"
@@ -88,7 +89,6 @@ type Server struct {
 	useAliases bool
 	alias      map[string]*pb.Alias
 	Sessions   map[string]*Session
-	TSub       []*TelemetrySubscription
 }
 
 // NewServer creates an instance of Server with given json config.
@@ -496,10 +496,6 @@ func (s *Server) Capabilities(ctx context.Context, req *pb.CapabilityRequest) (*
 
 // Get implements the Get RPC in gNMI spec.
 func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	s.dataBlock.Lock()
-	defer s.dataBlock.Unlock()
 
 	if req.GetType() != pb.GetRequest_ALL {
 		return nil, status.Errorf(codes.Unimplemented, "unsupported request type: %s", pb.GetRequest_DataType_name[int32(req.GetType())])
@@ -514,10 +510,15 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	paths := req.GetPath()
 	notifications := make([]*pb.Notification, len(paths))
 
+	s.mu.RLock()
+	s.dataBlock.Lock()
+	defer s.mu.RUnlock()
+	defer s.dataBlock.Unlock()
+
 	for i, path := range paths {
 		// path.CompletePath()
 		// Get schema node for path from config struct.
-		fullPath := utils.GetGNMIFullPath(prefix, path)
+		fullPath := xpath.GNMIFullPath(prefix, path)
 		if fullPath.GetElem() == nil && fullPath.GetElement() != nil {
 			return nil, status.Error(codes.Unimplemented, "deprecated path element type is unsupported")
 		}
@@ -602,39 +603,27 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 
 // Subscribe implements the Subscribe RPC in gNMI spec.
 func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
-	var wg sync.WaitGroup
-	s.mu.Lock()
-	s.dataBlock.Lock()
-	ss, err := s.getSession(stream.Context())
-	if err != nil {
-		return err
-	}
-	done := make(chan bool, 1)
-	rchan := make(chan *pb.SubscribeResponse, 256)
-	ss.respchannel = rchan
-	s.dataBlock.Unlock()
-	s.mu.Unlock()
-
+	teleses := newTelemetrySession(s)
 	// run stream responsor
+	teleses.waitgroup.Add(1)
 	go func(
 		stream pb.GNMI_SubscribeServer,
-		response <-chan *pb.SubscribeResponse,
-		done <-chan bool) {
-		defer wg.Done()
+		teleses *TelemetrySession) {
+		defer teleses.waitgroup.Done()
 		for {
 			select {
-			case resp := <-response:
+			case resp := <-teleses.channel:
 				fmt.Println(proto.MarshalTextString(resp))
 				stream.Send(resp)
-			case <-done:
+			case <-teleses.shutdown:
 				return
 			}
 		}
-	}(stream, rchan, done)
-	wg.Add(1)
+	}(stream, teleses)
+
 	defer func() {
-		done <- true
-		wg.Wait()
+		close(teleses.shutdown)
+		teleses.waitgroup.Wait()
 	}()
 	for {
 		req, err := stream.Recv()
@@ -645,11 +634,7 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 			return err
 		}
 		fmt.Println(proto.MarshalTextString(req))
-		s.mu.RLock()
-		s.dataBlock.Lock()
-		err = ss.processSR(req, rchan)
-		s.dataBlock.Unlock()
-		s.mu.RUnlock()
+		err = processSR(teleses, req)
 		if err != nil {
 			return err
 		}

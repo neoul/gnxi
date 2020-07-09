@@ -1,4 +1,4 @@
-package utils
+package xpath
 
 import (
 	"reflect"
@@ -6,24 +6,6 @@ import (
 	"github.com/neoul/libydb/go/ydb"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )
-
-// GetGNMIFullPath builds the full path from the prefix and path.
-func GetGNMIFullPath(prefix, path *pb.Path) *pb.Path {
-	if prefix == nil {
-		if path == nil {
-			return &pb.Path{}
-		}
-		return path
-	}
-	fullPath := &pb.Path{Origin: path.Origin}
-	if path.GetElement() != nil {
-		fullPath.Element = append(prefix.GetElement(), path.GetElement()...)
-	}
-	if path.GetElem() != nil {
-		fullPath.Elem = append(prefix.GetElem(), path.GetElem()...)
-	}
-	return fullPath
-}
 
 // // FindAllNodes - finds all nodes matched to the gNMI Path.
 // func FindAllNodes(vgs ygot.ValidatedGoStruct, path *pb.Path) ([]interface{}, error) {
@@ -155,7 +137,7 @@ func (n *PathNode) find(elems []*pb.PathElem) []interface{} {
 
 // // FindSchema - finds the child schema node from top
 // func FindSchema(top *yang.Entry, prefix, path *pb.Path) (*yang.Entry, error) {
-// 	fullpath := GetGNMIFullPath(prefix, path)
+// 	fullpath := GNMIFullPath(prefix, path)
 // 	elems := fullpath.GetElem()
 // 	if len(elems) <= 0 {
 // 		return top, nil

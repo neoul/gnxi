@@ -62,6 +62,7 @@ func TestCapabilities(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
+	modeldata := &pb.ModelData{}
 	jsonConfigRoot := `{
 		"openconfig-messages:messages": {
 			"config": {
@@ -251,7 +252,7 @@ func TestGet(t *testing.T) {
 		wantRetCode: codes.NotFound,
 	}, {
 		desc:        "use of model data not supported",
-		modelData:   []*pb.ModelData{&pb.ModelData{}},
+		modelData:   []*pb.ModelData{modeldata},
 		wantRetCode: codes.Unimplemented,
 	}}
 
@@ -324,6 +325,7 @@ func runTestGet(t *testing.T, s *Server, textPbPath string, wantRetCode codes.Co
 }
 
 func TestGetWithYdb(t *testing.T) {
+	modeldata := &pb.ModelData{}
 
 	flag.Set("disable-ydb", "true")
 	s, err := NewServer(model, nil, nil)
@@ -425,7 +427,7 @@ func TestGetWithYdb(t *testing.T) {
 		wantRetCode: codes.NotFound,
 	}, {
 		desc:        "use of model data not supported",
-		modelData:   []*pb.ModelData{&pb.ModelData{}},
+		modelData:   []*pb.ModelData{modeldata},
 		wantRetCode: codes.Unimplemented,
 	}}
 

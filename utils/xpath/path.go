@@ -18,6 +18,7 @@ package xpath
 
 import (
 	"fmt"
+	"strings"
 
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )
@@ -63,4 +64,52 @@ func ToGNMIPath(xpath string) (*pb.Path, error) {
 		}
 	}
 	return &pb.Path{Elem: pbPathElements}, nil
+}
+
+// GNMIFullPath builds the full path from the prefix and path.
+func GNMIFullPath(prefix, path *pb.Path) *pb.Path {
+	if prefix == nil {
+		if path == nil {
+			return &pb.Path{}
+		}
+		return path
+	}
+	fullPath := &pb.Path{Origin: path.Origin}
+	if path.GetElement() != nil {
+		fullPath.Element = append(prefix.GetElement(), path.GetElement()...)
+	}
+	if path.GetElem() != nil {
+		fullPath.Elem = append(prefix.GetElem(), path.GetElem()...)
+	}
+	return fullPath
+}
+
+// ToXPATH - returns XPATH string converted from gNMI Path
+func ToXPATH(p *pb.Path) string {
+	if p == nil {
+		return ""
+	}
+	// elems := p.GetElem()
+	// if len(elems) == 0 {
+	// 	return "/"
+	// }
+
+	pe := []string{""}
+	for _, e := range p.GetElem() {
+		if e.GetKey() != nil {
+			ke := []string{e.GetName()}
+			for k, kv := range e.GetKey() {
+				ke = append(ke, fmt.Sprintf("[%s=%s]", k, kv))
+			}
+			pe = append(pe, strings.Join(ke, ""))
+		} else {
+			pe = append(pe, e.GetName())
+		}
+	}
+	// gnmi.Path.Element is deprecated, but being gracefully handled
+	// when gnmi.PathElem doesn't exist
+	if len(pe) == 0 {
+		return strings.Join(p.GetElement(), "/")
+	}
+	return strings.Join(pe, "/")
 }

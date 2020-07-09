@@ -42,21 +42,23 @@ func (s StreamProtocol) String() string { return streamProtocolStr[s%5] }
 
 // Session - gNMI gRPC Session information managed by server
 type Session struct {
-	ID                 uint64                   `json:"id,omitempty"`
-	SID                string                   `json:"sid,omitempty"`
-	Username           string                   `json:"username,omitempty"`
-	Password           string                   `json:"password,omitempty"`
-	GrpcVer            string                   `json:"grpc-ver,omitempty"`
-	ContentType        string                   `json:"content-type,omitempty"`
-	LoginTime          time.Time                `json:"login-time,omitempty"`
-	DestinationAddress string                   `json:"destination-address,omitempty"`
-	DestinationPort    uint16                   `json:"destination-port,omitempty"`
-	Protocol           StreamProtocol           `json:"protocol,omitempty"`
-	TelemetrySub       []*TelemetrySubscription `json:"telemetry-subscriptions,omitempty"`
-	respchannel        chan *pb.SubscribeResponse
-	alias              map[string]*pb.Alias
-	server             *Server
-	valid              bool
+	ID                 uint64                            `json:"id,omitempty"`
+	SID                string                            `json:"sid,omitempty"`
+	Username           string                            `json:"username,omitempty"`
+	Password           string                            `json:"password,omitempty"`
+	GrpcVer            string                            `json:"grpc-ver,omitempty"`
+	ContentType        string                            `json:"content-type,omitempty"`
+	LoginTime          time.Time                         `json:"login-time,omitempty"`
+	DestinationAddress string                            `json:"destination-address,omitempty"`
+	DestinationPort    uint16                            `json:"destination-port,omitempty"`
+	Protocol           StreamProtocol                    `json:"protocol,omitempty"`
+	TeleSub            map[string]*TelemetrySubscription `json:"telemetry-subscriptions,omitempty"`
+
+	// telechan chan *pb.SubscribeResponse // The channel to send telemetry updates
+	// teledone chan bool                  // The channel to signal telemetry updates complete
+	alias  map[string]*pb.Alias
+	server *Server
+	valid  bool
 }
 
 var (
@@ -65,10 +67,6 @@ var (
 
 // Started - netsession interface to receive the session started event
 func (s *Server) Started(local, remote net.Addr) {
-	s.mu.Lock()
-	s.dataBlock.Lock()
-	defer s.mu.Unlock()
-	defer s.dataBlock.Unlock()
 	remoteaddr := remote.String()
 	session, ok := s.Sessions[remoteaddr]
 	if ok {
@@ -84,23 +82,17 @@ func (s *Server) Started(local, remote net.Addr) {
 		DestinationAddress: destinationAddress,
 		DestinationPort:    uint16(destinationPort),
 		Protocol:           StreamGRPC,
-		TelemetrySub:       []*TelemetrySubscription{},
+		TeleSub:            map[string]*TelemetrySubscription{},
 		alias:              map[string]*pb.Alias{},
 		server:             s, SID: remoteaddr,
 	}
 	s.Sessions[remoteaddr] = session
-	// fmt.Printf("session[%s] Started\n", remoteaddr)
 }
 
 // Closed - netsession interface to receive the session closed event
 func (s *Server) Closed(local, remote net.Addr) {
 	remoteaddr := remote.String()
-	// fmt.Printf("session[%s] Closed\n", remoteaddr)
-	s.mu.Lock()
-	s.dataBlock.Lock()
 	delete(s.Sessions, remoteaddr)
-	defer s.mu.Unlock()
-	defer s.dataBlock.Unlock()
 }
 
 // updateSession - Updated and Validate the session user
@@ -124,7 +116,6 @@ func (s *Server) updateSession(ctx context.Context, SID string) (*Session, error
 	session.ContentType = contentType
 	session.Protocol = StreamGRPC
 	session.valid = true
-	// fmt.Printf("session[%s] updated\n", SID)
 	return session, nil
 }
 
