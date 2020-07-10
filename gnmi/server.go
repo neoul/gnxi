@@ -608,18 +608,25 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 	teleses.waitgroup.Add(1)
 	go func(
 		stream pb.GNMI_SubscribeServer,
-		teleses *TelemetrySession) {
-		defer teleses.waitgroup.Done()
+		telemetrychannel chan *pb.SubscribeResponse,
+		shutdown chan struct{},
+		waitgroup *sync.WaitGroup,
+	) {
+		defer waitgroup.Done()
 		for {
 			select {
-			case resp := <-teleses.channel:
-				fmt.Println(proto.MarshalTextString(resp))
-				stream.Send(resp)
-			case <-teleses.shutdown:
+			case resp, ok := <-telemetrychannel:
+				if ok {
+					fmt.Println(proto.MarshalTextString(resp))
+					stream.Send(resp)
+				} else {
+					return
+				}
+			case <-shutdown:
 				return
 			}
 		}
-	}(stream, teleses)
+	}(stream, teleses.channel, teleses.shutdown, teleses.waitgroup)
 
 	defer func() {
 		close(teleses.shutdown)

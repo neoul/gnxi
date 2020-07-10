@@ -7,6 +7,20 @@ import (
 )
 
 func buildSubscribeResponse(prefix *pb.Path, alias string, update []*pb.Update, disableBundling bool, isInitUpdate bool) ([]*pb.SubscribeResponse, error) {
+	var num int = len(update)
+	var responses []*pb.SubscribeResponse
+	if num == 0 {
+		if isInitUpdate {
+			subscribeResponse := []*pb.SubscribeResponse{
+				{Response: &pb.SubscribeResponse_SyncResponse{
+					SyncResponse: true,
+				}},
+			}
+			return subscribeResponse, nil
+		}
+		return []*pb.SubscribeResponse{}, nil
+	}
+
 	if !disableBundling {
 		notification := pb.Notification{
 			Timestamp: time.Now().UnixNano(),
@@ -14,19 +28,25 @@ func buildSubscribeResponse(prefix *pb.Path, alias string, update []*pb.Update, 
 			Alias:     alias,
 			Update:    update,
 		}
-
-		updates := []*pb.SubscribeResponse{
+		if isInitUpdate { // set SyncResponse if init update
+			subscribeResponse := []*pb.SubscribeResponse{
+				{Response: &pb.SubscribeResponse_Update{
+					Update: &notification,
+				}},
+				{Response: &pb.SubscribeResponse_SyncResponse{
+					SyncResponse: true,
+				}},
+			}
+			return subscribeResponse, nil
+		}
+		subscribeResponse := []*pb.SubscribeResponse{
 			{Response: &pb.SubscribeResponse_Update{
 				Update: &notification,
 			}},
-			{Response: &pb.SubscribeResponse_SyncResponse{
-				SyncResponse: true,
-			}},
 		}
-		return updates, nil
+		return subscribeResponse, nil
 	}
-	var num int = len(update)
-	var responses []*pb.SubscribeResponse
+	// telemetry update bundling disabled.
 	if isInitUpdate {
 		responses = make([]*pb.SubscribeResponse, num+1)
 	} else {
