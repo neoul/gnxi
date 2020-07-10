@@ -75,10 +75,16 @@ type TelemetrySubscription struct {
 	HeartbeatInterval uint64                   `json:"heartbeat_interval,omitempty"`
 	Duplicates        uint32                   `json:"duplicates,omitempty"` // Number of coalesced duplicates.
 
-	ticker    *time.Ticker
-	stop      chan struct{}
-	isPolling bool
-	session   *TelemetrySession
+	// internal data
+	_subscriptionMode  pb.SubscriptionMode
+	_sampleInterval    uint64
+	_suppressRedundant bool
+	_heartbeatInterval uint64
+	samplingTimer      *time.Ticker
+	heartbeatTimer     *time.Ticker
+	stop               chan struct{}
+	isPolling          bool
+	session            *TelemetrySession
 
 	// // https://github.com/openconfig/gnmi/issues/45 - QoSMarking seems to be deprecated
 	// Qos              *pb.QOSMarking           `json:"qos,omitempty"`          // DSCP marking to be used.
@@ -99,63 +105,68 @@ func (telesub *TelemetrySubscription) GetKey() string {
 	)
 }
 
+func telemetryUpdate(
+	teleses *TelemetrySession, telesub *TelemetrySubscription,
+	samplingTimer *time.Ticker, shutdown chan struct{},
+	stop chan struct{}, waitgroup *sync.WaitGroup,
+	telemetrychannel chan *pb.SubscribeResponse,
+) {
+	defer waitgroup.Done()
+	for {
+		select {
+		case <-samplingTimer.C:
+			// Send TelemetryUpdate
+			if samplingTimer == telesub.samplingTimer {
+				log.Infof("tsession[%d].sub[%s].samplingTimer.expired", teleses.id, telesub.GetKey())
+			} else {
+				log.Infof("tsession[%d].sub[%s].heartbeatTimer.expired", teleses.id, telesub.GetKey())
+			}
+			resps, err := teleses.telemetryUpdate(telesub)
+			if err != nil {
+				return
+			}
+			for _, resp := range resps {
+				telemetrychannel <- resp
+			}
+		case <-shutdown:
+			log.Infof("tsession[%d].sub[%s].shutdown", teleses.id, telesub.GetKey())
+			return
+		case <-stop:
+			log.Infof("tsession[%d].sub[%s].stopped", teleses.id, telesub.GetKey())
+			return
+		}
+	}
+}
+
 // StartTelmetryUpdate - returns a key for telemetry comparison
 func (teleses *TelemetrySession) StartTelmetryUpdate(telesub *TelemetrySubscription) error {
 	teleses.lock()
 	defer teleses.unlock()
-	if telesub.SubscriptionMode == pb.SubscriptionMode_ON_CHANGE {
-		return nil
-	}
-	if telesub.ticker != nil {
-		return nil // already enabled
-	}
-	// Set up the interval
-	interval := telesub.SampleInterval
-	if telesub.SampleInterval == 0 {
-		// Set minimal sampling interval (1sec)
-		interval = 1000000000
-	}
-	// Set up the recommended interval
-	if telesub.SubscriptionMode == pb.SubscriptionMode_TARGET_DEFINED {
-		interval = 5000000000
-	}
-	if interval < 1000000000 {
-		return status.Errorf(codes.InvalidArgument, "sample_interval under 1sec is not supported")
-	}
-	tick := time.Duration(interval)
-	telesub.ticker = time.NewTicker(tick * time.Nanosecond)
-	if telesub.ticker == nil {
-		return status.Errorf(codes.Internal, "sampling rate control failed")
-	}
-	teleses.waitgroup.Add(1)
-	go func(teleses *TelemetrySession, telesub *TelemetrySubscription,
-		ticker *time.Ticker, shutdown chan struct{},
-		stop chan struct{}, waitgroup *sync.WaitGroup,
-		telemetrychannel chan *pb.SubscribeResponse) {
-		defer waitgroup.Done()
-		for {
-			select {
-			case <-ticker.C:
-				// Send TelemetryUpdate
-				log.Infof("tsession[%d].sub[%s].expired", teleses.id, telesub.GetKey())
-				resps, err := teleses.telemetryUpdate(telesub)
-				if err != nil {
-					return
-				}
-				for _, resp := range resps {
-					telemetrychannel <- resp
-				}
-			case <-shutdown:
-				log.Infof("tsession[%d].sub[%s].shutdown", teleses.id, telesub.GetKey())
-				return
-			case <-stop:
-				log.Infof("tsession[%d].sub[%s].stopped", teleses.id, telesub.GetKey())
-				return
-			}
+	fmt.Println(telesub)
+	if telesub.samplingTimer == nil && telesub._sampleInterval > 0 {
+		tick := time.Duration(telesub._sampleInterval)
+		telesub.samplingTimer = time.NewTicker(tick * time.Nanosecond)
+		if telesub.samplingTimer == nil {
+			return status.Errorf(codes.Internal, "sampling rate control failed")
 		}
-	}(teleses, telesub, telesub.ticker, teleses.shutdown, telesub.stop,
-		teleses.waitgroup, teleses.channel)
-
+		teleses.waitgroup.Add(1)
+		go telemetryUpdate(
+			teleses, telesub, telesub.samplingTimer,
+			teleses.shutdown, telesub.stop,
+			teleses.waitgroup, teleses.channel)
+	}
+	if telesub.heartbeatTimer == nil && telesub._heartbeatInterval > 0 {
+		tick := time.Duration(telesub._heartbeatInterval)
+		telesub.heartbeatTimer = time.NewTicker(tick * time.Nanosecond)
+		if telesub.heartbeatTimer == nil {
+			return status.Errorf(codes.Internal, "sampling rate control failed")
+		}
+		teleses.waitgroup.Add(1)
+		go telemetryUpdate(
+			teleses, telesub, telesub.heartbeatTimer,
+			teleses.shutdown, telesub.stop,
+			teleses.waitgroup, teleses.channel)
+	}
 	return nil
 }
 
@@ -163,10 +174,19 @@ func (teleses *TelemetrySession) StartTelmetryUpdate(telesub *TelemetrySubscript
 func (teleses *TelemetrySession) StopTelemetryUpdate(telesub *TelemetrySubscription) error {
 	teleses.lock()
 	defer teleses.unlock()
-	if telesub.ticker != nil {
-		telesub.ticker.Stop()
+	closeSignal := false
+	if telesub.samplingTimer != nil || telesub.heartbeatTimer != nil {
+		telesub.samplingTimer.Stop()
+		telesub.samplingTimer = nil
+		closeSignal = true
+	}
+	if telesub.heartbeatTimer != nil {
+		telesub.heartbeatTimer.Stop()
+		telesub.heartbeatTimer = nil
+		closeSignal = true
+	}
+	if closeSignal {
 		close(telesub.stop)
-		telesub.ticker = nil
 	}
 	return nil
 }
@@ -281,7 +301,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription)
 func newTelemetrySubscription(
 	prefix *pb.Path, useAliases bool, streamingMode pb.SubscriptionList_Mode, allowAggregation bool,
 	encoding pb.Encoding, paths []*pb.Path, subscriptionMode pb.SubscriptionMode,
-	sampleInterval uint64, suppressRedundant bool, heartbeatInterval uint64) *TelemetrySubscription {
+	sampleInterval uint64, suppressRedundant bool, heartbeatInterval uint64) (*TelemetrySubscription, error) {
 
 	telesub := TelemetrySubscription{
 		Prefix:            prefix,
@@ -294,17 +314,58 @@ func newTelemetrySubscription(
 		SampleInterval:    sampleInterval,
 		SuppressRedundant: suppressRedundant,
 		HeartbeatInterval: heartbeatInterval,
+		// internal data
+		// _subscriptionMode:  _subscriptionMode,
+		// _sampleInterval:    _sampleInterval,
+		// _suppressRedundant: _suppressRedundant,
+		// _heartbeatInterval: _heartbeatInterval,
 	}
 	if streamingMode == pb.SubscriptionList_POLL {
 		telesub.isPolling = true
 		telesub.Paths = []*pb.Path{}
 		telesub.Prefix = nil
 	}
-	return &telesub
+	// 3.5.1.5.2 STREAM Subscriptions Must be satisfied for telemetry update starting.
+	switch telesub.SubscriptionMode {
+	case pb.SubscriptionMode_TARGET_DEFINED:
+		// vendor specific mode
+		telesub._subscriptionMode = pb.SubscriptionMode_ON_CHANGE
+		telesub._sampleInterval = 0
+		telesub._suppressRedundant = false
+		telesub._heartbeatInterval = 60000000000 // 60sec
+	case pb.SubscriptionMode_ON_CHANGE:
+		if telesub.HeartbeatInterval < 1000000000 && telesub.HeartbeatInterval != 0 {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"heartbeat_interval(< 1sec) is not supported")
+		}
+		telesub._subscriptionMode = pb.SubscriptionMode_ON_CHANGE
+		telesub._sampleInterval = 0
+		telesub._suppressRedundant = false
+		telesub._heartbeatInterval = telesub.HeartbeatInterval
+
+	case pb.SubscriptionMode_SAMPLE:
+		if telesub.SampleInterval < 1000000000 && telesub.SampleInterval != 0 {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"sample_interval(< 1sec) is not supported")
+		}
+		if telesub.HeartbeatInterval < 1000000000 && telesub.HeartbeatInterval != 0 {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"heartbeat_interval(< 1sec) is not supported")
+		}
+		telesub._subscriptionMode = pb.SubscriptionMode_SAMPLE
+		telesub._sampleInterval = telesub.SampleInterval
+		if telesub.SampleInterval == 0 {
+			// Set minimal sampling interval (1sec)
+			telesub._sampleInterval = 1000000000
+		}
+		telesub._suppressRedundant = telesub.SuppressRedundant
+		telesub._heartbeatInterval = telesub.HeartbeatInterval
+	}
+	return &telesub, nil
 }
 
 // addSubscription - Create new TelemetrySubscription
-func (teleses *TelemetrySession) addSubscription(newsub *TelemetrySubscription) (*TelemetrySubscription, error) {
+func (teleses *TelemetrySession) addSubscription(newsub *TelemetrySubscription) *TelemetrySubscription {
 	teleses.lock()
 	defer teleses.unlock()
 	key := newsub.GetKey()
@@ -314,12 +375,11 @@ func (teleses *TelemetrySession) addSubscription(newsub *TelemetrySubscription) 
 		t.Paths = append(t.Paths, newsub.Paths...)
 		newsub = t
 	} else {
-		log.Infof("tsession[%d].sub[%s]", teleses.id, key)
 		log.Infof("tsession[%d].sub[%s].add(%s)", teleses.id, key, xpath.ToXPATH(newsub.Paths[0]))
 		newsub.session = teleses
 		teleses.telesub[key] = newsub
 	}
-	return newsub, nil
+	return newsub
 }
 
 // addPollingSubscription - Create new TelemetrySubscription
@@ -398,14 +458,17 @@ func processSR(teleses *TelemetrySession, req *pb.SubscribeRequest) error {
 	for _, updateEntry := range subList {
 		path := updateEntry.GetPath()
 		submod := updateEntry.GetMode()
-		sampleInterval := updateEntry.GetSampleInterval()
+		_sampleInterval := updateEntry.GetSampleInterval()
 		supressRedundant := updateEntry.GetSuppressRedundant()
 		heartBeatInterval := updateEntry.GetHeartbeatInterval()
-		telesub := newTelemetrySubscription(
+		telesub, err := newTelemetrySubscription(
 			prefix, useAliases, pb.SubscriptionList_STREAM,
 			allowAggregation, encoding, []*pb.Path{path}, submod,
-			sampleInterval, supressRedundant, heartBeatInterval)
-		telesub, err := teleses.addSubscription(telesub)
+			_sampleInterval, supressRedundant, heartBeatInterval)
+		if err != nil {
+			return err
+		}
+		telesub = teleses.addSubscription(telesub)
 		if err != nil {
 			return err
 		}
