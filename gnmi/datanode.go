@@ -11,9 +11,6 @@ import (
 	"github.com/openconfig/ygot/ygot"
 )
 
-// Schema()
-// schema.Dir[elem.Name]
-// gostruct.SchemaTree
 // FindAllNodes - finds all nodes matched to the gNMI Path.
 func FindAllNodes(vgs ygot.ValidatedGoStruct, path *pb.Path) ([]interface{}, bool) {
 	elems := path.GetElem()
@@ -39,89 +36,68 @@ func FindAllNodes(vgs ygot.ValidatedGoStruct, path *pb.Path) ([]interface{}, boo
 	return rvalues, false
 }
 
-func getList(v reflect.Value) {
-	if v.Kind() == reflect.Map {
-		if cvlist, ok := ydb.ValGetAll(v); ok && len(cvlist) > 0 {
-			if i+1 >= len(elems) {
-				return append(rv, cvlist...)
-			}
-			celems := elems[i+1:]
-			for _, cv := range cvlist {
-				rv = append(rv, findAllNodes(cv, celems)...)
-			}
-			return rv
-		}
-		return []reflect.Value{}
-	}
-}
-
 // findAllNodes - finds all nodes matched to the gNMI Path.
 func findAllNodes(v reflect.Value, elems []*pb.PathElem) []reflect.Value {
-	// gostruct.SchemaTree map[string]*yang.Entry
+	// select all child nodes if the current node is a list.
+	if v.Kind() == reflect.Map {
+		rv := []reflect.Value{}
+		cvlist, ok := ydb.ValGetAll(v)
+		if ok {
+			for _, cv := range cvlist {
+				rv = append(rv, findAllNodes(cv, elems)...)
+			}
+		}
+		return rv
+	}
 	if len(elems) <= 0 {
 		return []reflect.Value{v}
 	}
-	rv := []reflect.Value{}
-	for i, elem := range elems {
-		fmt.Println("** Search", elem.GetName(), "from", utils.SprintStructInline(v.Interface()))
-		if elem.GetName() == "*" {
-			if cvlist, ok := ydb.ValGetAll(v); ok && len(cvlist) > 0 {
-				if i+1 >= len(elems) {
-					return append(rv, cvlist...)
-				}
-				celems := elems[i+1:]
-				for _, cv := range cvlist {
-					rv = append(rv, findAllNodes(cv, celems)...)
-				}
-				return rv
-			}
-			return rv
-		} else if elem.GetName() == "..." {
-			if cvlist, ok := ydb.ValGetAll(v); ok && len(cvlist) > 0 {
-				if i+1 >= len(elems) {
-					return append(rv, cvlist...)
-				}
-				for _, cv := range cvlist {
-					ccvlist := findAllNodes(cv, elems[i+1:])
-					if len(ccvlist) > 0 {
-						rv = append(rv, ccvlist...)
-					}
-					rv = append(rv, findAllNodes(cv, elems[i:])...)
-				}
-				return rv
-			}
-			return rv
-		} else {
-			ke := []string{elem.GetName()}
-			for k, kv := range elem.GetKey() {
-				ke = append(ke, fmt.Sprintf("[%s=%s]", k, kv))
-			}
-			key := strings.Join(ke, "")
-
-			// fmt.Println("__________________", v.Type())
-			// fmt.Println(gostruct.SchemaTree)
-			cv, ok := ydb.ValFind(v, key, ydb.SearchByContent)
-			if !ok || !cv.IsValid() {
-				return []reflect.Value{}
-			}
-			v = cv
-			// select all child nodes if the current node is a list.
-			if v.Kind() == reflect.Map {
-				if cvlist, ok := ydb.ValGetAll(v); ok && len(cvlist) > 0 {
-					if i+1 >= len(elems) {
-						return append(rv, cvlist...)
-					}
-					celems := elems[i+1:]
-					for _, cv := range cvlist {
-						rv = append(rv, findAllNodes(cv, celems)...)
-					}
-					return rv
-				}
-				return []reflect.Value{}
+	elem := elems[0]
+	fmt.Println("** Search", elem.GetName(), "from", utils.SprintStructInline(v.Interface()))
+	if elem.GetName() == "*" {
+		rv := []reflect.Value{}
+		cvlist, ok := ydb.ValGetAll(v)
+		if ok {
+			celems := elems[1:]
+			for _, cv := range cvlist {
+				rv = append(rv, findAllNodes(cv, celems)...)
 			}
 		}
+		return rv
+	} else if elem.GetName() == "..." {
+		rv := []reflect.Value{}
+		cvlist, ok := ydb.ValGetAll(v)
+		if ok {
+			celems := elems[1:]
+			for _, cv := range cvlist {
+				rv = append(rv, findAllNodes(cv, celems)...)
+			}
+			for _, cv := range cvlist {
+				ccvlist := findAllNodes(cv, celems)
+				if len(ccvlist) > 0 {
+					rv = append(rv, ccvlist...)
+				}
+				rv = append(rv, findAllNodes(cv, elems)...)
+			}
+		}
+		return rv
 	}
-	return []reflect.Value{v}
+
+	ke := []string{elem.GetName()}
+	for k, kv := range elem.GetKey() {
+		if kv == "*" {
+			ke = []string{elem.GetName()}
+			break
+		}
+		ke = append(ke, fmt.Sprintf("[%s=%s]", k, kv))
+	}
+	key := strings.Join(ke, "")
+	cv, ok := ydb.ValFind(v, key, ydb.SearchByContent)
+	if !ok || !cv.IsValid() {
+		return []reflect.Value{}
+	}
+	v = cv
+	return findAllNodes(v, elems[1:])
 }
 
 // type DataFinder interface {

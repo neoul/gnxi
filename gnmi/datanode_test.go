@@ -214,7 +214,10 @@ func TestFindAllNodes(t *testing.T) {
 					},
 				},
 			},
-			want:  []interface{}{},
+			want: []interface{}{
+				s.config.(*gostruct.Device).Interfaces.Interface["eth0"].Config.Name,
+				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Name,
+			},
 			want1: true,
 		},
 	}
