@@ -99,8 +99,8 @@ type TelemetrySubscription struct {
 // GetKey - returns a key for telemetry comparison
 func (telesub *TelemetrySubscription) GetKey() string {
 	return fmt.Sprintf("%s-%s-%s-%s-%d-%d-%t-%t-%t",
-		xpath.ToXPATH(telesub.Prefix), telesub.StreamingMode, telesub.Encoding,
-		telesub.SubscriptionMode, telesub.SampleInterval, telesub.HeartbeatInterval,
+		telesub.StreamingMode, telesub.Encoding, telesub.SubscriptionMode,
+		xpath.ToXPATH(telesub.Prefix), telesub.SampleInterval, telesub.HeartbeatInterval,
 		telesub.UseAliases, telesub.AllowAggregation, telesub.SuppressRedundant,
 	)
 }
