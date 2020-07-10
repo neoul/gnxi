@@ -52,6 +52,9 @@ func findAllNodes(v reflect.Value, elems []*pb.PathElem) []reflect.Value {
 	if len(elems) <= 0 {
 		return []reflect.Value{v}
 	}
+	if ydb.IsValScalar(v) {
+		return []reflect.Value{}
+	}
 	elem := elems[0]
 	fmt.Println("** Search", elem.GetName(), "from", utils.SprintStructInline(v.Interface()))
 	if elem.GetName() == "*" {
@@ -69,9 +72,6 @@ func findAllNodes(v reflect.Value, elems []*pb.PathElem) []reflect.Value {
 		cvlist, ok := ydb.ValGetAll(v)
 		if ok {
 			celems := elems[1:]
-			for _, cv := range cvlist {
-				rv = append(rv, findAllNodes(cv, celems)...)
-			}
 			for _, cv := range cvlist {
 				ccvlist := findAllNodes(cv, celems)
 				if len(ccvlist) > 0 {

@@ -220,6 +220,30 @@ func TestFindAllNodes(t *testing.T) {
 			},
 			want1: true,
 		},
+		{
+			name: "FindAllNodes",
+			args: args{
+				vgs: s.config,
+				path: &pb.Path{
+					Elem: []*pb.PathElem{
+						&pb.PathElem{
+							Name: "interfaces",
+						},
+						&pb.PathElem{
+							Name: "...",
+						},
+						&pb.PathElem{
+							Name: "config",
+						},
+					},
+				},
+			},
+			want: []interface{}{
+				s.config.(*gostruct.Device).Interfaces.Interface["eth0"].Config,
+				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config,
+			},
+			want1: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
