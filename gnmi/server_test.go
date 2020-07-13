@@ -340,7 +340,7 @@ func TestGetWithYdb(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test data load failed: %v", err)
 	}
-	dec := s.dataBlock.NewDecoder(r)
+	dec := s.datablock.NewDecoder(r)
 	dec.Decode()
 
 	tds := []struct {

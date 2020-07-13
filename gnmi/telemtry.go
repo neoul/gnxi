@@ -223,9 +223,9 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) (
 		// alias = xxx
 	}
 	s.mu.RLock()
-	s.dataBlock.Lock()
+	s.datablock.Lock()
 	defer s.mu.RUnlock()
-	defer s.dataBlock.Unlock()
+	defer s.datablock.Unlock()
 	update := make([]*pb.Update, len(subList))
 	for i, updateEntry := range subList {
 		// Get schema node for path from config struct.
@@ -235,7 +235,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) (
 			return nil, status.Error(codes.Unimplemented, "deprecated path element used")
 		}
 		// fmt.Println("path:::", xpath.ToXPATH(fullPath))
-		node, stat := ygotutils.GetNode(s.model.schemaTreeRoot, s.config, fullPath)
+		node, stat := ygotutils.GetNode(s.model.schemaTreeRoot, s.datastore, fullPath)
 		if isNil(node) || stat.GetCode() != int32(cpb.Code_OK) {
 			return nil, status.Errorf(codes.NotFound, "path %v not found", fullPath)
 		}
@@ -273,9 +273,9 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription)
 		// alias = xxx
 	}
 	s.mu.RLock()
-	s.dataBlock.Lock()
+	s.datablock.Lock()
 	defer s.mu.RUnlock()
-	defer s.dataBlock.Unlock()
+	defer s.datablock.Unlock()
 	update := make([]*pb.Update, len(telesub.Paths))
 	for i, path := range telesub.Paths {
 		// Get schema node for path from config struct.
@@ -284,7 +284,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription)
 			return nil, status.Error(codes.Unimplemented, "deprecated path element used")
 		}
 		// fmt.Println("path:::", xpath.ToXPATH(fullPath))
-		node, stat := ygotutils.GetNode(s.model.schemaTreeRoot, s.config, fullPath)
+		node, stat := ygotutils.GetNode(s.model.schemaTreeRoot, s.datastore, fullPath)
 		if isNil(node) || stat.GetCode() != int32(cpb.Code_OK) {
 			return nil, status.Errorf(codes.NotFound, "path %v not found", fullPath)
 		}

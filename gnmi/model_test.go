@@ -69,7 +69,7 @@ func TestFindAllNodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test data load failed: %v", err)
 	}
-	dec := s.dataBlock.NewDecoder(r)
+	dec := s.datablock.NewDecoder(r)
 	dec.Decode()
 
 	type args struct {
@@ -85,16 +85,16 @@ func TestFindAllNodes(t *testing.T) {
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs:  s.config,
+				vgs:  s.datastore,
 				path: &pb.Path{},
 			},
-			want:  []interface{}{s.config},
+			want:  []interface{}{s.datastore},
 			want1: true,
 		},
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs: s.config,
+				vgs: s.datastore,
 				path: &pb.Path{
 					Elem: []*pb.PathElem{
 						&pb.PathElem{
@@ -107,15 +107,15 @@ func TestFindAllNodes(t *testing.T) {
 				},
 			},
 			want: []interface{}{
-				s.config.(*gostruct.Device).Interfaces.Interface["eth0"],
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"],
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth0"],
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"],
 			},
 			want1: true,
 		},
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs: s.config,
+				vgs: s.datastore,
 				path: &pb.Path{
 					Elem: []*pb.PathElem{
 						&pb.PathElem{
@@ -130,13 +130,13 @@ func TestFindAllNodes(t *testing.T) {
 					},
 				},
 			},
-			want:  []interface{}{s.config.(*gostruct.Device).Interfaces.Interface["eth1"]},
+			want:  []interface{}{s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"]},
 			want1: true,
 		},
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs: s.config,
+				vgs: s.datastore,
 				path: &pb.Path{
 					Elem: []*pb.PathElem{
 						&pb.PathElem{
@@ -157,13 +157,13 @@ func TestFindAllNodes(t *testing.T) {
 					},
 				},
 			},
-			want:  []interface{}{s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Name},
+			want:  []interface{}{s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Name},
 			want1: true,
 		},
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs: s.config,
+				vgs: s.datastore,
 				path: &pb.Path{
 					Elem: []*pb.PathElem{
 						&pb.PathElem{
@@ -185,19 +185,19 @@ func TestFindAllNodes(t *testing.T) {
 				},
 			},
 			want: []interface{}{
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Description,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Enabled,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.LoopbackMode,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Mtu,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Name,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Type,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Description,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Enabled,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config.LoopbackMode,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Mtu,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Name,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Type,
 			},
 			want1: true,
 		},
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs: s.config,
+				vgs: s.datastore,
 				path: &pb.Path{
 					Elem: []*pb.PathElem{
 						&pb.PathElem{
@@ -216,25 +216,25 @@ func TestFindAllNodes(t *testing.T) {
 				},
 			},
 			want: []interface{}{
-				s.config.(*gostruct.Device).Interfaces.Interface["eth0"].Config.Description,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth0"].Config.Enabled,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth0"].Config.LoopbackMode,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth0"].Config.Mtu,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth0"].Config.Name,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth0"].Config.Type,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Description,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Enabled,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.LoopbackMode,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Mtu,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Name,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Type,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth0"].Config.Description,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth0"].Config.Enabled,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth0"].Config.LoopbackMode,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth0"].Config.Mtu,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth0"].Config.Name,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth0"].Config.Type,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Description,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Enabled,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config.LoopbackMode,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Mtu,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Name,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Type,
 			},
 			want1: true,
 		},
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs: s.config,
+				vgs: s.datastore,
 				path: &pb.Path{
 					Elem: []*pb.PathElem{
 						&pb.PathElem{
@@ -253,15 +253,15 @@ func TestFindAllNodes(t *testing.T) {
 				},
 			},
 			want: []interface{}{
-				s.config.(*gostruct.Device).Interfaces.Interface["eth0"].Config.Name,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Name,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth0"].Config.Name,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config.Name,
 			},
 			want1: true,
 		},
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs: s.config,
+				vgs: s.datastore,
 				path: &pb.Path{
 					Elem: []*pb.PathElem{
 						&pb.PathElem{
@@ -277,8 +277,8 @@ func TestFindAllNodes(t *testing.T) {
 				},
 			},
 			want: []interface{}{
-				s.config.(*gostruct.Device).Interfaces.Interface["eth0"].Config,
-				s.config.(*gostruct.Device).Interfaces.Interface["eth1"].Config,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth0"].Config,
+				s.datastore.(*gostruct.Device).Interfaces.Interface["eth1"].Config,
 			},
 			want1: true,
 		},

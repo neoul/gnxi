@@ -82,8 +82,8 @@ var (
 type Server struct {
 	model     *Model
 	callback  ConfigCallback
-	dataBlock *ydb.YDB
-	config    ygot.ValidatedGoStruct
+	datablock *ydb.YDB
+	datastore ygot.ValidatedGoStruct
 	mu        sync.RWMutex // mu is the RW lock to protect the access to config
 
 	useAliases bool
@@ -101,9 +101,9 @@ func NewServer(model *Model, config []byte, callback ConfigCallback) (*Server, e
 
 	s := &Server{
 		model:     model,
-		config:    rootStruct,
+		datastore: rootStruct,
 		callback:  callback,
-		dataBlock: db,
+		datablock: db,
 		alias:     map[string]*pb.Alias{},
 		Sessions:  map[string]*Session{},
 	}
@@ -137,7 +137,7 @@ func NewServer(model *Model, config []byte, callback ConfigCallback) (*Server, e
 
 // Close the connected YDB instance
 func (s *Server) Close() {
-	s.dataBlock.Close()
+	s.datablock.Close()
 }
 
 // checkEncodingAndModel checks whether encoding and models are supported by the server. Return error if anything is unsupported.
@@ -212,7 +212,7 @@ func (s *Server) doDelete(jsonTree map[string]interface{}, prefix, path *pb.Path
 		}
 		if s.callback != nil {
 			if applyErr := s.callback(newConfig); applyErr != nil {
-				if rollbackErr := s.callback(s.config); rollbackErr != nil {
+				if rollbackErr := s.callback(s.datastore); rollbackErr != nil {
 					return nil, status.Errorf(codes.Internal, "error in rollback the failed operation (%v): %v", applyErr, rollbackErr)
 				}
 				return nil, status.Errorf(codes.Aborted, "error in applying operation to device: %v", applyErr)
@@ -309,7 +309,7 @@ func (s *Server) doReplaceOrUpdate(jsonTree map[string]interface{}, op pb.Update
 	// Apply the validated operation to the device.
 	if s.callback != nil {
 		if applyErr := s.callback(newConfig); applyErr != nil {
-			if rollbackErr := s.callback(s.config); rollbackErr != nil {
+			if rollbackErr := s.callback(s.datastore); rollbackErr != nil {
 				return nil, status.Errorf(codes.Internal, "error in rollback the failed operation (%v): %v", applyErr, rollbackErr)
 			}
 			return nil, status.Errorf(codes.Aborted, "error in applying operation to device: %v", applyErr)
@@ -511,9 +511,9 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	notifications := make([]*pb.Notification, len(paths))
 
 	s.mu.RLock()
-	s.dataBlock.Lock()
+	s.datablock.Lock()
 	defer s.mu.RUnlock()
-	defer s.dataBlock.Unlock()
+	defer s.datablock.Unlock()
 
 	for i, path := range paths {
 		// path.CompletePath()
@@ -522,19 +522,27 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 		if fullPath.GetElem() == nil && fullPath.GetElement() != nil {
 			return nil, status.Error(codes.Unimplemented, "deprecated path element type is unsupported")
 		}
-		node, stat := ygotutils.GetNode(s.model.schemaTreeRoot, s.config, fullPath)
-		if isNil(node) || stat.GetCode() != int32(cpb.Code_OK) {
-			return nil, status.Errorf(codes.NotFound, "path %v not found", fullPath)
+		// node, stat := ygotutils.GetNode(s.model.schemaTreeRoot, s.datastore, fullPath)
+		// if isNil(node) || stat.GetCode() != int32(cpb.Code_OK) {
+		// 	return nil, status.Errorf(codes.NotFound, "path %v not found", fullPath)
+		// }
+		// wildcard supported!!
+		founds, ok := FindAllDataNodes(s.datastore, fullPath)
+		if !ok {
+			return nil, status.Errorf(codes.NotFound, "%v not found", xpath.ToXPATH(fullPath))
 		}
-		typedValue, err := ygot.EncodeTypedValue(node, req.GetEncoding())
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
+		update := make([]*pb.Update, len(founds))
+		for i, node := range founds {
+			typedValue, err := ygot.EncodeTypedValue(node, req.GetEncoding())
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, err.Error())
+			}
+			update[i] = &pb.Update{Path: path, Val: typedValue}
 		}
-		update := &pb.Update{Path: path, Val: typedValue}
 		notifications[i] = &pb.Notification{
 			Timestamp: time.Now().UnixNano(),
 			Prefix:    prefix,
-			Update:    []*pb.Update{update},
+			Update:    update,
 		}
 	}
 
@@ -545,12 +553,12 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.dataBlock.Lock()
-	defer s.dataBlock.Unlock()
+	s.datablock.Lock()
+	defer s.datablock.Unlock()
 
 	utils.PrintProto(req)
 
-	jsonTree, err := ygot.ConstructIETFJSON(s.config, &ygot.RFC7951JSONConfig{})
+	jsonTree, err := ygot.ConstructIETFJSON(s.datastore, &ygot.RFC7951JSONConfig{})
 	if err != nil {
 		msg := fmt.Sprintf("error in constructing IETF JSON tree from config struct: %v", err)
 		log.Error(msg)
@@ -594,7 +602,7 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 		log.Error(msg)
 		return nil, status.Error(codes.Internal, msg)
 	}
-	s.config = rootStruct
+	s.datastore = rootStruct
 	return &pb.SetResponse{
 		Prefix:   req.GetPrefix(),
 		Response: results,
@@ -650,10 +658,10 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 
 // InternalUpdate is an experimental feature to let the server update its
 // internal states. Use it with your own risk.
-func (s *Server) InternalUpdate(fp func(config ygot.ValidatedGoStruct) error) error {
+func (s *Server) InternalUpdate(fp func(datastore ygot.ValidatedGoStruct) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.dataBlock.Lock()
-	defer s.dataBlock.Unlock()
-	return fp(s.config)
+	s.datablock.Lock()
+	defer s.datablock.Unlock()
+	return fp(s.datastore)
 }
