@@ -48,6 +48,7 @@ func TestCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
+	defer s.Close()
 	resp, err := s.Capabilities(nil, &pb.CapabilityRequest{})
 	t.Log(resp)
 	if err != nil {
@@ -109,6 +110,7 @@ func TestGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
+	defer s.Close()
 
 	tds := []struct {
 		desc        string
@@ -332,6 +334,7 @@ func TestGetWithYdb(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
+	defer s.Close()
 	r, err := os.Open("modeldata/data/sample.yaml")
 	defer r.Close()
 	if err != nil {
