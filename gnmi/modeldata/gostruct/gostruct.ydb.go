@@ -12,7 +12,7 @@ import (
 
 // Merge - constructs Device
 func merge(device *Device, keys []string, key string, tag string, value string) error {
-	fmt.Printf("Device.merge %v %v %v %v\n", keys, key, tag, value)
+	// fmt.Printf("Device.merge %v %v %v %v\n", keys, key, tag, value)
 	v := reflect.ValueOf(device)
 	for _, k := range keys {
 		cv, ok := ydb.ValFindOrInit(v, k, ydb.SearchByContent)
@@ -29,9 +29,9 @@ func merge(device *Device, keys []string, key string, tag string, value string) 
 			return err
 		}
 	}
-	nv, err := ydb.ValChildSet(v, key, value, ydb.SearchByContent)
+	_, err := ydb.ValChildSet(v, key, value, ydb.SearchByContent)
 	if err == nil {
-		ydb.DebugValueString(nv.Interface(), 1, func(x ...interface{}) { fmt.Print(x...) })
+		// ydb.DebugValueString(nv.Interface(), 1, func(x ...interface{}) { fmt.Print(x...) })
 	} else {
 		fmt.Println(err)
 	}
@@ -40,7 +40,7 @@ func merge(device *Device, keys []string, key string, tag string, value string) 
 
 // Merge - constructs Device
 func delete(device *Device, keys []string, key string) error {
-	fmt.Printf("Device.delete %v %v\n", keys, key)
+	// fmt.Printf("Device.delete %v %v\n", keys, key)
 	v := reflect.ValueOf(device)
 	for _, k := range keys {
 		cv, ok := ydb.ValFind(v, k, ydb.SearchByContent)
@@ -51,7 +51,7 @@ func delete(device *Device, keys []string, key string) error {
 	}
 	_, err := ydb.ValChildUnset(v, key, ydb.SearchByContent)
 	if err == nil {
-		ydb.DebugValueString(v.Interface(), 1, func(x ...interface{}) { fmt.Print(x...) })
+		// ydb.DebugValueString(v.Interface(), 1, func(x ...interface{}) { fmt.Print(x...) })
 	} else {
 		fmt.Println(err)
 	}
@@ -60,24 +60,24 @@ func delete(device *Device, keys []string, key string) error {
 
 // Create - constructs Device
 func (device *Device) Create(keys []string, key string, tag string, value string) error {
-	fmt.Printf("Device.Create %v %v %v %v {\n", keys, key, tag, value)
+	// fmt.Printf("Device.Create %v %v %v %v {\n", keys, key, tag, value)
 	err := merge(device, keys, key, tag, value)
-	fmt.Println("}", err)
+	// fmt.Println("}", err)
 	return err
 }
 
 // Replace - constructs Device
 func (device *Device) Replace(keys []string, key string, tag string, value string) error {
-	fmt.Printf("Device.Replace %v %v %v %v {\n", keys, key, tag, value)
+	// fmt.Printf("Device.Replace %v %v %v %v {\n", keys, key, tag, value)
 	err := merge(device, keys, key, tag, value)
-	fmt.Println("}", err)
+	// fmt.Println("}", err)
 	return err
 }
 
 // Delete - constructs Device
 func (device *Device) Delete(keys []string, key string) error {
-	fmt.Printf("Device.Delete %v %v {\n", keys, key)
+	// fmt.Printf("Device.Delete %v %v {\n", keys, key)
 	err := delete(device, keys, key)
-	fmt.Println("}", err)
+	// fmt.Println("}", err)
 	return err
 }

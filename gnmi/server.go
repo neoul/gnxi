@@ -36,6 +36,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"github.com/neoul/gnxi/gnmi/modeldata/gostruct"
 	"github.com/neoul/gnxi/utils"
 	"github.com/neoul/gnxi/utils/xpath"
 	"github.com/neoul/libydb/go/ydb"
@@ -527,7 +528,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 		// 	return nil, status.Errorf(codes.NotFound, "path %v not found", fullPath)
 		// }
 		// wildcard supported!!
-		founds, ok := FindAllDataNodes(s.datastore, fullPath)
+		founds, ok := gostruct.FindAllDataNodes(s.datastore, fullPath)
 		if !ok {
 			return nil, status.Errorf(codes.NotFound, "%v not found", xpath.ToXPATH(fullPath))
 		}
