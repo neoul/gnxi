@@ -499,7 +499,8 @@ func (s *Server) Capabilities(ctx context.Context, req *pb.CapabilityRequest) (*
 func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
 
 	if req.GetType() != pb.GetRequest_ALL {
-		return nil, status.Errorf(codes.Unimplemented, "unsupported request type: %s", pb.GetRequest_DataType_name[int32(req.GetType())])
+		return nil, status.Errorf(codes.Unimplemented, "unsupported request type: %s",
+			pb.GetRequest_DataType_name[int32(req.GetType())])
 	}
 	if err := s.checkEncodingAndModel(req.GetEncoding(), req.GetUseModels()); err != nil {
 		return nil, err
@@ -509,44 +510,55 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 
 	prefix := req.GetPrefix()
 	paths := req.GetPath()
-	notifications := make([]*pb.Notification, len(paths))
 
 	s.mu.RLock()
 	s.datablock.Lock()
 	defer s.mu.RUnlock()
 	defer s.datablock.Unlock()
 
-	for i, path := range paths {
-		// path.CompletePath()
-		// Get schema node for path from config struct.
-		fullPath := xpath.GNMIFullPath(prefix, path)
-		if fullPath.GetElem() == nil && fullPath.GetElement() != nil {
-			return nil, status.Error(codes.Unimplemented, "deprecated path element type is unsupported")
+	toplist, ok := gostruct.FindAllData(s.datastore, prefix)
+	if !ok || len(toplist) <= 0 {
+		return nil, status.Errorf(codes.NotFound, "%v not found", xpath.ToXPATH(prefix))
+	}
+	notifications := make([]*pb.Notification, len(toplist))
+	for i, top := range toplist {
+		bpath := top.Path
+		branch := top.Value.(ygot.GoStruct)
+		bprefix, err := xpath.ToGNMIPath(bpath)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "prefix path conversion failed.")
 		}
-		// node, stat := ygotutils.GetNode(s.model.schemaTreeRoot, s.datastore, fullPath)
-		// if isNil(node) || stat.GetCode() != int32(cpb.Code_OK) {
-		// 	return nil, status.Errorf(codes.NotFound, "path %v not found", fullPath)
-		// }
-		// wildcard supported!!
-		founds, ok := gostruct.FindAllDataNodes(s.datastore, fullPath)
-		if !ok {
-			return nil, status.Errorf(codes.NotFound, "%v not found", xpath.ToXPATH(fullPath))
+		fmt.Println("bpath:", bpath, ", bprefix:", bprefix)
+		datalist := []*gostruct.DataAndPath{}
+		for _, path := range paths {
+			found, ok := gostruct.FindAllData(branch, path)
+			if ok {
+				// for _, data := range found {
+				// 	fmt.Println(" - ", data.Path)
+				// }
+				datalist = append(datalist, found...)
+			}
 		}
-		update := make([]*pb.Update, len(founds))
-		for i, node := range founds {
-			typedValue, err := ygot.EncodeTypedValue(node, req.GetEncoding())
+		update := make([]*pb.Update, len(datalist))
+		for j, data := range datalist {
+			typedValue, err := ygot.EncodeTypedValue(data.Value, req.GetEncoding())
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, err.Error())
 			}
-			update[i] = &pb.Update{Path: path, Val: typedValue}
+			datapath, err := xpath.ToGNMIPath(data.Path)
+			if err != nil {
+				msg := fmt.Sprintf("path (%s) conversion failed", data.Path)
+				return nil, status.Error(codes.Internal, msg)
+			}
+			update[j] = &pb.Update{Path: datapath, Val: typedValue}
 		}
 		notifications[i] = &pb.Notification{
 			Timestamp: time.Now().UnixNano(),
-			Prefix:    prefix,
+			Prefix:    bprefix,
 			Update:    update,
 		}
 	}
-
+	// fmt.Println(proto.MarshalTextString(&pb.GetResponse{Notification: notifications}))
 	return &pb.GetResponse{Notification: notifications}, nil
 }
 
