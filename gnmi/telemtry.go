@@ -7,11 +7,11 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/neoul/gnxi/gnmi/modeldata/gostruct"
+	"github.com/neoul/gnxi/utils"
 	"github.com/neoul/gnxi/utils/xpath"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/openconfig/ygot/experimental/ygotutils"
 	"github.com/openconfig/ygot/ygot"
-	cpb "google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -198,12 +198,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) (
 	subList := subscriptionList.GetSubscription()
 	updateOnly := subscriptionList.GetUpdatesOnly()
 	if updateOnly {
-		updates := []*pb.SubscribeResponse{
-			{Response: &pb.SubscribeResponse_SyncResponse{
-				SyncResponse: true,
-			}},
-		}
-		return updates, nil
+		return buildSyncResponse()
 	}
 	prefix := subscriptionList.GetPrefix()
 	encoding := subscriptionList.GetEncoding()
@@ -226,27 +221,58 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) (
 	s.datablock.Lock()
 	defer s.mu.RUnlock()
 	defer s.datablock.Unlock()
-	update := make([]*pb.Update, len(subList))
-	for i, updateEntry := range subList {
-		// Get schema node for path from config struct.
-		path := updateEntry.Path
-		fullPath := xpath.GNMIFullPath(prefix, path)
-		if fullPath.GetElem() == nil && fullPath.GetElement() != nil {
-			return nil, status.Error(codes.Unimplemented, "deprecated path element used")
-		}
-		// fmt.Println("path:::", xpath.ToXPATH(fullPath))
-		node, stat := ygotutils.GetNode(s.model.schemaTreeRoot, s.datastore, fullPath)
-		if isNil(node) || stat.GetCode() != int32(cpb.Code_OK) {
-			return nil, status.Errorf(codes.NotFound, "path %v not found", fullPath)
-		}
-		typedValue, err := ygot.EncodeTypedValue(node, encoding)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
-		}
-		update[i] = &pb.Update{Path: path, Val: typedValue}
+	if err := utils.ValidateGNMIPath(prefix); err != nil {
+		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-
-	return buildSubscribeResponse(prefix, alias, update, *disableBundling, true)
+	toplist, ok := gostruct.FindAllData(s.datastore, prefix)
+	if !ok || len(toplist) <= 0 {
+		_, ok = gostruct.FindAllSchemaTypes(s.datastore, prefix)
+		if ok {
+			// data-missing is not an error in SubscribeRPC
+			// doest send any of messages before sync response.
+			return buildSyncResponse()
+		}
+		return nil, status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPATH(prefix))
+	}
+	allresponses := []*pb.SubscribeResponse{}
+	for _, top := range toplist {
+		bpath := top.Path
+		branch := top.Value.(ygot.GoStruct)
+		bprefix, err := xpath.ToGNMIPath(bpath)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
+		}
+		allupdates := []*pb.Update{}
+		for _, updateEntry := range subList {
+			path := updateEntry.Path
+			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
+				return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
+			}
+			datalist, ok := gostruct.FindAllData(branch, path)
+			if !ok || len(datalist) <= 0 {
+				continue
+			}
+			update := make([]*pb.Update, len(datalist))
+			for j, data := range datalist {
+				typedValue, err := ygot.EncodeTypedValue(data.Value, encoding)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "encoding-error(%s)", err.Error())
+				}
+				datapath, err := xpath.ToGNMIPath(data.Path)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", data.Path)
+				}
+				update[j] = &pb.Update{Path: datapath, Val: typedValue}
+			}
+			allupdates = append(allupdates, update...)
+		}
+		responses, err := buildSubscribeResponse(prefix, alias, allupdates, *disableBundling, true)
+		if err != nil {
+			return []*pb.SubscribeResponse{}, err
+		}
+		allresponses = append(allresponses, responses...)
+	}
+	return allresponses, nil
 }
 
 // initTelemetryUpdate - Process and generate responses for a init update.
@@ -276,26 +302,58 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription)
 	s.datablock.Lock()
 	defer s.mu.RUnlock()
 	defer s.datablock.Unlock()
-	update := make([]*pb.Update, len(telesub.Paths))
-	for i, path := range telesub.Paths {
-		// Get schema node for path from config struct.
-		fullPath := xpath.GNMIFullPath(prefix, path)
-		if fullPath.GetElem() == nil && fullPath.GetElement() != nil {
-			return nil, status.Error(codes.Unimplemented, "deprecated path element used")
+	if err := utils.ValidateGNMIPath(prefix); err != nil {
+		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
+	}
+	toplist, ok := gostruct.FindAllData(s.datastore, prefix)
+	if !ok || len(toplist) <= 0 {
+		_, ok = gostruct.FindAllSchemaTypes(s.datastore, prefix)
+		if ok {
+			// data-missing is not an error in SubscribeRPC
+			// doest send any of messages before sync response.
+			return buildSyncResponse()
 		}
-		// fmt.Println("path:::", xpath.ToXPATH(fullPath))
-		node, stat := ygotutils.GetNode(s.model.schemaTreeRoot, s.datastore, fullPath)
-		if isNil(node) || stat.GetCode() != int32(cpb.Code_OK) {
-			return nil, status.Errorf(codes.NotFound, "path %v not found", fullPath)
-		}
-		typedValue, err := ygot.EncodeTypedValue(node, encoding)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
-		}
-		update[i] = &pb.Update{Path: path, Val: typedValue}
+		return nil, status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPATH(prefix))
 	}
 
-	return buildSubscribeResponse(prefix, alias, update, *disableBundling, false)
+	allresponses := []*pb.SubscribeResponse{}
+	for _, top := range toplist {
+		bpath := top.Path
+		branch := top.Value.(ygot.GoStruct)
+		bprefix, err := xpath.ToGNMIPath(bpath)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
+		}
+		allupdates := []*pb.Update{}
+		for _, path := range telesub.Paths {
+			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
+				return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
+			}
+			datalist, ok := gostruct.FindAllData(branch, path)
+			if !ok || len(datalist) <= 0 {
+				continue
+			}
+			update := make([]*pb.Update, len(datalist))
+			for j, data := range datalist {
+				typedValue, err := ygot.EncodeTypedValue(data.Value, encoding)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "encoding-error(%s)", err.Error())
+				}
+				datapath, err := xpath.ToGNMIPath(data.Path)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", data.Path)
+				}
+				update[j] = &pb.Update{Path: datapath, Val: typedValue}
+			}
+			allupdates = append(allupdates, update...)
+		}
+		responses, err := buildSubscribeResponse(prefix, alias, allupdates, *disableBundling, false)
+		if err != nil {
+			return []*pb.SubscribeResponse{}, err
+		}
+		allresponses = append(allresponses, responses...)
+	}
+	return allresponses, nil
 }
 
 func newTelemetrySubscription(

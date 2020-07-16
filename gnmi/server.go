@@ -515,50 +515,57 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	s.datablock.Lock()
 	defer s.mu.RUnlock()
 	defer s.datablock.Unlock()
-
+	// each prefix + path ==> one notification message
+	if err := utils.ValidateGNMIPath(prefix); err != nil {
+		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
+	}
 	toplist, ok := gostruct.FindAllData(s.datastore, prefix)
 	if !ok || len(toplist) <= 0 {
-		return nil, status.Errorf(codes.NotFound, "%v not found", xpath.ToXPATH(prefix))
+		_, ok = gostruct.FindAllSchemaTypes(s.datastore, prefix)
+		if ok {
+			return nil, status.Errorf(codes.NotFound, "data-missing(%v)", xpath.ToXPATH(prefix))
+		}
+		return nil, status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPATH(prefix))
 	}
-	notifications := make([]*pb.Notification, len(toplist))
-	for i, top := range toplist {
+	notifications := []*pb.Notification{}
+	for _, top := range toplist {
 		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
 		bprefix, err := xpath.ToGNMIPath(bpath)
 		if err != nil {
-			return nil, status.Error(codes.Internal, "prefix path conversion failed.")
+			return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
 		}
-		fmt.Println("bpath:", bpath, ", bprefix:", bprefix)
-		datalist := []*gostruct.DataAndPath{}
 		for _, path := range paths {
-			found, ok := gostruct.FindAllData(branch, path)
-			if ok {
-				// for _, data := range found {
-				// 	fmt.Println(" - ", data.Path)
-				// }
-				datalist = append(datalist, found...)
+			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
+				return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-		}
-		update := make([]*pb.Update, len(datalist))
-		for j, data := range datalist {
-			typedValue, err := ygot.EncodeTypedValue(data.Value, req.GetEncoding())
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, err.Error())
+			datalist, ok := gostruct.FindAllData(branch, path)
+			if !ok || len(datalist) <= 0 {
+				continue
 			}
-			datapath, err := xpath.ToGNMIPath(data.Path)
-			if err != nil {
-				msg := fmt.Sprintf("path (%s) conversion failed", data.Path)
-				return nil, status.Error(codes.Internal, msg)
+			update := make([]*pb.Update, len(datalist))
+			for j, data := range datalist {
+				typedValue, err := ygot.EncodeTypedValue(data.Value, req.GetEncoding())
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "encoding-error(%s)", err.Error())
+				}
+				datapath, err := xpath.ToGNMIPath(data.Path)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", data.Path)
+				}
+				update[j] = &pb.Update{Path: datapath, Val: typedValue}
 			}
-			update[j] = &pb.Update{Path: datapath, Val: typedValue}
-		}
-		notifications[i] = &pb.Notification{
-			Timestamp: time.Now().UnixNano(),
-			Prefix:    bprefix,
-			Update:    update,
+			notification := &pb.Notification{
+				Timestamp: time.Now().UnixNano(),
+				Prefix:    bprefix,
+				Update:    update,
+			}
+			notifications = append(notifications, notification)
 		}
 	}
-	// fmt.Println(proto.MarshalTextString(&pb.GetResponse{Notification: notifications}))
+	if len(notifications) <= 0 {
+		return nil, status.Errorf(codes.NotFound, "data-missing")
+	}
 	return &pb.GetResponse{Notification: notifications}, nil
 }
 

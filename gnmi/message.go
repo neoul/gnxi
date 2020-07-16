@@ -7,9 +7,8 @@ import (
 )
 
 func buildSubscribeResponse(prefix *pb.Path, alias string, update []*pb.Update, disableBundling bool, isInitUpdate bool) ([]*pb.SubscribeResponse, error) {
-	var num int = len(update)
 	var responses []*pb.SubscribeResponse
-	if num == 0 {
+	if update == nil || len(update) == 0 {
 		if isInitUpdate {
 			subscribeResponse := []*pb.SubscribeResponse{
 				{Response: &pb.SubscribeResponse_SyncResponse{
@@ -47,6 +46,7 @@ func buildSubscribeResponse(prefix *pb.Path, alias string, update []*pb.Update, 
 		return subscribeResponse, nil
 	}
 	// telemetry update bundling disabled.
+	num := len(update)
 	if isInitUpdate {
 		responses = make([]*pb.SubscribeResponse, num+1)
 	} else {
@@ -71,4 +71,12 @@ func buildSubscribeResponse(prefix *pb.Path, alias string, update []*pb.Update, 
 			}}
 	}
 	return responses, nil
+}
+
+func buildSyncResponse() ([]*pb.SubscribeResponse, error) {
+	return []*pb.SubscribeResponse{
+		{Response: &pb.SubscribeResponse_SyncResponse{
+			SyncResponse: true,
+		}},
+	}, nil
 }

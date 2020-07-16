@@ -27,7 +27,6 @@ go run gnmi_cli.go -address 192.168.0.77:10161 -ca_crt ../pki/ca.crt -client_crt
   >
 >
 path: <
-  
   elem: <
     name: "interface"
     key: <
@@ -35,9 +34,19 @@ path: <
       value: "eth0"
     >
   >
+>
+path: <
+  elem: <
+    name: "interface"
+    key: <
+      key: "name"
+      value: "eth1"
+    >
+  >
 >'
 
 ## SubscribeRequest
 go run gnmi_cli.go -address 192.168.0.77:10161 -ca_crt ../pki/ca.crt -client_crt ../pki/client.crt -client_key ../pki/client.key -alsologtostderr -stderrthreshold 0 -v 2 -query "/interfaces/interface[name=eth0]"
 
+go run gnmi_cli.go -address 192.168.0.77:10161 -ca_crt ../pki/ca.crt -client_crt ../pki/client.crt -client_key ../pki/client.key -alsologtostderr -stderrthreshold 0 -v 2 -query "/interfaces/interface[name=eth0]/name" -query_type s
 ```
