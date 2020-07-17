@@ -217,16 +217,14 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) (
 		// prefix = nil
 		// alias = xxx
 	}
-	s.mu.RLock()
-	s.datablock.Lock()
-	defer s.mu.RUnlock()
-	defer s.datablock.Unlock()
+	s.modeldata.RLock()
+	defer s.modeldata.RUnlock()
 	if err := utils.ValidateGNMIPath(prefix); err != nil {
 		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := gostruct.FindAllData(s.datastore, prefix)
+	toplist, ok := gostruct.FindAllData(s.modeldata.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
-		_, ok = gostruct.FindAllSchemaTypes(s.datastore, prefix)
+		_, ok = gostruct.FindAllSchemaTypes(s.modeldata.GetRoot(), prefix)
 		if ok {
 			// data-missing is not an error in SubscribeRPC
 			// doest send any of messages before sync response.
@@ -298,16 +296,14 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription)
 		// prefix = nil
 		// alias = xxx
 	}
-	s.mu.RLock()
-	s.datablock.Lock()
-	defer s.mu.RUnlock()
-	defer s.datablock.Unlock()
+	s.modeldata.RLock()
+	defer s.modeldata.RUnlock()
 	if err := utils.ValidateGNMIPath(prefix); err != nil {
 		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := gostruct.FindAllData(s.datastore, prefix)
+	toplist, ok := gostruct.FindAllData(s.modeldata.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
-		_, ok = gostruct.FindAllSchemaTypes(s.datastore, prefix)
+		_, ok = gostruct.FindAllSchemaTypes(s.modeldata.GetRoot(), prefix)
 		if ok {
 			// data-missing is not an error in SubscribeRPC
 			// doest send any of messages before sync response.

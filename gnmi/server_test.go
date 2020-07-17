@@ -18,10 +18,11 @@ package gnmi
 import (
 	"encoding/json"
 	"flag"
-	"os"
+	"io/ioutil"
 	"reflect"
 	"testing"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/value"
@@ -34,18 +35,18 @@ import (
 
 var (
 	// model is the model for test config server.
-	mo = &model.Model{
-		ModelData:       gostruct.ΓModelData,
-		StructRootType:  reflect.TypeOf((*gostruct.Device)(nil)),
-		SchemaTreeRoot:  gostruct.SchemaTree["Device"],
-		JsonUnmarshaler: gostruct.Unmarshal,
-		EnumData:        gostruct.ΛEnum,
-	}
+	mo = model.NewCustomModel(
+		gostruct.ΓModelData,
+		reflect.TypeOf((*gostruct.Device)(nil)),
+		gostruct.SchemaTree["Device"],
+		gostruct.Unmarshal,
+		gostruct.ΛEnum,
+	)
 )
 
 func TestCapabilities(t *testing.T) {
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(mo, nil, nil)
+	s, err := NewServer(mo, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -55,8 +56,8 @@ func TestCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
-	if !reflect.DeepEqual(resp.GetSupportedModels(), mo.ModelData) {
-		t.Errorf("got supported models %v\nare not the same as\nmodel supported by the server %v", resp.GetSupportedModels(), mo.ModelData)
+	if !reflect.DeepEqual(resp.GetSupportedModels(), mo.GetModelData()) {
+		t.Errorf("got supported models %v\nare not the same as\nmodel supported by the server %v", resp.GetSupportedModels(), mo.GetModelData())
 	}
 	if !reflect.DeepEqual(resp.GetSupportedEncodings(), supportedEncodings) {
 		t.Errorf("got supported encodings %v\nare not the same as\nencodings supported by the server %v", resp.GetSupportedEncodings(), supportedEncodings)
@@ -107,7 +108,7 @@ func TestGet(t *testing.T) {
 	}`
 
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(mo, []byte(jsonConfigRoot), nil)
+	s, err := NewServer(mo, []byte(jsonConfigRoot), nil, nil)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -331,18 +332,15 @@ func TestGetWithYdb(t *testing.T) {
 	modeldata := &pb.ModelData{}
 
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(mo, nil, nil)
+	yamlData, err := ioutil.ReadFile("model/data/sample.yaml")
+	if err != nil {
+		glog.Exitf("error in reading config file: %v", err)
+	}
+	s, err := NewServer(mo, nil, yamlData, nil)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
 	defer s.Close()
-	r, err := os.Open("model/data/sample.yaml")
-	defer r.Close()
-	if err != nil {
-		t.Fatalf("test data load failed: %v", err)
-	}
-	dec := s.datablock.NewDecoder(r)
-	dec.Decode()
 
 	tds := []struct {
 		desc        string
@@ -1307,7 +1305,7 @@ func TestGetWithYdb(t *testing.T) {
 // 	}
 
 // 	// Check server config
-// 	wantConfigStruct, err := m.NewConfigStruct([]byte(tc.wantConfig))
+// 	wantConfigStruct, err := NewModelData(m, []byte(tc.wantConfig))
 // 	if err != nil {
 // 		t.Fatalf("wantConfig data cannot be loaded as a config struct: %v", err)
 // 	}

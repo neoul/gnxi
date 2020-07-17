@@ -36,16 +36,17 @@ import (
 )
 
 var (
-	bindAddr   = flag.String("bind_address", ":10161", "Bind to address:port or just :port")
-	configFile = flag.String("config", "", "IETF JSON file for target startup config")
+	bindAddr       = flag.String("bind_address", ":10161", "Bind to address:port or just :port")
+	jsonConfigFile = flag.String("json-config", "", "IETF JSON file for target startup config")
+	yamlConfigFile = flag.String("yaml-config", "", "YAML file for target startup configuration")
 )
 
 type server struct {
 	*gnmi.Server
 }
 
-func newServer(model *model.Model, config []byte) (*server, error) {
-	s, err := gnmi.NewServer(model, config, nil)
+func newServer(model *model.Model, jsonConfig []byte, yamlConfig []byte) (*server, error) {
+	s, err := gnmi.NewServer(model, jsonConfig, yamlConfig, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -71,15 +72,23 @@ func main() {
 	// opts = append(opts, grpc.StreamInterceptor(credentials.StreamInterceptor))
 	g := grpc.NewServer(opts...)
 
-	var configData []byte
-	if *configFile != "" {
+	var jsonData []byte
+	if *jsonConfigFile != "" {
 		var err error
-		configData, err = ioutil.ReadFile(*configFile)
+		jsonData, err = ioutil.ReadFile(*jsonConfigFile)
 		if err != nil {
 			glog.Exitf("error in reading config file: %v", err)
 		}
 	}
-	s, err := newServer(model, configData)
+	var yamlData []byte
+	if *yamlConfigFile != "" {
+		var err error
+		yamlData, err = ioutil.ReadFile(*yamlConfigFile)
+		if err != nil {
+			glog.Exitf("error in reading config file: %v", err)
+		}
+	}
+	s, err := newServer(model, jsonData, yamlData)
 	if err != nil {
 		glog.Exitf("error in creating gnmid: %v", err)
 	}

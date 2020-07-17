@@ -32,3 +32,21 @@ func ValidateGNMIFullPath(prefix, path *gpb.Path) error {
 	}
 	return nil
 }
+
+// GNMIFullPath builds the full path from the prefix and path.
+func GNMIFullPath(prefix, path *gpb.Path) *gpb.Path {
+	if prefix == nil {
+		if path == nil {
+			return &gpb.Path{}
+		}
+		return path
+	}
+	fullPath := &gpb.Path{Origin: path.Origin}
+	if path.GetElement() != nil {
+		fullPath.Element = append(prefix.GetElement(), path.GetElement()...)
+	}
+	if path.GetElem() != nil {
+		fullPath.Elem = append(prefix.GetElem(), path.GetElem()...)
+	}
+	return fullPath
+}
