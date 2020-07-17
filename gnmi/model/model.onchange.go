@@ -1,4 +1,4 @@
-package gostruct
+package model
 
 // OnChange - used to inform the data change to user
 type OnChange interface {
