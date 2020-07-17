@@ -496,9 +496,14 @@ func processSR(teleses *TelemetrySession, req *pb.SubscribeRequest) error {
 	}
 	encoding := subscriptionList.GetEncoding()
 	useModules := subscriptionList.GetUseModels()
-	if err := teleses.server.checkEncodingAndModel(encoding, useModules); err != nil {
+
+	if err := teleses.server.model.CheckModels(useModules); err != nil {
+		return status.Errorf(codes.Unimplemented, err.Error())
+	}
+	if err := teleses.server.checkEncoding(encoding); err != nil {
 		return err
 	}
+
 	resps, err := teleses.initTelemetryUpdate(req)
 	for _, resp := range resps {
 		teleses.channel <- resp

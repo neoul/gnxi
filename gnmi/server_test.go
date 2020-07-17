@@ -28,23 +28,24 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/neoul/gnxi/gnmi/model"
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
 )
 
 var (
 	// model is the model for test config server.
-	model = &Model{
-		modelData:       gostruct.ΓModelData,
-		structRootType:  reflect.TypeOf((*gostruct.Device)(nil)),
-		schemaTreeRoot:  gostruct.SchemaTree["Device"],
-		jsonUnmarshaler: gostruct.Unmarshal,
-		enumData:        gostruct.ΛEnum,
+	mo = &model.Model{
+		ModelData:       gostruct.ΓModelData,
+		StructRootType:  reflect.TypeOf((*gostruct.Device)(nil)),
+		SchemaTreeRoot:  gostruct.SchemaTree["Device"],
+		JsonUnmarshaler: gostruct.Unmarshal,
+		EnumData:        gostruct.ΛEnum,
 	}
 )
 
 func TestCapabilities(t *testing.T) {
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(model, nil, nil)
+	s, err := NewServer(mo, nil, nil)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -54,8 +55,8 @@ func TestCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
-	if !reflect.DeepEqual(resp.GetSupportedModels(), model.modelData) {
-		t.Errorf("got supported models %v\nare not the same as\nmodel supported by the server %v", resp.GetSupportedModels(), model.modelData)
+	if !reflect.DeepEqual(resp.GetSupportedModels(), mo.ModelData) {
+		t.Errorf("got supported models %v\nare not the same as\nmodel supported by the server %v", resp.GetSupportedModels(), mo.ModelData)
 	}
 	if !reflect.DeepEqual(resp.GetSupportedEncodings(), supportedEncodings) {
 		t.Errorf("got supported encodings %v\nare not the same as\nencodings supported by the server %v", resp.GetSupportedEncodings(), supportedEncodings)
@@ -106,7 +107,7 @@ func TestGet(t *testing.T) {
 	}`
 
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(model, []byte(jsonConfigRoot), nil)
+	s, err := NewServer(mo, []byte(jsonConfigRoot), nil)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -330,7 +331,7 @@ func TestGetWithYdb(t *testing.T) {
 	modeldata := &pb.ModelData{}
 
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(model, nil, nil)
+	s, err := NewServer(mo, nil, nil)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}

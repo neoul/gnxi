@@ -21,14 +21,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"reflect"
 
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
 	"github.com/neoul/gnxi/gnmi"
-	"github.com/neoul/gnxi/gnmi/model/gostruct"
+	"github.com/neoul/gnxi/gnmi/model"
 
 	"github.com/neoul/gnxi/utils/credentials"
 	"github.com/neoul/gnxi/utils/netsession"
@@ -45,7 +44,7 @@ type server struct {
 	*gnmi.Server
 }
 
-func newServer(model *gnmi.Model, config []byte) (*server, error) {
+func newServer(model *model.Model, config []byte) (*server, error) {
 	s, err := gnmi.NewServer(model, config, nil)
 	if err != nil {
 		return nil, err
@@ -54,12 +53,7 @@ func newServer(model *gnmi.Model, config []byte) (*server, error) {
 }
 
 func main() {
-	model := gnmi.NewModel(
-		reflect.TypeOf((*gostruct.Device)(nil)),
-		gostruct.SchemaTree["Device"],
-		gostruct.Unmarshal,
-		gostruct.ΛEnum)
-
+	model := model.NewModel()
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Supported models:\n")
 		for _, m := range model.SupportedModels() {

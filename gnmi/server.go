@@ -36,6 +36,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"github.com/neoul/gnxi/gnmi/model"
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
 	"github.com/neoul/gnxi/utils"
 	"github.com/neoul/gnxi/utils/xpath"
@@ -81,7 +82,7 @@ var (
 //		// Do something ...
 // }
 type Server struct {
-	model     *Model
+	model     *model.Model
 	callback  ConfigCallback
 	datablock *ydb.YDB
 	datastore ygot.ValidatedGoStruct
@@ -93,7 +94,7 @@ type Server struct {
 }
 
 // NewServer creates an instance of Server with given json config.
-func NewServer(model *Model, config []byte, callback ConfigCallback) (*Server, error) {
+func NewServer(model *model.Model, config []byte, callback ConfigCallback) (*Server, error) {
 	rootStruct, err := model.NewConfigStruct(config)
 	if err != nil {
 		return nil, err
@@ -141,8 +142,8 @@ func (s *Server) Close() {
 	s.datablock.Close()
 }
 
-// checkEncodingAndModel checks whether encoding and models are supported by the server. Return error if anything is unsupported.
-func (s *Server) checkEncodingAndModel(encoding pb.Encoding, models []*pb.ModelData) error {
+// checkEncoding checks whether encoding and models are supported by the server. Return error if anything is unsupported.
+func (s *Server) checkEncoding(encoding pb.Encoding) error {
 	hasSupportedEncoding := false
 	for _, supportedEncoding := range supportedEncodings {
 		if encoding == supportedEncoding {
@@ -154,19 +155,6 @@ func (s *Server) checkEncodingAndModel(encoding pb.Encoding, models []*pb.ModelD
 		err := fmt.Errorf("unsupported encoding: %s", pb.Encoding_name[int32(encoding)])
 		return status.Error(codes.Unimplemented, err.Error())
 	}
-	for _, m := range models {
-		isSupported := false
-		for _, supportedModel := range s.model.modelData {
-			if reflect.DeepEqual(m, supportedModel) {
-				isSupported = true
-				break
-			}
-		}
-		if !isSupported {
-			err := fmt.Errorf("unsupported model: %v", m)
-			return status.Error(codes.Unimplemented, err.Error())
-		}
-	}
 	return nil
 }
 
@@ -177,7 +165,7 @@ func (s *Server) doDelete(jsonTree map[string]interface{}, prefix, path *pb.Path
 	var curNode interface{} = jsonTree
 	pathDeleted := false
 	fullPath := gnmiFullPath(prefix, path)
-	schema := s.model.schemaTreeRoot
+	schema := s.model.SchemaTreeRoot
 	for i, elem := range fullPath.Elem { // Delete sub-tree or leaf node.
 		node, ok := curNode.(map[string]interface{})
 		if !ok {
@@ -232,14 +220,14 @@ func (s *Server) doDelete(jsonTree map[string]interface{}, prefix, path *pb.Path
 func (s *Server) doReplaceOrUpdate(jsonTree map[string]interface{}, op pb.UpdateResult_Operation, prefix, path *pb.Path, val *pb.TypedValue) (*pb.UpdateResult, error) {
 	// Validate the operation.
 	fullPath := gnmiFullPath(prefix, path)
-	emptyNode, stat := ygotutils.NewNode(s.model.structRootType, fullPath)
+	emptyNode, stat := ygotutils.NewNode(s.model.StructRootType, fullPath)
 	if stat.GetCode() != int32(cpb.Code_OK) {
 		return nil, status.Errorf(codes.NotFound, "path %v is not found in the config structure: %d %s", fullPath, stat.GetCode(), stat.GetMessage())
 	}
 	var nodeVal interface{}
 	nodeStruct, ok := emptyNode.(ygot.ValidatedGoStruct)
 	if ok {
-		if err := s.model.jsonUnmarshaler(val.GetJsonIetfVal(), nodeStruct); err != nil {
+		if err := s.model.JsonUnmarshaler(val.GetJsonIetfVal(), nodeStruct); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "unmarshaling json data to config struct fails: %v", err)
 		}
 		if err := nodeStruct.Validate(); err != nil {
@@ -260,7 +248,7 @@ func (s *Server) doReplaceOrUpdate(jsonTree map[string]interface{}, op pb.Update
 
 	// Update json tree of the device config.
 	var curNode interface{} = jsonTree
-	schema := s.model.schemaTreeRoot
+	schema := s.model.SchemaTreeRoot
 	for i, elem := range fullPath.Elem {
 		switch node := curNode.(type) {
 		case map[string]interface{}:
@@ -489,7 +477,7 @@ func (s *Server) Capabilities(ctx context.Context, req *pb.CapabilityRequest) (*
 		return nil, status.Errorf(codes.Internal, "error in getting gnmi service version: %v", err)
 	}
 	return &pb.CapabilityResponse{
-		SupportedModels:    s.model.modelData,
+		SupportedModels:    s.model.ModelData,
 		SupportedEncodings: supportedEncodings,
 		GNMIVersion:        *ver,
 	}, nil
@@ -502,7 +490,10 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 		return nil, status.Errorf(codes.Unimplemented, "unsupported request type: %s",
 			pb.GetRequest_DataType_name[int32(req.GetType())])
 	}
-	if err := s.checkEncodingAndModel(req.GetEncoding(), req.GetUseModels()); err != nil {
+	if err := s.model.CheckModels(req.GetUseModels()); err != nil {
+		return nil, status.Errorf(codes.Unimplemented, err.Error())
+	}
+	if err := s.checkEncoding(req.GetEncoding()); err != nil {
 		return nil, err
 	}
 

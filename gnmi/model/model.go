@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package gnmi
+package model
 
 import (
 	"errors"
@@ -39,27 +39,27 @@ type GoStructEnumData map[string]map[int64]ygot.EnumDefinition
 
 // Model contains the model data and GoStruct information for the device to config.
 type Model struct {
-	modelData       []*pb.ModelData
-	structRootType  reflect.Type
-	schemaTreeRoot  *yang.Entry
-	jsonUnmarshaler JSONUnmarshaler
-	enumData        GoStructEnumData
+	ModelData       []*pb.ModelData
+	StructRootType  reflect.Type
+	SchemaTreeRoot  *yang.Entry
+	JsonUnmarshaler JSONUnmarshaler
+	EnumData        GoStructEnumData
 }
 
 // NewModel returns an instance of Model struct.
-func NewModel(t reflect.Type, r *yang.Entry, f JSONUnmarshaler, e GoStructEnumData) *Model {
+func NewModel() *Model {
 	return &Model{
-		modelData:       gostruct.ΓModelData,
-		structRootType:  t,
-		schemaTreeRoot:  r,
-		jsonUnmarshaler: f,
-		enumData:        e,
+		ModelData:       gostruct.ΓModelData,
+		StructRootType:  reflect.TypeOf((*gostruct.Device)(nil)),
+		SchemaTreeRoot:  gostruct.SchemaTree["Device"],
+		JsonUnmarshaler: gostruct.Unmarshal,
+		EnumData:        gostruct.ΛEnum,
 	}
 }
 
 // NewConfigStruct creates a ValidatedGoStruct of this model from jsonConfig. If jsonConfig is nil, creates an empty GoStruct.
 func (m *Model) NewConfigStruct(jsonConfig []byte) (ygot.ValidatedGoStruct, error) {
-	rootNode, stat := ygotutils.NewNode(m.structRootType, &pb.Path{})
+	rootNode, stat := ygotutils.NewNode(m.StructRootType, &pb.Path{})
 	if stat.GetCode() != int32(cpb.Code_OK) {
 		return nil, fmt.Errorf("cannot create root node: %d: %s", stat.GetCode(), stat.GetMessage())
 	}
@@ -69,7 +69,7 @@ func (m *Model) NewConfigStruct(jsonConfig []byte) (ygot.ValidatedGoStruct, erro
 		return nil, errors.New("root node is not a ygot.ValidatedGoStruct")
 	}
 	if jsonConfig != nil {
-		if err := m.jsonUnmarshaler(jsonConfig, rootStruct); err != nil {
+		if err := m.JsonUnmarshaler(jsonConfig, rootStruct); err != nil {
 			return nil, err
 		}
 		if err := rootStruct.Validate(); err != nil {
@@ -81,10 +81,27 @@ func (m *Model) NewConfigStruct(jsonConfig []byte) (ygot.ValidatedGoStruct, erro
 
 // SupportedModels returns a list of supported models.
 func (m *Model) SupportedModels() []string {
-	mDesc := make([]string, len(m.modelData))
-	for i, m := range m.modelData {
+	mDesc := make([]string, len(m.ModelData))
+	for i, m := range m.ModelData {
 		mDesc[i] = fmt.Sprintf("%s %s", m.Name, m.Version)
 	}
 	sort.Strings(mDesc)
 	return mDesc
+}
+
+// CheckModels checks whether models are supported by the model. Return error if anything is unsupported.
+func (m *Model) CheckModels(models []*pb.ModelData) error {
+	for _, mo := range models {
+		isSupported := false
+		for _, supportedModel := range m.ModelData {
+			if reflect.DeepEqual(mo, supportedModel) {
+				isSupported = true
+				break
+			}
+		}
+		if !isSupported {
+			return fmt.Errorf("unsupported model: %v", m)
+		}
+	}
+	return nil
 }
