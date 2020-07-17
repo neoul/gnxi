@@ -1,10 +1,11 @@
-package gostruct
+package model
 
 import (
 	"os"
 	"reflect"
 	"testing"
 
+	"github.com/neoul/gnxi/gnmi/model/gostruct"
 	"github.com/neoul/libydb/go/ydb"
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
@@ -53,11 +54,11 @@ func testSetDataAndPath(s string, value interface{}) *DataAndPath {
 }
 
 func TestFindAllData(t *testing.T) {
-	root := Device{}
+	root := gostruct.Device{}
 	datablock, _ := ydb.OpenWithTargetStruct("gnmi_target", &root)
 	defer datablock.Close()
 
-	r, err := os.Open("../data/sample.yaml")
+	r, err := os.Open("data/sample.yaml")
 	defer r.Close()
 	if err != nil {
 		t.Fatalf("test data load failed: %v", err)
@@ -287,6 +288,9 @@ func TestFindAllData(t *testing.T) {
 			}
 			if !testIsEqualList(got, tt.want) {
 				t.Errorf("FindAllDataNodes() got = %v, want %v", got, tt.want)
+				for _, g := range tt.want {
+					t.Log("tt.want::", g)
+				}
 			}
 			if got1 != tt.want1 {
 				t.Errorf("FindAllDataNodes() got1 = %v, want %v", got1, tt.want1)
@@ -296,11 +300,11 @@ func TestFindAllData(t *testing.T) {
 }
 
 func TestFindAllNodes(t *testing.T) {
-	root := Device{}
+	root := gostruct.Device{}
 	datablock, _ := ydb.OpenWithTargetStruct("gnmi_target", &root)
 	defer datablock.Close()
 
-	r, err := os.Open("../data/sample.yaml")
+	r, err := os.Open("data/sample.yaml")
 	defer r.Close()
 	if err != nil {
 		t.Fatalf("test data load failed: %v", err)
@@ -537,7 +541,7 @@ func TestFindAllNodes(t *testing.T) {
 }
 
 func TestFindAllSchemaTypes(t *testing.T) {
-	gd := Device{}
+	gd := gostruct.Device{}
 
 	type args struct {
 		gs   ygot.GoStruct
@@ -571,12 +575,12 @@ func TestFindAllSchemaTypes(t *testing.T) {
 				},
 			},
 			want: []reflect.Type{
-				reflect.TypeOf(OpenconfigInterfaces_Interfaces_Interface_Config{}.Description),
-				reflect.TypeOf(OpenconfigInterfaces_Interfaces_Interface_Config{}.Enabled),
-				reflect.TypeOf(OpenconfigInterfaces_Interfaces_Interface_Config{}.LoopbackMode),
-				reflect.TypeOf(OpenconfigInterfaces_Interfaces_Interface_Config{}.Mtu),
-				reflect.TypeOf(OpenconfigInterfaces_Interfaces_Interface_Config{}.Name),
-				reflect.TypeOf(OpenconfigInterfaces_Interfaces_Interface_Config{}.Type),
+				reflect.TypeOf(gostruct.OpenconfigInterfaces_Interfaces_Interface_Config{}.Description),
+				reflect.TypeOf(gostruct.OpenconfigInterfaces_Interfaces_Interface_Config{}.Enabled),
+				reflect.TypeOf(gostruct.OpenconfigInterfaces_Interfaces_Interface_Config{}.LoopbackMode),
+				reflect.TypeOf(gostruct.OpenconfigInterfaces_Interfaces_Interface_Config{}.Mtu),
+				reflect.TypeOf(gostruct.OpenconfigInterfaces_Interfaces_Interface_Config{}.Name),
+				reflect.TypeOf(gostruct.OpenconfigInterfaces_Interfaces_Interface_Config{}.Type),
 			},
 			want1: true,
 		},
@@ -595,7 +599,7 @@ func TestFindAllSchemaTypes(t *testing.T) {
 }
 
 func TestFindAllSchemaPaths(t *testing.T) {
-	gd := Device{}
+	gd := gostruct.Device{}
 	type args struct {
 		gs   ygot.GoStruct
 		path *gpb.Path

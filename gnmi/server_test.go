@@ -38,7 +38,7 @@ var (
 	mo = model.NewCustomModel(
 		gostruct.ΓModelData,
 		reflect.TypeOf((*gostruct.Device)(nil)),
-		gostruct.SchemaTree["Device"],
+		gostruct.SchemaTree,
 		gostruct.Unmarshal,
 		gostruct.ΛEnum,
 	)

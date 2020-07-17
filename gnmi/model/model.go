@@ -36,8 +36,10 @@ type GoStructEnumData map[string]map[int64]ygot.EnumDefinition
 
 // Model contains the model data and GoStruct information for the device.
 type Model struct {
+	name            string
 	modelData       []*gpb.ModelData
 	StructRootType  reflect.Type
+	SchemaTree      map[string]*yang.Entry
 	SchemaTreeRoot  *yang.Entry
 	JSONUnmarshaler JSONUnmarshaler
 	EnumData        GoStructEnumData
@@ -45,10 +47,21 @@ type Model struct {
 
 // NewModel returns an instance of Model struct.
 func NewModel() *Model {
+	var name string
+	var schemaTreeRoot *yang.Entry
+	for key, entry := range gostruct.SchemaTree {
+		if entry.Parent == nil {
+			name = key
+			schemaTreeRoot = entry
+			break
+		}
+	}
 	return &Model{
+		name:            name,
 		modelData:       gostruct.ΓModelData,
 		StructRootType:  reflect.TypeOf((*gostruct.Device)(nil)),
-		SchemaTreeRoot:  gostruct.SchemaTree["Device"],
+		SchemaTree:      gostruct.SchemaTree,
+		SchemaTreeRoot:  schemaTreeRoot,
 		JSONUnmarshaler: gostruct.Unmarshal,
 		EnumData:        gostruct.ΛEnum,
 	}
@@ -58,11 +71,21 @@ func NewModel() *Model {
 func NewCustomModel(
 	modelData []*gpb.ModelData,
 	structRootType reflect.Type,
-	schemaTreeRoot *yang.Entry,
+	schemaTree map[string]*yang.Entry,
 	jSONUnmarshaler JSONUnmarshaler,
 	enumData GoStructEnumData,
 ) *Model {
+	var name string
+	var schemaTreeRoot *yang.Entry
+	for key, entry := range gostruct.SchemaTree {
+		if entry.Parent == nil {
+			name = key
+			schemaTreeRoot = entry
+			break
+		}
+	}
 	return &Model{
+		name:            name,
 		modelData:       modelData,
 		StructRootType:  structRootType,
 		SchemaTreeRoot:  schemaTreeRoot,

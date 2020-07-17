@@ -34,7 +34,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/neoul/gnxi/gnmi/model"
-	"github.com/neoul/gnxi/gnmi/model/gostruct"
 	"github.com/neoul/gnxi/utils"
 	"github.com/neoul/gnxi/utils/xpath"
 	"github.com/openconfig/ygot/ygot"
@@ -172,9 +171,9 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	if err := utils.ValidateGNMIPath(prefix); err != nil {
 		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := gostruct.FindAllData(s.modeldata.GetRoot(), prefix)
+	toplist, ok := model.FindAllData(s.modeldata.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
-		_, ok = gostruct.FindAllSchemaTypes(s.modeldata.GetRoot(), prefix)
+		_, ok = model.FindAllSchemaTypes(s.modeldata.GetRoot(), prefix)
 		if ok {
 			return nil, status.Errorf(codes.NotFound, "data-missing(%v)", xpath.ToXPATH(prefix))
 		}
@@ -192,7 +191,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
 				return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-			datalist, ok := gostruct.FindAllData(branch, path)
+			datalist, ok := model.FindAllData(branch, path)
 			if !ok || len(datalist) <= 0 {
 				continue
 			}
@@ -240,21 +239,21 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 	var results []*pb.UpdateResult
 
 	for _, path := range req.GetDelete() {
-		res, grpcStatusError := s.modeldata.Delete(jsonTree, prefix, path)
+		res, grpcStatusError := s.modeldata.SetDelete(jsonTree, prefix, path)
 		if grpcStatusError != nil {
 			return nil, grpcStatusError
 		}
 		results = append(results, res)
 	}
 	for _, upd := range req.GetReplace() {
-		res, grpcStatusError := s.modeldata.ReplaceOrUpdate(jsonTree, pb.UpdateResult_REPLACE, prefix, upd.GetPath(), upd.GetVal())
+		res, grpcStatusError := s.modeldata.SetReplaceOrUpdate(jsonTree, pb.UpdateResult_REPLACE, prefix, upd.GetPath(), upd.GetVal())
 		if grpcStatusError != nil {
 			return nil, grpcStatusError
 		}
 		results = append(results, res)
 	}
 	for _, upd := range req.GetUpdate() {
-		res, grpcStatusError := s.modeldata.ReplaceOrUpdate(jsonTree, pb.UpdateResult_UPDATE, prefix, upd.GetPath(), upd.GetVal())
+		res, grpcStatusError := s.modeldata.SetReplaceOrUpdate(jsonTree, pb.UpdateResult_UPDATE, prefix, upd.GetPath(), upd.GetVal())
 		if grpcStatusError != nil {
 			return nil, grpcStatusError
 		}

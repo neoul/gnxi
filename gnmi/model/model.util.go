@@ -1,4 +1,4 @@
-package gostruct
+package model
 
 import (
 	"fmt"
@@ -8,7 +8,6 @@ import (
 	"github.com/neoul/gnxi/utils"
 	"github.com/neoul/libydb/go/ydb"
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/openconfig/goyang/pkg/yang"
 	"github.com/openconfig/ygot/ygot"
 )
 
@@ -60,18 +59,18 @@ type dataAndPath struct {
 }
 
 // findYangEntry - find the yang.Entry for schema info.
-func findYangEntry(v reflect.Value) *yang.Entry {
-	if !v.IsValid() {
-		return nil
-	}
-	for v.Kind() == reflect.Ptr {
-		v = v.Elem()
-		if !v.IsValid() {
-			return nil
-		}
-	}
-	return SchemaTree[v.Type().Name()]
-}
+// func findYangEntry(v reflect.Value) *yang.Entry {
+// 	if !v.IsValid() {
+// 		return nil
+// 	}
+// 	for v.Kind() == reflect.Ptr {
+// 		v = v.Elem()
+// 		if !v.IsValid() {
+// 			return nil
+// 		}
+// 	}
+// 	return SchemaTree[v.Type().Name()]
+// }
 
 func appendCopy(curkey []string, addkey string) []string {
 	length := len(curkey)
@@ -81,7 +80,7 @@ func appendCopy(curkey []string, addkey string) []string {
 	return dest
 }
 
-func (dpath *dataAndPath) getAllChildren() ([]*dataAndPath, bool) {
+func (dpath *dataAndPath) getAllChildren(prefix string) ([]*dataAndPath, bool) {
 	if !dpath.Value.IsValid() {
 		return []*dataAndPath{}, false
 	}
@@ -89,7 +88,7 @@ func (dpath *dataAndPath) getAllChildren() ([]*dataAndPath, bool) {
 	case reflect.Ptr, reflect.Interface:
 		// child := &dataAndPath{Value: dpath.Value.Elem(), Key: dpath.Key}
 		dpath.Value = dpath.Value.Elem()
-		return dpath.getAllChildren()
+		return dpath.getAllChildren(prefix)
 	case reflect.Struct:
 		length := dpath.Value.NumField()
 		more := []*dataAndPath{}
@@ -101,18 +100,18 @@ func (dpath *dataAndPath) getAllChildren() ([]*dataAndPath, bool) {
 			if !fv.IsValid() {
 				continue
 			}
-			key := ""
+			key := prefix
 			if ydb.EnableTagLookup {
 				if tag, ok := sft.Tag.Lookup(ydb.TagLookupKey); ok {
-					key = tag
+					key = prefix + tag
 				}
 			}
-			if key == "" {
+			if key == prefix {
 				key = sft.Name
 			}
 			if ydb.IsValMap(fv) { // find more values
 				child := &dataAndPath{Value: fv, Key: dpath.Key}
-				_rval, _ok := child.getAllChildren()
+				_rval, _ok := child.getAllChildren(prefix + key)
 				if _ok {
 					more = append(more, _rval...)
 				}
@@ -131,24 +130,32 @@ func (dpath *dataAndPath) getAllChildren() ([]*dataAndPath, bool) {
 		rval := make([]*dataAndPath, dpath.Value.Len())
 		iter := dpath.Value.MapRange()
 		i := 0
-		var schemaEntry *yang.Entry
 		for iter.Next() {
 			// [FIXME] - Need to check another way to get the key of a list.
-			// ev := iter.Value()
-			// if !ev.CanInterface() {
-			// 	continue
-			// }
-			// keydata, ok := ev.Interface().(ygot.KeyHelperGoStruct)
-			// if !ok {
-			// 	continue
-			// }
-			if i == 0 {
-				schemaEntry = findYangEntry(iter.Value())
-				if schemaEntry == nil {
-					return []*dataAndPath{}, false
-				}
+			ev := iter.Value()
+			if !ev.CanInterface() {
+				continue
 			}
-			key, err := ydb.StrKeyGen(iter.Key(), schemaEntry.Name, schemaEntry.Key)
+			listStruct, ok := ev.Interface().(ygot.KeyHelperGoStruct)
+			if !ok {
+				continue
+			}
+			keymap, err := listStruct.ΛListKeyMap()
+			if err != nil {
+				return []*dataAndPath{}, false
+			}
+			key := prefix
+			for kname, kvalue := range keymap {
+				key = key + fmt.Sprintf("[%s=%v]", kname, kvalue)
+			}
+			// var schemaEntry *yang.Entry
+			// if i == 0 {
+			// 	schemaEntry = findYangEntry(iter.Value())
+			// 	if schemaEntry == nil {
+			// 		return []*dataAndPath{}, false
+			// 	}
+			// }
+			// key, err := ydb.StrKeyGen(iter.Key(), schemaEntry.Name, schemaEntry.Key)
 			if err != nil {
 				return []*dataAndPath{}, false
 			}
@@ -184,7 +191,7 @@ func (dpath *dataAndPath) findChildren(key string) ([]*dataAndPath, bool) {
 	if ydb.IsValMap(cv) {
 		dpath.Value = cv
 		// fmt.Println("findChild MAP:", dpath.Key)
-		return dpath.getAllChildren()
+		return dpath.getAllChildren(key)
 	}
 	child := &dataAndPath{Value: cv, Key: appendCopy(dpath.Key, key)}
 	// fmt.Println("findChild :", child.Key)
@@ -203,7 +210,7 @@ func findAllData(dpath *dataAndPath, elems []*gpb.PathElem) []*dataAndPath {
 	fmt.Println("** Search", elem.GetName(), "from", ydb.DebugValueStringInline(dpath.Value.Interface(), 0, nil))
 	if elem.GetName() == "*" {
 		rpath := []*dataAndPath{}
-		childlist, ok := dpath.getAllChildren()
+		childlist, ok := dpath.getAllChildren("")
 		if ok {
 			celems := elems[1:]
 			for _, child := range childlist {
@@ -213,7 +220,7 @@ func findAllData(dpath *dataAndPath, elems []*gpb.PathElem) []*dataAndPath {
 		return rpath
 	} else if elem.GetName() == "..." {
 		rpath := []*dataAndPath{}
-		childlist, ok := dpath.getAllChildren()
+		childlist, ok := dpath.getAllChildren("")
 
 		if ok {
 			celems := elems[1:]

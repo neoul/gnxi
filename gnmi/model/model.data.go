@@ -96,12 +96,10 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback ConfigCal
 	if err != nil {
 		return nil, err
 	}
-
-	block, _ := ydb.OpenWithTargetStruct("gnmi_target", root)
+	utils.PrintStruct(root)
 
 	mdata := &ModelData{
 		dataroot: root,
-		block:    block,
 		callback: callback,
 		model:    m,
 	}
@@ -112,8 +110,9 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback ConfigCal
 		}
 	}
 
+	mdata.block, _ = ydb.OpenWithTargetStruct("gnmi_target", mdata)
 	if yamlData != nil {
-		if err := block.Parse(yamlData); err != nil {
+		if err := mdata.block.Parse(yamlData); err != nil {
 			return nil, err
 		}
 		if err := root.Validate(); err != nil {
@@ -127,12 +126,12 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback ConfigCal
 	}
 
 	if !(*disableYdbChannel) {
-		err := block.Connect("uss://openconfig", "pub")
+		err := mdata.block.Connect("uss://openconfig", "pub")
 		if err != nil {
-			block.Close()
+			mdata.block.Close()
 			return nil, err
 		}
-		block.Serve()
+		mdata.block.Serve()
 	}
 
 	return mdata, nil
@@ -149,9 +148,9 @@ func (mdata *ModelData) ChangeRoot(root ygot.ValidatedGoStruct) error {
 	return mdata.block.RelaceTargetStruct(root, false)
 }
 
-// Delete deletes the path from the json tree if the path exists. If success,
+// SetDelete deletes the path from the json tree if the path exists. If success,
 // it calls the callback function to apply the change to the device hardware.
-func (mdata *ModelData) Delete(jsonTree map[string]interface{}, prefix, path *gpb.Path) (*gpb.UpdateResult, error) {
+func (mdata *ModelData) SetDelete(jsonTree map[string]interface{}, prefix, path *gpb.Path) (*gpb.UpdateResult, error) {
 	// Update json tree of the device config
 	var curNode interface{} = jsonTree
 	pathDeleted := false
@@ -206,10 +205,10 @@ func (mdata *ModelData) Delete(jsonTree map[string]interface{}, prefix, path *gp
 	}, nil
 }
 
-// ReplaceOrUpdate validates the replace or update operation to be applied to
+// SetReplaceOrUpdate validates the replace or update operation to be applied to
 // the device, modifies the json tree of the config struct, then calls the
 // callback function to apply the operation to the device hardware.
-func (mdata *ModelData) ReplaceOrUpdate(jsonTree map[string]interface{}, op gpb.UpdateResult_Operation, prefix, path *gpb.Path, val *gpb.TypedValue) (*gpb.UpdateResult, error) {
+func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op gpb.UpdateResult_Operation, prefix, path *gpb.Path, val *gpb.TypedValue) (*gpb.UpdateResult, error) {
 	// Validate the operation.
 	fullPath := utils.GNMIFullPath(prefix, path)
 	emptyNode, stat := ygotutils.NewNode(mdata.model.StructRootType, fullPath)

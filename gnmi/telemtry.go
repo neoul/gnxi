@@ -7,7 +7,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/neoul/gnxi/gnmi/model/gostruct"
+	"github.com/neoul/gnxi/gnmi/model"
 	"github.com/neoul/gnxi/utils"
 	"github.com/neoul/gnxi/utils/xpath"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
@@ -222,9 +222,9 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) (
 	if err := utils.ValidateGNMIPath(prefix); err != nil {
 		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := gostruct.FindAllData(s.modeldata.GetRoot(), prefix)
+	toplist, ok := model.FindAllData(s.modeldata.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
-		_, ok = gostruct.FindAllSchemaTypes(s.modeldata.GetRoot(), prefix)
+		_, ok = model.FindAllSchemaTypes(s.modeldata.GetRoot(), prefix)
 		if ok {
 			// data-missing is not an error in SubscribeRPC
 			// doest send any of messages before sync response.
@@ -246,7 +246,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) (
 			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
 				return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-			datalist, ok := gostruct.FindAllData(branch, path)
+			datalist, ok := model.FindAllData(branch, path)
 			if !ok || len(datalist) <= 0 {
 				continue
 			}
@@ -301,9 +301,9 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription)
 	if err := utils.ValidateGNMIPath(prefix); err != nil {
 		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := gostruct.FindAllData(s.modeldata.GetRoot(), prefix)
+	toplist, ok := model.FindAllData(s.modeldata.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
-		_, ok = gostruct.FindAllSchemaTypes(s.modeldata.GetRoot(), prefix)
+		_, ok = model.FindAllSchemaTypes(s.modeldata.GetRoot(), prefix)
 		if ok {
 			// data-missing is not an error in SubscribeRPC
 			// doest send any of messages before sync response.
@@ -325,7 +325,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription)
 			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
 				return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-			datalist, ok := gostruct.FindAllData(branch, path)
+			datalist, ok := model.FindAllData(branch, path)
 			if !ok || len(datalist) <= 0 {
 				continue
 			}
