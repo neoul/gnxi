@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/neoul/gnxi/gnmi/modeldata/gostruct"
+	"github.com/neoul/gnxi/gnmi/model/gostruct"
 	"github.com/openconfig/goyang/pkg/yang"
 	"github.com/openconfig/ygot/experimental/ygotutils"
 	"github.com/openconfig/ygot/ygot"

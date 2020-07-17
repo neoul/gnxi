@@ -7,7 +7,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/neoul/gnxi/gnmi/modeldata/gostruct"
+	"github.com/neoul/gnxi/gnmi/model/gostruct"
 	"github.com/neoul/gnxi/utils"
 	"github.com/neoul/gnxi/utils/xpath"
 	pb "github.com/openconfig/gnmi/proto/gnmi"

@@ -9,7 +9,7 @@
 
 ## gNMI Server
 
-- Add **YDB Go Update Interface** to `modeldata/gostruct/ydb.go` to update gostruct using YDB.
+- Add **YDB Go Update Interface** to `model/gostruct/ydb.go` to update gostruct using YDB.
   - YDB Update Interface `{Create, Relace, Delete}` should be defined. **(done)**
   - Add the test cases to `server_test.go` for the YDB Update Interface verification.
 - Update deprecated `Descriptor()` function in `getGNMIServiceVersion()`

@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"github.com/neoul/gnxi/gnmi"
-	"github.com/neoul/gnxi/gnmi/modeldata/gostruct"
+	"github.com/neoul/gnxi/gnmi/model/gostruct"
 
 	"github.com/neoul/gnxi/utils/credentials"
 	"github.com/neoul/gnxi/utils/netsession"

@@ -133,6 +133,15 @@ func (dpath *dataAndPath) getAllChildren() ([]*dataAndPath, bool) {
 		i := 0
 		var schemaEntry *yang.Entry
 		for iter.Next() {
+			// [FIXME] - Need to check another way to get the key of a list.
+			// ev := iter.Value()
+			// if !ev.CanInterface() {
+			// 	continue
+			// }
+			// keydata, ok := ev.Interface().(ygot.KeyHelperGoStruct)
+			// if !ok {
+			// 	continue
+			// }
 			if i == 0 {
 				schemaEntry = findYangEntry(iter.Value())
 				if schemaEntry == nil {

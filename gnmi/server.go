@@ -36,7 +36,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
-	"github.com/neoul/gnxi/gnmi/modeldata/gostruct"
+	"github.com/neoul/gnxi/gnmi/model/gostruct"
 	"github.com/neoul/gnxi/utils"
 	"github.com/neoul/gnxi/utils/xpath"
 	"github.com/neoul/libydb/go/ydb"

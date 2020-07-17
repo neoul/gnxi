@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/neoul/gnxi/gnmi/modeldata/gostruct"
+	"github.com/neoul/gnxi/gnmi/model/gostruct"
 )
 
 var (
@@ -335,7 +335,7 @@ func TestGetWithYdb(t *testing.T) {
 		t.Fatalf("error in creating server: %v", err)
 	}
 	defer s.Close()
-	r, err := os.Open("modeldata/data/sample.yaml")
+	r, err := os.Open("model/data/sample.yaml")
 	defer r.Close()
 	if err != nil {
 		t.Fatalf("test data load failed: %v", err)

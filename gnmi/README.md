@@ -1,4 +1,4 @@
-# gNMI modeldata generation
+# gNMI model generation
 
 1. Add YANG modules to `/yang` directory.
 2. Updated `go generate` comment of the file in `gostruct` directory (e.g. `gostruct/gen.sample.go`).
