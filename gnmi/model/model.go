@@ -77,7 +77,7 @@ func NewCustomModel(
 ) *Model {
 	var name string
 	var schemaTreeRoot *yang.Entry
-	for key, entry := range gostruct.SchemaTree {
+	for key, entry := range schemaTree {
 		if entry.Parent == nil {
 			name = key
 			schemaTreeRoot = entry
