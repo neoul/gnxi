@@ -46,7 +46,7 @@ var (
 
 func TestCapabilities(t *testing.T) {
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(mo, nil, nil, nil)
+	s, err := NewServer(mo, nil, nil)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestGet(t *testing.T) {
 	}`
 
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(mo, []byte(jsonConfigRoot), nil, nil)
+	s, err := NewServer(mo, []byte(jsonConfigRoot), nil)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -336,7 +336,7 @@ func TestGetWithYdb(t *testing.T) {
 	if err != nil {
 		glog.Exitf("error in reading config file: %v", err)
 	}
-	s, err := NewServer(mo, nil, yamlData, nil)
+	s, err := NewServer(mo, nil, yamlData)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}

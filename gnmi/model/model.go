@@ -125,3 +125,17 @@ func (m *Model) CheckModels(models []*gpb.ModelData) error {
 func (m *Model) GetModelData() []*gpb.ModelData {
 	return m.modelData
 }
+
+// FindSchemaData - find the yang.Entry for schema info.
+func (m *Model) FindSchemaData(v reflect.Value) *yang.Entry {
+	if !v.IsValid() {
+		return nil
+	}
+	for v.Kind() == reflect.Ptr {
+		v = v.Elem()
+		if !v.IsValid() {
+			return nil
+		}
+	}
+	return m.SchemaTree[v.Type().Name()]
+}

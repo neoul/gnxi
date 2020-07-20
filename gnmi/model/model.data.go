@@ -27,13 +27,10 @@ var (
 	pbRootPath        = &gpb.Path{}
 )
 
-// ConfigCallback is the signature of the function to apply a validated config to the physical device.
-type ConfigCallback func(ygot.ValidatedGoStruct) error
-
 // ModelData - the data instance for the model
 type ModelData struct {
 	dataroot ygot.ValidatedGoStruct
-	callback ConfigCallback
+	callback DataCallback
 	block    *ydb.YDB
 	mutex    sync.RWMutex // mu is the RW lock to protect the access to config
 	model    *Model
@@ -91,7 +88,7 @@ func NewGoStruct(m *Model, jsonData []byte) (ygot.ValidatedGoStruct, error) {
 }
 
 // NewModelData creates a ValidatedGoStruct of this model from jsonData. If jsonData is nil, creates an empty GoStruct.
-func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback ConfigCallback) (*ModelData, error) {
+func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallback) (*ModelData, error) {
 	root, err := NewGoStruct(m, jsonData)
 	if err != nil {
 		return nil, err
@@ -104,8 +101,8 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback ConfigCal
 		model:    m,
 	}
 
-	if jsonData != nil && mdata.callback != nil {
-		if err := mdata.callback(root); err != nil {
+	if jsonData != nil {
+		if err := execConfigCallback(mdata.callback, root); err != nil {
 			return nil, err
 		}
 	}
@@ -118,10 +115,8 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback ConfigCal
 		if err := root.Validate(); err != nil {
 			return nil, err
 		}
-		if mdata.callback != nil {
-			if err := mdata.callback(root); err != nil {
-				return nil, err
-			}
+		if err := execConfigCallback(mdata.callback, root); err != nil {
+			return nil, err
 		}
 	}
 
@@ -191,8 +186,8 @@ func (mdata *ModelData) SetDelete(jsonTree map[string]interface{}, prefix, path 
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 		if mdata.callback != nil {
-			if applyErr := mdata.callback(newConfig); applyErr != nil {
-				if rollbackErr := mdata.callback(mdata.dataroot); rollbackErr != nil {
+			if applyErr := execConfigCallback(mdata.callback, newConfig); applyErr != nil {
+				if rollbackErr := execConfigCallback(mdata.callback, mdata.dataroot); rollbackErr != nil {
 					return nil, status.Errorf(codes.Internal, "error in rollback the failed operation (%v): %v", applyErr, rollbackErr)
 				}
 				return nil, status.Errorf(codes.Aborted, "error in applying operation to device: %v", applyErr)
@@ -288,8 +283,8 @@ func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op g
 
 	// Apply the validated operation to the device.
 	if mdata.callback != nil {
-		if applyErr := mdata.callback(newConfig); applyErr != nil {
-			if rollbackErr := mdata.callback(mdata.dataroot); rollbackErr != nil {
+		if applyErr := execConfigCallback(mdata.callback, newConfig); applyErr != nil {
+			if rollbackErr := execConfigCallback(mdata.callback, mdata.dataroot); rollbackErr != nil {
 				return nil, status.Errorf(codes.Internal, "error in rollback the failed operation (%v): %v", applyErr, rollbackErr)
 			}
 			return nil, status.Errorf(codes.Aborted, "error in applying operation to device: %v", applyErr)

@@ -72,18 +72,23 @@ type Server struct {
 	Sessions   map[string]*Session
 }
 
+// OnChangeCallback - callback for Telemetry subscription on data changes
+func (s *Server) OnChangeCallback(op model.Operation, schemaPath, dataPath string, value interface{}) {
+	fmt.Println("OnChange", op, schemaPath, dataPath)
+}
+
 // NewServer creates an instance of Server with given json config.
-func NewServer(m *model.Model, jsonData []byte, yamlData []byte, callback model.ConfigCallback) (*Server, error) {
-	mdata, err := model.NewModelData(m, jsonData, yamlData, callback)
+func NewServer(m *model.Model, jsonData []byte, yamlData []byte) (*Server, error) {
+	s := &Server{
+		model:    m,
+		alias:    map[string]*pb.Alias{},
+		Sessions: map[string]*Session{},
+	}
+	mdata, err := model.NewModelData(m, jsonData, yamlData, s)
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{
-		model:     m,
-		modeldata: mdata,
-		alias:     map[string]*pb.Alias{},
-		Sessions:  map[string]*Session{},
-	}
+	s.modeldata = mdata
 	return s, nil
 }
 

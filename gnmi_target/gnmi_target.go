@@ -46,7 +46,7 @@ type server struct {
 }
 
 func newServer(model *model.Model, jsonConfig []byte, yamlConfig []byte) (*server, error) {
-	s, err := gnmi.NewServer(model, jsonConfig, yamlConfig, nil)
+	s, err := gnmi.NewServer(model, jsonConfig, yamlConfig)
 	if err != nil {
 		return nil, err
 	}

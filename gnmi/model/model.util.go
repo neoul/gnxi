@@ -58,20 +58,6 @@ type dataAndPath struct {
 	Key   []string
 }
 
-// findYangEntry - find the yang.Entry for schema info.
-// func findYangEntry(v reflect.Value) *yang.Entry {
-// 	if !v.IsValid() {
-// 		return nil
-// 	}
-// 	for v.Kind() == reflect.Ptr {
-// 		v = v.Elem()
-// 		if !v.IsValid() {
-// 			return nil
-// 		}
-// 	}
-// 	return SchemaTree[v.Type().Name()]
-// }
-
 func appendCopy(curkey []string, addkey string) []string {
 	length := len(curkey)
 	dest := make([]string, length+1)
@@ -150,7 +136,7 @@ func (dpath *dataAndPath) getAllChildren(prefix string) ([]*dataAndPath, bool) {
 			}
 			// var schemaEntry *yang.Entry
 			// if i == 0 {
-			// 	schemaEntry = findYangEntry(iter.Value())
+			// 	schemaEntry = FindSchemaData(iter.Value())
 			// 	if schemaEntry == nil {
 			// 		return []*dataAndPath{}, false
 			// 	}
