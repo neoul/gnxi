@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/neoul/gnxi/utils"
 	"github.com/neoul/libydb/go/ydb"
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
@@ -193,7 +192,7 @@ func findAllData(dpath *dataAndPath, elems []*gpb.PathElem) []*dataAndPath {
 		return []*dataAndPath{}
 	}
 	elem := elems[0]
-	fmt.Println("** Search", elem.GetName(), "from", ydb.DebugValueStringInline(dpath.Value.Interface(), 0, nil))
+	// fmt.Println("** Search", elem.GetName(), "from", ydb.DebugValueStringInline(dpath.Value.Interface(), 0, nil))
 	if elem.GetName() == "*" {
 		rpath := []*dataAndPath{}
 		childlist, ok := dpath.getAllChildren("")
@@ -288,7 +287,7 @@ func findAllDataNodes(v reflect.Value, elems []*gpb.PathElem) []reflect.Value {
 		return []reflect.Value{}
 	}
 	elem := elems[0]
-	fmt.Println("** Search", elem.GetName(), "from", utils.SprintStructInline(v.Interface()))
+	// fmt.Println("** Search", elem.GetName(), "from", utils.SprintStructInline(v.Interface()))
 	if elem.GetName() == "*" {
 		rv := []reflect.Value{}
 		cvlist, ok := ydb.ValGetAll(v)
@@ -369,7 +368,7 @@ func findAllSchemaTypes(t reflect.Type, elems []*gpb.PathElem) []reflect.Type {
 		return []reflect.Type{}
 	}
 	elem := elems[0]
-	fmt.Println("** Search", elem.GetName(), "from", t)
+	// fmt.Println("** Search", elem.GetName(), "from", t)
 	if elem.GetName() == "*" {
 		rv := []reflect.Type{}
 		ctlist, ok := ydb.TypeGetAll(t)
@@ -455,7 +454,7 @@ func findAllSchemaPaths(sp schemaPathElem, elems []*gpb.PathElem) []schemaPathEl
 		return []schemaPathElem{}
 	}
 	elem := elems[0]
-	fmt.Println("** Search", elem.GetName(), "from", sp.t)
+	// fmt.Println("** Search", elem.GetName(), "from", sp.t)
 	if elem.GetName() == "*" {
 		rv := []schemaPathElem{}
 		csplist, ok := getAllSchemaPaths(sp)

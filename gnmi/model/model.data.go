@@ -93,7 +93,6 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallb
 	if err != nil {
 		return nil, err
 	}
-	utils.PrintStruct(root)
 
 	mdata := &ModelData{
 		dataroot: root,
@@ -118,6 +117,7 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallb
 		if err := execConfigCallback(mdata.callback, root); err != nil {
 			return nil, err
 		}
+		utils.PrintStruct(root)
 	}
 
 	if !(*disableYdbChannel) {

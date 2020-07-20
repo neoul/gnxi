@@ -164,7 +164,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 		return nil, err
 	}
 
-	fmt.Println(proto.MarshalTextString(req))
+	// fmt.Println(proto.MarshalTextString(req))
 
 	prefix := req.GetPrefix()
 	paths := req.GetPath()

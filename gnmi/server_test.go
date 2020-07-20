@@ -329,7 +329,6 @@ func runTestGet(t *testing.T, s *Server, textPbPath string, wantRetCode codes.Co
 }
 
 func TestGetWithYdb(t *testing.T) {
-	modeldata := &pb.ModelData{}
 
 	flag.Set("disable-ydb", "true")
 	yamlData, err := ioutil.ReadFile("model/data/sample.yaml")
@@ -429,7 +428,7 @@ func TestGetWithYdb(t *testing.T) {
 		wantRetCode: codes.NotFound,
 	}, {
 		desc:        "use of model data not supported",
-		modelData:   []*pb.ModelData{modeldata},
+		modelData:   []*pb.ModelData{&pb.ModelData{}},
 		wantRetCode: codes.Unimplemented,
 	}}
 

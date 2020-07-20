@@ -88,6 +88,7 @@ func NewCustomModel(
 		name:            name,
 		modelData:       modelData,
 		StructRootType:  structRootType,
+		SchemaTree:      schemaTree,
 		SchemaTreeRoot:  schemaTreeRoot,
 		JSONUnmarshaler: jSONUnmarshaler,
 		EnumData:        enumData,
