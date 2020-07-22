@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-	"sync"
 
 	"github.com/neoul/gnxi/utils"
 	"github.com/neoul/libydb/go/ydb"
@@ -32,32 +31,27 @@ type ModelData struct {
 	dataroot ygot.ValidatedGoStruct
 	callback DataCallback
 	block    *ydb.YDB
-	mutex    sync.RWMutex // mu is the RW lock to protect the access to config
 	model    *Model
 }
 
 // Lock - Lock the YDB instance for use.
 func (mdata *ModelData) Lock() {
-	mdata.mutex.Lock()
 	mdata.block.Lock()
 }
 
 // Unlock - Unlock of the YDB instance.
 func (mdata *ModelData) Unlock() {
 	mdata.block.Unlock()
-	mdata.mutex.Unlock()
 }
 
 // RLock - Lock the YDB instance for read.
 func (mdata *ModelData) RLock() {
-	mdata.mutex.RLock()
 	mdata.block.RLock()
 }
 
 // RUnlock - Unlock of the YDB instance for read.
 func (mdata *ModelData) RUnlock() {
 	mdata.block.RUnlock()
-	mdata.mutex.RUnlock()
 }
 
 // Close the connected YDB instance

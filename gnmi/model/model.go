@@ -19,8 +19,10 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
+	"github.com/neoul/libydb/go/ydb"
 	"github.com/openconfig/goyang/pkg/yang"
 	"github.com/openconfig/ygot/ygot"
 	"github.com/openconfig/ygot/ytypes"
@@ -128,15 +130,119 @@ func (m *Model) GetModelData() []*gpb.ModelData {
 }
 
 // FindSchemaData - find the yang.Entry for schema info.
-func (m *Model) FindSchemaData(v reflect.Value) *yang.Entry {
-	if !v.IsValid() {
+func (m *Model) FindSchemaData(t reflect.Type) *yang.Entry {
+	if t == reflect.TypeOf(nil) {
 		return nil
 	}
-	for v.Kind() == reflect.Ptr {
-		v = v.Elem()
-		if !v.IsValid() {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+		if t == reflect.TypeOf(nil) {
 			return nil
 		}
 	}
-	return m.SchemaTree[v.Type().Name()]
+	return m.SchemaTree[t.Name()]
+}
+
+// FindAllPaths - finds all XPaths against to the gNMI Path that has wildcard
+func (m *Model) FindAllPaths(path *gpb.Path) ([]string, bool) {
+	elems := path.GetElem()
+	if len(elems) <= 0 {
+		return []string{"/"}, true
+	}
+	p := ""
+	sp := pathFinder{
+		t:    m.StructRootType,
+		path: &p,
+	}
+
+	rsplist := m.findAllPaths(sp, elems)
+	num := len(rsplist)
+	if num <= 0 {
+		return []string{}, false
+	}
+	rlist := make([]string, num)
+	for i := 0; i < num; i++ {
+		rlist[i] = *rsplist[i].path
+	}
+	return rlist, true
+}
+
+// findAllPaths - finds all XPaths matched to the gNMI Path.
+// It is used to find all schema nodes matched to a wildcard path.
+func (m *Model) findAllPaths(sp pathFinder, elems []*gpb.PathElem) []pathFinder {
+	// select all child nodes if the current node is a list.
+	if sp.t.Kind() == reflect.Map {
+		rv := []pathFinder{}
+		csplist, ok := getAllSchemaPaths(sp)
+		if ok {
+			for _, csp := range csplist {
+				rv = append(rv, m.findAllPaths(csp, elems)...)
+			}
+		}
+		return rv
+	}
+	if len(elems) <= 0 {
+		return []pathFinder{sp}
+	}
+	if ydb.IsTypeScalar(sp.t) {
+		return []pathFinder{}
+	}
+	elem := elems[0]
+	// fmt.Println("** Search", elem.GetName(), "from", sp.t)
+	if elem.GetName() == "*" {
+		rv := []pathFinder{}
+		csplist, ok := getAllSchemaPaths(sp)
+		if ok {
+			celems := elems[1:]
+			for _, csp := range csplist {
+				rv = append(rv, m.findAllPaths(csp, celems)...)
+			}
+		}
+		return rv
+	} else if elem.GetName() == "..." {
+		rv := []pathFinder{}
+		csplist, ok := getAllSchemaPaths(sp)
+		if ok {
+			celems := elems[1:]
+			for _, csp := range csplist {
+				ccsplist := m.findAllPaths(csp, celems)
+				if len(ccsplist) > 0 {
+					rv = append(rv, ccsplist...)
+				}
+				rv = append(rv, m.findAllPaths(csp, elems)...)
+			}
+		}
+		return rv
+	}
+
+	elemName := elem.GetName()
+	csp, ok := findSchemaPath(sp, elemName)
+	if !ok {
+		return []pathFinder{}
+	}
+	keys := elem.GetKey()
+	if keys != nil && len(keys) > 0 {
+		if ydb.IsTypeMap(csp.t) {
+			schema := m.FindSchemaData(csp.t.Elem())
+			if schema != nil {
+				npath := ""
+				knamelist := strings.Split(schema.Key, " ")
+				for _, kname := range knamelist {
+					kvalue, ok := keys[kname]
+					if ok {
+						npath = npath + fmt.Sprintf("[%s=%s]", kname, kvalue)
+					} else {
+						npath = ""
+						break
+					}
+				}
+				if npath != "" {
+					npath = *csp.path + npath
+					csp.path = &npath
+				}
+			}
+		}
+	}
+
+	return m.findAllPaths(csp, elems[1:])
 }

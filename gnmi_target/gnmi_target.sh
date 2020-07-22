@@ -8,5 +8,4 @@ go run gnmi_target.go \
   -ca ../pki/ca.crt \
   -alsologtostderr \
   -stderrthreshold 0 \
-  -yaml-config ../gnmi/model/data/sample.yaml \
-  -disable-ydb
+  -yaml-config ../gnmi/model/data/sample.yaml

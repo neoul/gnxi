@@ -411,7 +411,7 @@ func FindAllSchemaPaths(gs ygot.GoStruct, path *gpb.Path) ([]string, bool) {
 		return []string{"/"}, true
 	}
 	p := ""
-	sp := schemaPathElem{
+	sp := pathFinder{
 		t:    reflect.TypeOf(gs),
 		path: &p,
 	}
@@ -428,17 +428,17 @@ func FindAllSchemaPaths(gs ygot.GoStruct, path *gpb.Path) ([]string, bool) {
 	return rlist, true
 }
 
-type schemaPathElem struct {
+type pathFinder struct {
 	t    reflect.Type
 	path *string
 }
 
 // findAllSchemaPaths - finds all schema nodes' path matched to the gNMI Path.
 // It is used to find all schema nodes matched to a wildcard path.
-func findAllSchemaPaths(sp schemaPathElem, elems []*gpb.PathElem) []schemaPathElem {
+func findAllSchemaPaths(sp pathFinder, elems []*gpb.PathElem) []pathFinder {
 	// select all child nodes if the current node is a list.
 	if sp.t.Kind() == reflect.Map {
-		rv := []schemaPathElem{}
+		rv := []pathFinder{}
 		csplist, ok := getAllSchemaPaths(sp)
 		if ok {
 			for _, csp := range csplist {
@@ -448,15 +448,15 @@ func findAllSchemaPaths(sp schemaPathElem, elems []*gpb.PathElem) []schemaPathEl
 		return rv
 	}
 	if len(elems) <= 0 {
-		return []schemaPathElem{sp}
+		return []pathFinder{sp}
 	}
 	if ydb.IsTypeScalar(sp.t) {
-		return []schemaPathElem{}
+		return []pathFinder{}
 	}
 	elem := elems[0]
 	// fmt.Println("** Search", elem.GetName(), "from", sp.t)
 	if elem.GetName() == "*" {
-		rv := []schemaPathElem{}
+		rv := []pathFinder{}
 		csplist, ok := getAllSchemaPaths(sp)
 		if ok {
 			celems := elems[1:]
@@ -466,7 +466,7 @@ func findAllSchemaPaths(sp schemaPathElem, elems []*gpb.PathElem) []schemaPathEl
 		}
 		return rv
 	} else if elem.GetName() == "..." {
-		rv := []schemaPathElem{}
+		rv := []pathFinder{}
 		csplist, ok := getAllSchemaPaths(sp)
 		if ok {
 			celems := elems[1:]
@@ -481,32 +481,32 @@ func findAllSchemaPaths(sp schemaPathElem, elems []*gpb.PathElem) []schemaPathEl
 		return rv
 	}
 
-	key := elem.GetName()
-	csp, ok := findSchemaPath(sp, key)
+	elemname := elem.GetName()
+	csp, ok := findSchemaPath(sp, elemname)
 	if !ok {
-		return []schemaPathElem{}
+		return []pathFinder{}
 	}
 	sp = csp
 	return findAllSchemaPaths(sp, elems[1:])
 }
 
 // TypeGetAll - Get All child values from the struct, map or slice value
-func getAllSchemaPaths(sp schemaPathElem) ([]schemaPathElem, bool) {
+func getAllSchemaPaths(sp pathFinder) ([]pathFinder, bool) {
 	nt := reflect.TypeOf(nil)
 	if sp.t == nt {
-		return []schemaPathElem{}, false
+		return []pathFinder{}, false
 	}
 
 	switch sp.t.Kind() {
 	case reflect.Interface:
 		// Interface type doesn't have any dedicated type assigned!!.
-		return []schemaPathElem{}, false
+		return []pathFinder{}, false
 	case reflect.Ptr:
 		sp.t = sp.t.Elem()
 		return getAllSchemaPaths(sp)
 	case reflect.Struct:
 		length := sp.t.NumField()
-		rtype := make([]schemaPathElem, 0)
+		rtype := make([]pathFinder, 0)
 		for i := 0; i < length; i++ {
 			sft := sp.t.Field(i)
 			st := sft.Type
@@ -514,25 +514,25 @@ func getAllSchemaPaths(sp schemaPathElem) ([]schemaPathElem, bool) {
 				p, ok := sft.Tag.Lookup("path")
 				if ok {
 					np := *sp.path + "/" + p
-					rtype = append(rtype, schemaPathElem{t: st, path: &np})
+					rtype = append(rtype, pathFinder{t: st, path: &np})
 				}
 			}
 		}
 		return rtype, true
 	case reflect.Map, reflect.Slice:
 		sp.t = sp.t.Elem()
-		return []schemaPathElem{sp}, true
+		return []pathFinder{sp}, true
 	default:
-		return []schemaPathElem{}, false
+		return []pathFinder{}, false
 	}
 }
 
-// findSchemaPath - finds a child type from the struct, map or slice value using the key.
-func findSchemaPath(sp schemaPathElem, key string) (schemaPathElem, bool) {
+// findSchemaPath - finds a child type from the struct, map or slice value using the elemname.
+func findSchemaPath(sp pathFinder, elemname string) (pathFinder, bool) {
 	if sp.t == reflect.TypeOf(nil) {
 		return sp, false
 	}
-	if key == "" {
+	if elemname == "" {
 		return sp, true
 	}
 
@@ -540,25 +540,25 @@ func findSchemaPath(sp schemaPathElem, key string) (schemaPathElem, bool) {
 	case reflect.Interface:
 		return sp, false
 	case reflect.Ptr:
-		// nsp := &schemaPathElem{t: sp.t.Elem(), path: sp.path}
-		// return findSchemaPath(nsp, key)
+		// nsp := &pathFinder{t: sp.t.Elem(), path: sp.path}
+		// return findSchemaPath(nsp, elemname)
 		sp.t = sp.t.Elem()
-		return findSchemaPath(sp, key)
+		return findSchemaPath(sp, elemname)
 	case reflect.Struct:
-		// ft, ok := sp.t.FieldByName(key)
+		// ft, ok := sp.t.FieldByName(elemname)
 		// if ok {
 		// 	p, ok := ft.Tag.Lookup("path")
 		// 	if !ok {
 		// 		return sp, false
 		// 	}
 		// 	np := *sp.path + p
-		// 	return schemaPathElem{t: ft.Type, path: &np}, false
+		// 	return pathFinder{t: ft.Type, path: &np}, false
 		// }
 		for i := 0; i < sp.t.NumField(); i++ {
 			ft := sp.t.Field(i)
-			if n, ok := ft.Tag.Lookup("path"); ok && n == key {
+			if n, ok := ft.Tag.Lookup("path"); ok && n == elemname {
 				np := *sp.path + "/" + n
-				return schemaPathElem{t: ft.Type, path: &np}, true
+				return pathFinder{t: ft.Type, path: &np}, true
 			}
 		}
 	case reflect.Map, reflect.Slice, reflect.Array:

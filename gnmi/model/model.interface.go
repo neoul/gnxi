@@ -1,6 +1,8 @@
 package model
 
-import "github.com/openconfig/ygot/ygot"
+import (
+	"github.com/openconfig/ygot/ygot"
+)
 
 // DataCallback is an interface to be invoked by the modeled data control
 type DataCallback interface {
@@ -35,7 +37,7 @@ func (s Operation) String() string { return operationStr[s%5] }
 // OnChangeCallback is an interface to be invoked upon the model data changes
 type OnChangeCallback interface {
 	DataCallback
-	OnChangeCallback(op Operation, schemaPath, dataPath string, value interface{})
+	OnChangeCallback(op Operation, path []string, value interface{})
 }
 
 func execConfigCallback(callback DataCallback, vgs ygot.ValidatedGoStruct) error {
@@ -49,13 +51,13 @@ func execConfigCallback(callback DataCallback, vgs ygot.ValidatedGoStruct) error
 	return nil
 }
 
-func execOnChangeCallback(callback DataCallback, op Operation, schemaPath string, dataPath string, value interface{}) {
+func execOnChangeCallback(callback DataCallback, op Operation, path []string, value interface{}) {
 	if callback == nil {
 		return
 	}
 	configcallback, ok := callback.(OnChangeCallback)
 	if ok {
-		configcallback.OnChangeCallback(op, schemaPath, dataPath, value)
+		configcallback.OnChangeCallback(op, path, value)
 	}
 	return
 }

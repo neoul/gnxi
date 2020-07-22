@@ -65,24 +65,21 @@ var (
 //		// Do something ...
 // }
 type Server struct {
-	model      *model.Model
-	modeldata  *model.ModelData
-	useAliases bool
-	alias      map[string]*pb.Alias
+	model     *model.Model
+	modeldata *model.ModelData
+	*telemetryCB
 	Sessions   map[string]*Session
-}
-
-// OnChangeCallback - callback for Telemetry subscription on data changes
-func (s *Server) OnChangeCallback(op model.Operation, schemaPath, dataPath string, value interface{}) {
-	fmt.Println("OnChange", op, schemaPath, dataPath)
+	alias      map[string]*pb.Alias
+	useAliases bool
 }
 
 // NewServer creates an instance of Server with given json config.
 func NewServer(m *model.Model, jsonData []byte, yamlData []byte) (*Server, error) {
 	s := &Server{
-		model:    m,
-		alias:    map[string]*pb.Alias{},
-		Sessions: map[string]*Session{},
+		model:       m,
+		alias:       map[string]*pb.Alias{},
+		Sessions:    map[string]*Session{},
+		telemetryCB: newTelemetryCB(),
 	}
 	mdata, err := model.NewModelData(m, jsonData, yamlData, s)
 	if err != nil {
