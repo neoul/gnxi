@@ -7,13 +7,13 @@ import (
 	"reflect"
 
 	"github.com/neoul/libydb/go/ydb"
+	"github.com/openconfig/ygot/ygot"
 	"github.com/openconfig/ygot/ytypes"
 )
 
-// ydbMerge - constructs Device
-func ydbMerge(op Operation, mdata *ModelData, keys []string, key string, tag string, value string) error {
-	// fmt.Printf("Device.merge %v %v %v %v\n", keys, key, tag, value)
-	v := reflect.ValueOf(mdata.dataroot)
+// dataMerge - constructs ModelData
+func dataMerge(root ygot.GoStruct, keys []string, key string, tag string, value string) error {
+	v := reflect.ValueOf(root)
 	for _, k := range keys {
 		cv, ok := ydb.ValFindOrInit(v, k, ydb.SearchByContent)
 		if !ok || !cv.IsValid() {
@@ -21,34 +21,21 @@ func ydbMerge(op Operation, mdata *ModelData, keys []string, key string, tag str
 		}
 		v = cv
 	}
-	path := append(keys, key)
 	ct, ok := ydb.TypeFind(v.Type(), key)
 	if ok && value != "" {
 		cv, err := ytypes.StringToType(ct, value)
 		if err == nil {
 			_, err = ydb.ValChildDirectSet(v, key, cv)
-			if err == nil {
-				execOnChangeCallback(mdata.callback, op, path, cv.Interface())
-			}
 			return err
 		}
 	}
-	rv, err := ydb.ValChildSet(v, key, value, ydb.SearchByContent)
-	if err == nil {
-		cv, ok := ydb.ValFindOrInit(rv, key, ydb.SearchByContent)
-		if !ok || !cv.IsValid() {
-			return fmt.Errorf("key %s not found", key)
-		}
-		execOnChangeCallback(mdata.callback, op, path, cv.Interface())
-		// ydb.DebugValueString(nv.Interface(), 1, func(x ...interface{}) { fmt.Print(x...) })
-	}
+	_, err := ydb.ValChildSet(v, key, value, ydb.SearchByContent)
 	return err
 }
 
-// ydbDelete - constructs Device
-func ydbDelete(mdata *ModelData, keys []string, key string) error {
-	// fmt.Printf("Device.delete %v %v\n", keys, key)
-	v := reflect.ValueOf(mdata.dataroot)
+// dataDelete - constructs ModelData
+func dataDelete(root ygot.GoStruct, keys []string, key string) error {
+	v := reflect.ValueOf(root)
 	for _, k := range keys {
 		cv, ok := ydb.ValFind(v, k, ydb.SearchByContent)
 		if !ok || !cv.IsValid() {
@@ -56,37 +43,86 @@ func ydbDelete(mdata *ModelData, keys []string, key string) error {
 		}
 		v = cv
 	}
-	path := append(keys, key)
-	execOnChangeCallback(mdata.callback, OpDelete, path, nil)
 	_, err := ydb.ValChildUnset(v, key, ydb.SearchByContent)
-	if err == nil {
-		// ydb.DebugValueString(v.Interface(), 1, func(x ...interface{}) { fmt.Print(x...) })
-	} else {
-		fmt.Println(err)
-	}
-	return nil
+	return err
 }
 
-// Create - constructs Device
+// Create - constructs ModelData
 func (mdata *ModelData) Create(keys []string, key string, tag string, value string) error {
-	// fmt.Printf("Device.Create %v %v %v %v {\n", keys, key, tag, value)
-	err := ydbMerge(OpCreate, mdata, keys, key, tag, value)
+	// fmt.Printf("ModelData.Create %v %v %v %v {\n", keys, key, tag, value)
+	err := dataMerge(mdata.dataroot, keys, key, tag, value)
+	if err != nil {
+		dataMerge(mdata.fakeroot, keys, key, tag, value)
+		if mdata.callback != nil {
+			path := append(keys, key)
+			onchangecb, ok := mdata.callback.(OnChangeCallback)
+			if ok {
+				onchangecb.OnChangeCreated(path, mdata.fakeroot)
+			}
+		}
+	}
 	// fmt.Println("}", err)
 	return err
 }
 
-// Replace - constructs Device
+// Replace - constructs ModelData
 func (mdata *ModelData) Replace(keys []string, key string, tag string, value string) error {
-	// fmt.Printf("Device.Replace %v %v %v %v {\n", keys, key, tag, value)
-	err := ydbMerge(OpReplace, mdata, keys, key, tag, value)
+	// fmt.Printf("ModelData.Replace %v %v %v %v {\n", keys, key, tag, value)
+	err := dataMerge(mdata.dataroot, keys, key, tag, value)
+	if err != nil {
+		dataMerge(mdata.fakeroot, keys, key, tag, value)
+		if mdata.callback != nil {
+			path := append(keys, key)
+			onchangecb, ok := mdata.callback.(OnChangeCallback)
+			if ok {
+				onchangecb.OnChangeReplaced(path, mdata.fakeroot)
+			}
+		}
+	}
 	// fmt.Println("}", err)
 	return err
 }
 
-// Delete - constructs Device
+// Delete - constructs ModelData
 func (mdata *ModelData) Delete(keys []string, key string) error {
-	// fmt.Printf("Device.Delete %v %v {\n", keys, key)
-	err := ydbDelete(mdata, keys, key)
+	// fmt.Printf("ModelData.Delete %v %v {\n", keys, key)
+	err := dataDelete(mdata.dataroot, keys, key)
+	if err != nil {
+		if mdata.callback != nil {
+			path := append(keys, key)
+			onchangecb, ok := mdata.callback.(OnChangeCallback)
+			if ok {
+				onchangecb.OnChangeDeleted(path)
+			}
+		}
+	}
 	// fmt.Println("}", err)
 	return err
+}
+
+// UpdateStart - indicates the start of ModelData construction
+func (mdata *ModelData) UpdateStart() {
+	// fakeroot is used to save the changes of the model data.
+	fakeroot, err := NewGoStruct(mdata.model, nil)
+	if err != nil {
+		return
+	}
+	mdata.fakeroot = fakeroot
+	if mdata.callback != nil {
+		onchangecb, ok := mdata.callback.(OnChangeCallback)
+		if ok {
+			onchangecb.OnChangeStarted(mdata.fakeroot)
+		}
+	}
+}
+
+// UpdateEnd - indicates the end of ModelData construction
+func (mdata *ModelData) UpdateEnd() {
+	mdata.fakeroot = nil
+	if mdata.callback != nil {
+		onchangecb, ok := mdata.callback.(OnChangeCallback)
+		if ok {
+			onchangecb.OnChangeFinished(mdata.fakeroot)
+		}
+	}
 }

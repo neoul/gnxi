@@ -28,7 +28,8 @@ var (
 
 // ModelData - the data instance for the model
 type ModelData struct {
-	dataroot ygot.ValidatedGoStruct
+	dataroot ygot.ValidatedGoStruct // the current data tree of the Model
+	fakeroot ygot.GoStruct          // a fake data tree to represent the changed data.
 	callback DataCallback
 	block    *ydb.YDB
 	model    *Model
