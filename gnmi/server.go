@@ -306,11 +306,10 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 				return
 			}
 		}
-	}(stream, teleses.channel, teleses.shutdown, teleses.waitgroup)
+	}(stream, teleses.respchan, teleses.shutdown, teleses.waitgroup)
 
 	defer func() {
-		close(teleses.shutdown)
-		teleses.waitgroup.Wait()
+		teleses.stopTelemetrySession()
 	}()
 	for {
 		req, err := stream.Recv()

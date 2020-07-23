@@ -51,7 +51,7 @@ func dataDelete(root ygot.GoStruct, keys []string, key string) error {
 func (mdata *ModelData) Create(keys []string, key string, tag string, value string) error {
 	// fmt.Printf("ModelData.Create %v %v %v %v {\n", keys, key, tag, value)
 	err := dataMerge(mdata.dataroot, keys, key, tag, value)
-	if err != nil {
+	if err == nil {
 		dataMerge(mdata.fakeroot, keys, key, tag, value)
 		if mdata.callback != nil {
 			path := append(keys, key)
@@ -69,7 +69,7 @@ func (mdata *ModelData) Create(keys []string, key string, tag string, value stri
 func (mdata *ModelData) Replace(keys []string, key string, tag string, value string) error {
 	// fmt.Printf("ModelData.Replace %v %v %v %v {\n", keys, key, tag, value)
 	err := dataMerge(mdata.dataroot, keys, key, tag, value)
-	if err != nil {
+	if err == nil {
 		dataMerge(mdata.fakeroot, keys, key, tag, value)
 		if mdata.callback != nil {
 			path := append(keys, key)
@@ -87,7 +87,7 @@ func (mdata *ModelData) Replace(keys []string, key string, tag string, value str
 func (mdata *ModelData) Delete(keys []string, key string) error {
 	// fmt.Printf("ModelData.Delete %v %v {\n", keys, key)
 	err := dataDelete(mdata.dataroot, keys, key)
-	if err != nil {
+	if err == nil {
 		if mdata.callback != nil {
 			path := append(keys, key)
 			onchangecb, ok := mdata.callback.(OnChangeCallback)
@@ -118,11 +118,11 @@ func (mdata *ModelData) UpdateStart() {
 
 // UpdateEnd - indicates the end of ModelData construction
 func (mdata *ModelData) UpdateEnd() {
-	mdata.fakeroot = nil
 	if mdata.callback != nil {
 		onchangecb, ok := mdata.callback.(OnChangeCallback)
 		if ok {
 			onchangecb.OnChangeFinished(mdata.fakeroot)
 		}
 	}
+	mdata.fakeroot = nil
 }

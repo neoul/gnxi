@@ -132,6 +132,11 @@ func (mdata *ModelData) GetRoot() ygot.ValidatedGoStruct {
 	return mdata.dataroot
 }
 
+// GetFakeRoot - replaces the root of the Model Data
+func (mdata *ModelData) GetFakeRoot() ygot.GoStruct {
+	return mdata.fakeroot
+}
+
 // ChangeRoot - replaces the root of the Model Data
 func (mdata *ModelData) ChangeRoot(root ygot.ValidatedGoStruct) error {
 	mdata.dataroot = root
