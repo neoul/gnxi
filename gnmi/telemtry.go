@@ -541,7 +541,7 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 		return status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPATH(prefix))
 	}
 
-	updates := make([]*pb.Update, 0, 32)
+	updates := []*pb.Update{}
 	for _, top := range toplist {
 		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
@@ -549,7 +549,9 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 		if err != nil {
 			return status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
 		}
-		updates = updates[:0] // reuse?
+		if bundling {
+			updates = make([]*pb.Update, 0, 16)
+		}
 		for _, updateEntry := range subList {
 			path := updateEntry.Path
 			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
