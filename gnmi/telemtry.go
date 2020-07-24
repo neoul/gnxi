@@ -459,9 +459,49 @@ func (teleses *telemetrySession) sendTelemetryUpdate(responses []*pb.SubscribeRe
 	return nil
 }
 
+func getDeletes(telesub *telemetrySubscription, path *string, deleteOnly bool) ([]*pb.Path, error) {
+	deletesNum := telesub.replacedList.Size() + telesub.deletedList.Size()
+	deletes := make([]*pb.Path, 0, deletesNum)
+	if !deleteOnly {
+		rpaths := telesub.replacedList.PrefixSearch(*path)
+		for _, rpath := range rpaths {
+			datapath, err := xpath.ToGNMIPath(rpath)
+			if err != nil {
+				return nil, fmt.Errorf("path-conversion-error(%s)", datapath)
+			}
+			deletes = append(deletes, datapath)
+		}
+	}
+	dpaths := telesub.deletedList.PrefixSearch(*path)
+	for _, dpath := range dpaths {
+		datapath, err := xpath.ToGNMIPath(dpath)
+		if err != nil {
+			return nil, fmt.Errorf("path-conversion-error(%s)", datapath)
+		}
+		deletes = append(deletes, datapath)
+	}
+	return deletes, nil
+}
+
+func getUpdate(data *model.DataAndPath, encoding pb.Encoding) (*pb.Update, error) {
+	typedValue, err := ygot.EncodeTypedValue(data.Value, encoding)
+	if err != nil {
+		return nil, fmt.Errorf("encoding-error(%s)", err.Error())
+	}
+	if typedValue == nil {
+		return nil, nil
+	}
+	datapath, err := xpath.ToGNMIPath(data.Path)
+	if err != nil {
+		return nil, fmt.Errorf("update-path-conversion-error(%s)", data.Path)
+	}
+	return &pb.Update{Path: datapath, Val: typedValue}, nil
+}
+
 // initTelemetryUpdate - Process and generate responses for a init update.
 func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) error {
 	s := teleses.server
+	bundling := !*disableBundling
 	subscriptionList := req.GetSubscribe()
 	subList := subscriptionList.GetSubscription()
 	updateOnly := subscriptionList.GetUpdatesOnly()
@@ -500,7 +540,8 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 		}
 		return status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPATH(prefix))
 	}
-	allresponses := []*pb.SubscribeResponse{}
+
+	updates := make([]*pb.Update, 0, 32)
 	for _, top := range toplist {
 		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
@@ -508,7 +549,7 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 		if err != nil {
 			return status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
 		}
-		allupdates := []*pb.Update{}
+		updates = updates[:0] // reuse?
 		for _, updateEntry := range subList {
 			path := updateEntry.Path
 			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
@@ -518,44 +559,31 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 			if !ok || len(datalist) <= 0 {
 				continue
 			}
-			j := 0
-			update := make([]*pb.Update, len(datalist))
 			for _, data := range datalist {
-				typedValue, err := ygot.EncodeTypedValue(data.Value, encoding)
+				u, err := getUpdate(data, encoding)
 				if err != nil {
-					return status.Errorf(codes.Internal, "encoding-error(%s)", err.Error())
+					return status.Error(codes.Internal, err.Error())
 				}
-				if typedValue == nil {
-					continue
+				if bundling {
+					updates = append(updates, u)
+				} else if u != nil {
+					err = teleses.sendTelemetryUpdate(
+						buildSubscribeResponse(prefix, alias, []*pb.Update{u}, nil))
+					if err != nil {
+						return err
+					}
 				}
-				datapath, err := xpath.ToGNMIPath(data.Path)
-				if err != nil {
-					return status.Errorf(codes.Internal, "path-conversion-error(%s)", data.Path)
-				}
-				update[j] = &pb.Update{Path: datapath, Val: typedValue}
-				j++
-			}
-			if j > 0 {
-				allupdates = append(allupdates, update[:j]...)
 			}
 		}
-		allresponses = append(allresponses,
-			buildSubscribeResponse(prefix, alias, allupdates, nil, true)...)
-	}
-	return teleses.sendTelemetryUpdate(allresponses)
-}
-
-func getDeletes(list *trie.Trie, path *string) []*pb.Path {
-	relativePath := list.PrefixSearch(*path)
-	gnmipath := make([]*pb.Path, 0, len(relativePath))
-	for _, dpath := range relativePath {
-		datapath, err := xpath.ToGNMIPath(dpath)
-		if err != nil {
-			continue
+		if bundling {
+			err = teleses.sendTelemetryUpdate(
+				buildSubscribeResponse(prefix, alias, updates, nil))
+			if err != nil {
+				return err
+			}
 		}
-		gnmipath = append(gnmipath, datapath)
 	}
-	return gnmipath
+	return teleses.sendTelemetryUpdate(buildSyncResponse())
 }
 
 // telemetryUpdate - Process and generate responses for a telemetry update.
@@ -563,6 +591,7 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 	telesub.session.rlock()
 	defer telesub.session.runlock()
 	s := teleses.server
+	bundling := !*disableBundling
 
 	prefix := telesub.Prefix
 	encoding := telesub.Encoding
@@ -601,6 +630,9 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 		return status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPATH(prefix))
 	}
 
+	deletes := []*pb.Path{}
+	updates := []*pb.Update{}
+
 	for _, top := range toplist {
 		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
@@ -608,18 +640,15 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 		if err != nil {
 			return status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
 		}
-		deletes := make([]*pb.Path, 0, 64)
-		updates := make([]*pb.Update, 0, 64)
 
-		deletes = append(deletes, getDeletes(telesub.replacedList, &bpath)...)
-		if err != nil {
-			return status.Error(codes.Internal, err.Error())
+		if bundling {
+			updates = make([]*pb.Update, 0, 16)
+			// get all replaced, deleted paths relative to the prefix
+			deletes, err = getDeletes(telesub, &bpath, false)
+			if err != nil {
+				return status.Error(codes.Internal, err.Error())
+			}
 		}
-		deletes = append(deletes, getDeletes(telesub.deletedList, &bpath)...)
-		if err != nil {
-			return status.Error(codes.Internal, err.Error())
-		}
-		fmt.Println("deletes", deletes)
 
 		for _, path := range telesub.Paths {
 			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
@@ -630,24 +659,44 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 				continue
 			}
 			for _, data := range datalist {
-				typedValue, err := ygot.EncodeTypedValue(data.Value, encoding)
+				u, err := getUpdate(data, encoding)
 				if err != nil {
-					return status.Errorf(codes.Internal, "encoding-error(%s)", err.Error())
+					return status.Error(codes.Internal, err.Error())
 				}
-				if typedValue == nil {
-					continue
+				if bundling {
+					updates = append(updates, u)
+				} else if u != nil {
+					fullpath := bpath + data.Path
+					deletes, err = getDeletes(telesub, &fullpath, false)
+					if err != nil {
+						return status.Error(codes.Internal, err.Error())
+					}
+					err = teleses.sendTelemetryUpdate(
+						buildSubscribeResponse(prefix, alias, []*pb.Update{u}, nil))
+					if err != nil {
+						return err
+					}
 				}
-				datapath, err := xpath.ToGNMIPath(data.Path)
-				if err != nil {
-					return status.Errorf(codes.Internal, "update-path-conversion-error(%s)", data.Path)
-				}
-				updates = append(updates, &pb.Update{Path: datapath, Val: typedValue})
 			}
 		}
-		err = teleses.sendTelemetryUpdate(
-			buildSubscribeResponse(prefix, alias, updates, deletes, false))
-		if err != nil {
-			return err
+		if bundling {
+			err = teleses.sendTelemetryUpdate(
+				buildSubscribeResponse(prefix, alias, updates, deletes))
+			if err != nil {
+				return err
+			}
+		} else {
+			deletes, err = getDeletes(telesub, &bpath, true)
+			if err != nil {
+				return status.Error(codes.Internal, err.Error())
+			}
+			for _, d := range deletes {
+				err = teleses.sendTelemetryUpdate(
+					buildSubscribeResponse(prefix, alias, nil, []*pb.Path{d}))
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil

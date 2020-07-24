@@ -6,11 +6,8 @@ import (
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
-func buildSubscribeResponse(prefix *pb.Path, alias string, update []*pb.Update, delete []*pb.Path, isInitUpdate bool) []*pb.SubscribeResponse {
+func buildSubscribeResponse(prefix *pb.Path, alias string, update []*pb.Update, delete []*pb.Path) []*pb.SubscribeResponse {
 	if update == nil && delete == nil {
-		if isInitUpdate {
-			return buildSyncResponse()
-		}
 		return []*pb.SubscribeResponse{}
 	}
 	notification := pb.Notification{
@@ -24,9 +21,6 @@ func buildSubscribeResponse(prefix *pb.Path, alias string, update []*pb.Update, 
 		{Response: &pb.SubscribeResponse_Update{
 			Update: &notification,
 		}},
-	}
-	if isInitUpdate { // set SyncResponse if init update
-		subscribeResponse = append(subscribeResponse, buildSyncResponse()...)
 	}
 	return subscribeResponse
 }
