@@ -66,6 +66,46 @@ func ToGNMIPath(xpath string) (*pb.Path, error) {
 	return &pb.Path{Elem: pbPathElements}, nil
 }
 
+// ToSchemaPath - returns the schema path of the xpath
+func ToSchemaPath(xpath string) (string, error) {
+	xpathElements, err := ParseStringPath(xpath)
+	if err != nil {
+		return "", err
+	}
+	schemaElememts := []string{""}
+	for _, elem := range xpathElements {
+		switch v := elem.(type) {
+		case string:
+			schemaElememts = append(schemaElememts, v)
+		case map[string]string:
+			// skip keys
+		default:
+			return "", fmt.Errorf("wrong data type: %T", v)
+		}
+	}
+	return strings.Join(schemaElememts, "/"), nil
+}
+
+// ToSchemaSlicePath - returns the sliced schema path of the input xpath
+func ToSchemaSlicePath(xpath string) ([]string, error) {
+	xpathElements, err := ParseStringPath(xpath)
+	if err != nil {
+		return nil, err
+	}
+	var schemaElememts []string
+	for _, elem := range xpathElements {
+		switch v := elem.(type) {
+		case string:
+			schemaElememts = append(schemaElememts, v)
+		case map[string]string:
+			// skip keys
+		default:
+			return nil, fmt.Errorf("wrong data type: %T", v)
+		}
+	}
+	return schemaElememts, nil
+}
+
 // ToXPATH - returns XPATH string converted from gNMI Path
 func ToXPATH(p *pb.Path) string {
 	if p == nil {

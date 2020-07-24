@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/neoul/gnxi/gnmi/model"
 	"github.com/neoul/gnxi/utils"
@@ -233,7 +232,6 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 	jsonTree, err := ygot.ConstructIETFJSON(s.modeldata.GetRoot(), &ygot.RFC7951JSONConfig{})
 	if err != nil {
 		msg := fmt.Sprintf("error in constructing IETF JSON tree from config struct: %v", err)
-		log.Error(msg)
 		return nil, status.Error(codes.Internal, msg)
 	}
 
@@ -265,13 +263,11 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 	jsonDump, err := json.Marshal(jsonTree)
 	if err != nil {
 		msg := fmt.Sprintf("error in marshaling IETF JSON tree to bytes: %v", err)
-		log.Error(msg)
 		return nil, status.Error(codes.Internal, msg)
 	}
 	newRoot, err := model.NewGoStruct(s.model, jsonDump)
 	if err != nil {
 		msg := fmt.Sprintf("error in creating config struct from IETF JSON data: %v", err)
-		log.Error(msg)
 		return nil, status.Error(codes.Internal, msg)
 	}
 	s.modeldata.ChangeRoot(newRoot)
