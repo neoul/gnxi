@@ -67,7 +67,7 @@ var (
 type Server struct {
 	model     *model.Model
 	modeldata *model.ModelData
-	*telemetryCB
+	*telemetryCtrl
 	Sessions   map[string]*Session
 	alias      map[string]*pb.Alias
 	useAliases bool
@@ -76,10 +76,10 @@ type Server struct {
 // NewServer creates an instance of Server with given json config.
 func NewServer(m *model.Model, jsonData []byte, yamlData []byte) (*Server, error) {
 	s := &Server{
-		model:       m,
-		alias:       map[string]*pb.Alias{},
-		Sessions:    map[string]*Session{},
-		telemetryCB: newTelemetryCB(),
+		model:         m,
+		alias:         map[string]*pb.Alias{},
+		Sessions:      map[string]*Session{},
+		telemetryCtrl: newTelemetryCB(),
 	}
 	mdata, err := model.NewModelData(m, jsonData, yamlData, s)
 	if err != nil {

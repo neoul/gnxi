@@ -28,11 +28,11 @@ var (
 
 // ModelData - the data instance for the model
 type ModelData struct {
-	dataroot ygot.ValidatedGoStruct // the current data tree of the Model
-	fakeroot ygot.GoStruct          // a fake data tree to represent the changed data.
-	callback DataCallback
-	block    *ydb.YDB
-	model    *Model
+	dataroot    ygot.ValidatedGoStruct // the current data tree of the Model
+	updatedroot ygot.GoStruct          // a fake data tree to represent the changed data.
+	callback    DataCallback
+	block       *ydb.YDB
+	model       *Model
 }
 
 // Lock - Lock the YDB instance for use.
@@ -130,11 +130,6 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallb
 // GetRoot - replaces the root of the Model Data
 func (mdata *ModelData) GetRoot() ygot.ValidatedGoStruct {
 	return mdata.dataroot
-}
-
-// GetFakeRoot - replaces the root of the Model Data
-func (mdata *ModelData) GetFakeRoot() ygot.GoStruct {
-	return mdata.fakeroot
 }
 
 // ChangeRoot - replaces the root of the Model Data

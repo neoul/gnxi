@@ -52,12 +52,12 @@ func (mdata *ModelData) Create(keys []string, key string, tag string, value stri
 	// fmt.Printf("ModelData.Create %v %v %v %v {\n", keys, key, tag, value)
 	err := dataMerge(mdata.dataroot, keys, key, tag, value)
 	if err == nil {
-		dataMerge(mdata.fakeroot, keys, key, tag, value)
+		dataMerge(mdata.updatedroot, keys, key, tag, value)
 		if mdata.callback != nil {
 			path := append(keys, key)
 			onchangecb, ok := mdata.callback.(OnChangeCallback)
 			if ok {
-				onchangecb.OnChangeCreated(path, mdata.fakeroot)
+				onchangecb.OnChangeCreated(path, mdata.updatedroot)
 			}
 		}
 	}
@@ -70,12 +70,12 @@ func (mdata *ModelData) Replace(keys []string, key string, tag string, value str
 	// fmt.Printf("ModelData.Replace %v %v %v %v {\n", keys, key, tag, value)
 	err := dataMerge(mdata.dataroot, keys, key, tag, value)
 	if err == nil {
-		dataMerge(mdata.fakeroot, keys, key, tag, value)
+		dataMerge(mdata.updatedroot, keys, key, tag, value)
 		if mdata.callback != nil {
 			path := append(keys, key)
 			onchangecb, ok := mdata.callback.(OnChangeCallback)
 			if ok {
-				onchangecb.OnChangeReplaced(path, mdata.fakeroot)
+				onchangecb.OnChangeReplaced(path, mdata.updatedroot)
 			}
 		}
 	}
@@ -102,16 +102,16 @@ func (mdata *ModelData) Delete(keys []string, key string) error {
 
 // UpdateStart - indicates the start of ModelData construction
 func (mdata *ModelData) UpdateStart() {
-	// fakeroot is used to save the changes of the model data.
-	fakeroot, err := NewGoStruct(mdata.model, nil)
+	// updatedroot is used to save the changes of the model data.
+	updatedroot, err := NewGoStruct(mdata.model, nil)
 	if err != nil {
 		return
 	}
-	mdata.fakeroot = fakeroot
+	mdata.updatedroot = updatedroot
 	if mdata.callback != nil {
 		onchangecb, ok := mdata.callback.(OnChangeCallback)
 		if ok {
-			onchangecb.OnChangeStarted(mdata.fakeroot)
+			onchangecb.OnChangeStarted(mdata.updatedroot)
 		}
 	}
 }
@@ -121,8 +121,8 @@ func (mdata *ModelData) UpdateEnd() {
 	if mdata.callback != nil {
 		onchangecb, ok := mdata.callback.(OnChangeCallback)
 		if ok {
-			onchangecb.OnChangeFinished(mdata.fakeroot)
+			onchangecb.OnChangeFinished(mdata.updatedroot)
 		}
 	}
-	mdata.fakeroot = nil
+	mdata.updatedroot = nil
 }
