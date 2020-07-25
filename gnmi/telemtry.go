@@ -52,7 +52,7 @@ func (tcb *telemetryCtrl) registerTelemetry(m *model.Model, telesub *telemetrySu
 		fullpath := utils.GNMIFullPath(telesub.Prefix, path)
 		allpaths, ok := m.FindAllPaths(fullpath)
 		if ok {
-			telesub.allpaths = allpaths
+			telesub.subscribedPath = allpaths
 			for _, p := range allpaths {
 				subgroup, ok := tcb.lookupTeleSub[p]
 				if !ok || subgroup == nil {
@@ -108,19 +108,21 @@ func (tcb *telemetryCtrl) OnChangeCreated(slicepath []string, changes ygot.GoStr
 			}
 		}
 	}
-	sliceschema, _ := xpath.ToSchemaSlicePath(datapath)
-	for i := len(sliceschema); i >= 0; i-- {
-		path := "/" + strings.Join(sliceschema[:i], "/")
-		subgroup, ok := tcb.lookupTeleSub[path]
-		if ok {
-			for _, telesub := range subgroup {
-				if telesub.isPolling {
-					continue
+	sliceschema, isEqual := xpath.ToSchemaSlicePath(slicepath)
+	if !isEqual {
+		for i := len(sliceschema); i >= 0; i-- {
+			path := "/" + strings.Join(sliceschema[:i], "/")
+			subgroup, ok := tcb.lookupTeleSub[path]
+			if ok {
+				for _, telesub := range subgroup {
+					if telesub.isPolling {
+						continue
+					}
+					glog.Infof("telemetry[%d][%d].onchange(created).matched.path(%s)",
+						telesub.sessionid, telesub.id, path)
+					telesub.Duplicates++
+					tcb.readyToUpdate[telesub.id] = telesub
 				}
-				glog.Infof("telemetry[%d][%d].onchange(created).matched.path(%s)",
-					telesub.sessionid, telesub.id, path)
-				telesub.Duplicates++
-				tcb.readyToUpdate[telesub.id] = telesub
 			}
 		}
 	}
@@ -152,24 +154,26 @@ func (tcb *telemetryCtrl) OnChangeReplaced(slicepath []string, changes ygot.GoSt
 			}
 		}
 	}
-	sliceschema, _ := xpath.ToSchemaSlicePath(datapath)
-	for i := len(sliceschema); i >= 0; i-- {
-		path := "/" + strings.Join(sliceschema[:i], "/")
-		subgroup, ok := tcb.lookupTeleSub[path]
-		if ok {
-			for _, telesub := range subgroup {
-				if telesub.isPolling {
-					continue
+	sliceschema, isEqual := xpath.ToSchemaSlicePath(slicepath)
+	if !isEqual {
+		for i := len(sliceschema); i >= 0; i-- {
+			path := "/" + strings.Join(sliceschema[:i], "/")
+			subgroup, ok := tcb.lookupTeleSub[path]
+			if ok {
+				for _, telesub := range subgroup {
+					if telesub.isPolling {
+						continue
+					}
+					glog.Infof("telemetry[%d][%d].onchange(replaced).matched.path(%s)",
+						telesub.sessionid, telesub.id, path)
+					telesub.Duplicates++
+					if tcb.replacedList[telesub.id] == nil {
+						tcb.replacedList[telesub.id] = pathSet{datapath: present{}}
+					} else {
+						tcb.replacedList[telesub.id][datapath] = present{}
+					}
+					tcb.readyToUpdate[telesub.id] = telesub
 				}
-				glog.Infof("telemetry[%d][%d].onchange(replaced).matched.path(%s)",
-					telesub.sessionid, telesub.id, path)
-				telesub.Duplicates++
-				if tcb.replacedList[telesub.id] == nil {
-					tcb.replacedList[telesub.id] = pathSet{datapath: present{}}
-				} else {
-					tcb.replacedList[telesub.id][datapath] = present{}
-				}
-				tcb.readyToUpdate[telesub.id] = telesub
 			}
 		}
 	}
@@ -201,24 +205,26 @@ func (tcb *telemetryCtrl) OnChangeDeleted(slicepath []string) {
 			}
 		}
 	}
-	sliceschema, _ := xpath.ToSchemaSlicePath(datapath)
-	for i := len(sliceschema); i >= 0; i-- {
-		path := "/" + strings.Join(sliceschema[:i], "/")
-		subgroup, ok := tcb.lookupTeleSub[path]
-		if ok {
-			for _, telesub := range subgroup {
-				if telesub.isPolling {
-					continue
+	sliceschema, isEqual := xpath.ToSchemaSlicePath(slicepath)
+	if !isEqual {
+		for i := len(sliceschema); i >= 0; i-- {
+			path := "/" + strings.Join(sliceschema[:i], "/")
+			subgroup, ok := tcb.lookupTeleSub[path]
+			if ok {
+				for _, telesub := range subgroup {
+					if telesub.isPolling {
+						continue
+					}
+					glog.Infof("telemetry[%d][%d].onchange(deleted).matched.path(%s)",
+						telesub.sessionid, telesub.id, path)
+					telesub.Duplicates++
+					if tcb.deletedList[telesub.id] == nil {
+						tcb.deletedList[telesub.id] = pathSet{datapath: present{}}
+					} else {
+						tcb.deletedList[telesub.id][datapath] = present{}
+					}
+					tcb.readyToUpdate[telesub.id] = telesub
 				}
-				glog.Infof("telemetry[%d][%d].onchange(deleted).matched.path(%s)",
-					telesub.sessionid, telesub.id, path)
-				telesub.Duplicates++
-				if tcb.deletedList[telesub.id] == nil {
-					tcb.deletedList[telesub.id] = pathSet{datapath: present{}}
-				} else {
-					tcb.deletedList[telesub.id][datapath] = present{}
-				}
-				tcb.readyToUpdate[telesub.id] = telesub
 			}
 		}
 	}
@@ -322,13 +328,13 @@ type telemetrySubscription struct {
 	_suppressRedundant bool
 	_heartbeatInterval uint64
 
-	eventque     chan *telemetryUpdateEvent
-	replacedList *trie.Trie
-	deletedList  *trie.Trie
-	started      bool
-	stop         chan struct{}
-	isPolling    bool
-	allpaths     []string
+	eventque       chan *telemetryUpdateEvent
+	replacedList   *trie.Trie
+	deletedList    *trie.Trie
+	started        bool
+	stop           chan struct{}
+	isPolling      bool
+	subscribedPath []string
 
 	// // https://github.com/openconfig/gnmi/issues/45 - QoSMarking seems to be deprecated
 	// Qos              *pb.QOSMarking           `json:"qos,omitempty"`          // DSCP marking to be used.

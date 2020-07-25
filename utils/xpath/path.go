@@ -86,24 +86,29 @@ func ToSchemaPath(xpath string) (string, error) {
 	return strings.Join(schemaElememts, "/"), nil
 }
 
-// ToSchemaSlicePath - returns the sliced schema path of the input xpath
-func ToSchemaSlicePath(xpath string) ([]string, error) {
-	xpathElements, err := ParseStringPath(xpath)
-	if err != nil {
-		return nil, err
-	}
-	var schemaElememts []string
-	for _, elem := range xpathElements {
-		switch v := elem.(type) {
-		case string:
-			schemaElememts = append(schemaElememts, v)
-		case map[string]string:
-			// skip keys
-		default:
-			return nil, fmt.Errorf("wrong data type: %T", v)
+// ToSchemaSlicePath - returns the sliced schema path and whether equal or not of the input sliced xpath. And
+func ToSchemaSlicePath(xpath []string) ([]string, bool) {
+	isEqual := true
+	schemaElememts := make([]string, 0, len(xpath))
+	for _, x := range xpath {
+		xpathElements, err := ParseStringPath(x)
+		if err != nil {
+			return nil, false
+		}
+		for _, elem := range xpathElements {
+			switch v := elem.(type) {
+			case string:
+				schemaElememts = append(schemaElememts, v)
+			case map[string]string:
+				// skip keys
+				isEqual = false
+			default:
+				return nil, false
+			}
 		}
 	}
-	return schemaElememts, nil
+
+	return schemaElememts, isEqual
 }
 
 // ToXPATH - returns XPATH string converted from gNMI Path
