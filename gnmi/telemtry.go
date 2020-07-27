@@ -18,11 +18,14 @@ import (
 )
 
 type telemetryID uint64
-type present struct{}
-type pathSet map[string]present
+type present struct {
+	duplicates uint32
+}
+type pathSet map[string]*present
 
 type telemetryUpdateEvent struct {
 	updatedroot  ygot.GoStruct
+	createdList  pathSet
 	replacedList pathSet
 	deletedList  pathSet
 }
@@ -31,6 +34,7 @@ type telemetryCtrl struct {
 	// map[uint]*telemetrySubscription: uint = is subscription.id
 	lookupTeleSub map[string]map[telemetryID]*telemetrySubscription
 	readyToUpdate map[telemetryID]*telemetrySubscription
+	createdList   map[telemetryID]pathSet // paths
 	replacedList  map[telemetryID]pathSet // paths
 	deletedList   map[telemetryID]pathSet // paths
 	mutex         sync.RWMutex
@@ -40,6 +44,7 @@ func newTelemetryCB() *telemetryCtrl {
 	return &telemetryCtrl{
 		lookupTeleSub: map[string]map[telemetryID]*telemetrySubscription{},
 		readyToUpdate: map[telemetryID]*telemetrySubscription{},
+		createdList:   map[telemetryID]pathSet{},
 		replacedList:  map[telemetryID]pathSet{},
 		deletedList:   map[telemetryID]pathSet{},
 	}
@@ -52,7 +57,6 @@ func (tcb *telemetryCtrl) registerTelemetry(m *model.Model, telesub *telemetrySu
 		fullpath := utils.GNMIFullPath(telesub.Prefix, path)
 		allpaths, ok := m.FindAllPaths(fullpath)
 		if ok {
-			telesub.subscribedPath = allpaths
 			for _, p := range allpaths {
 				subgroup, ok := tcb.lookupTeleSub[p]
 				if !ok || subgroup == nil {
@@ -83,6 +87,7 @@ func (tcb *telemetryCtrl) OnChangeStarted(changes ygot.GoStruct) {
 	tcb.mutex.RLock()
 	defer tcb.mutex.RUnlock()
 	tcb.readyToUpdate = map[telemetryID]*telemetrySubscription{}
+	tcb.createdList = map[telemetryID]pathSet{}
 	tcb.replacedList = map[telemetryID]pathSet{}
 	tcb.deletedList = map[telemetryID]pathSet{}
 }
@@ -103,8 +108,16 @@ func (tcb *telemetryCtrl) OnChangeCreated(slicepath []string, changes ygot.GoStr
 				}
 				glog.Infof("telemetry[%d][%d].onchange(created).matched.path(%s)",
 					telesub.sessionid, telesub.id, path)
-				telesub.Duplicates++
 				tcb.readyToUpdate[telesub.id] = telesub
+				if tcb.createdList[telesub.id] == nil {
+					tcb.createdList[telesub.id] = pathSet{datapath: &present{duplicates: 1}}
+				} else {
+					if p, ok := tcb.createdList[telesub.id][datapath]; !ok {
+						tcb.createdList[telesub.id][datapath] = &present{duplicates: 1}
+					} else {
+						p.duplicates++
+					}
+				}
 			}
 		}
 	}
@@ -120,8 +133,16 @@ func (tcb *telemetryCtrl) OnChangeCreated(slicepath []string, changes ygot.GoStr
 					}
 					glog.Infof("telemetry[%d][%d].onchange(created).matched.path(%s)",
 						telesub.sessionid, telesub.id, path)
-					telesub.Duplicates++
 					tcb.readyToUpdate[telesub.id] = telesub
+					if tcb.createdList[telesub.id] == nil {
+						tcb.createdList[telesub.id] = pathSet{datapath: &present{duplicates: 1}}
+					} else {
+						if p, ok := tcb.createdList[telesub.id][datapath]; !ok {
+							tcb.createdList[telesub.id][datapath] = &present{duplicates: 1}
+						} else {
+							p.duplicates++
+						}
+					}
 				}
 			}
 		}
@@ -144,13 +165,17 @@ func (tcb *telemetryCtrl) OnChangeReplaced(slicepath []string, changes ygot.GoSt
 				}
 				glog.Infof("telemetry[%d][%d].onchange(replaced).matched.path(%s)",
 					telesub.sessionid, telesub.id, path)
-				telesub.Duplicates++
-				if tcb.replacedList[telesub.id] == nil {
-					tcb.replacedList[telesub.id] = pathSet{datapath: present{}}
-				} else {
-					tcb.replacedList[telesub.id][datapath] = present{}
-				}
 				tcb.readyToUpdate[telesub.id] = telesub
+				if tcb.replacedList[telesub.id] == nil {
+					tcb.replacedList[telesub.id] = pathSet{datapath: &present{duplicates: 1}}
+				} else {
+					if p, ok := tcb.replacedList[telesub.id][datapath]; !ok {
+						tcb.replacedList[telesub.id][datapath] = &present{duplicates: 1}
+					} else {
+						p.duplicates++
+						fmt.Println("p.duplicates++", p.duplicates)
+					}
+				}
 			}
 		}
 	}
@@ -166,13 +191,16 @@ func (tcb *telemetryCtrl) OnChangeReplaced(slicepath []string, changes ygot.GoSt
 					}
 					glog.Infof("telemetry[%d][%d].onchange(replaced).matched.path(%s)",
 						telesub.sessionid, telesub.id, path)
-					telesub.Duplicates++
-					if tcb.replacedList[telesub.id] == nil {
-						tcb.replacedList[telesub.id] = pathSet{datapath: present{}}
-					} else {
-						tcb.replacedList[telesub.id][datapath] = present{}
-					}
 					tcb.readyToUpdate[telesub.id] = telesub
+					if tcb.replacedList[telesub.id] == nil {
+						tcb.replacedList[telesub.id] = pathSet{datapath: &present{duplicates: 1}}
+					} else {
+						if p, ok := tcb.replacedList[telesub.id][datapath]; !ok {
+							tcb.replacedList[telesub.id][datapath] = &present{duplicates: 1}
+						} else {
+							p.duplicates++
+						}
+					}
 				}
 			}
 		}
@@ -195,13 +223,16 @@ func (tcb *telemetryCtrl) OnChangeDeleted(slicepath []string) {
 				}
 				glog.Infof("telemetry[%d][%d].onchange(deleted).matched.path(%s)",
 					telesub.sessionid, telesub.id, path)
-				telesub.Duplicates++
-				if tcb.deletedList[telesub.id] == nil {
-					tcb.deletedList[telesub.id] = pathSet{datapath: present{}}
-				} else {
-					tcb.deletedList[telesub.id][datapath] = present{}
-				}
 				tcb.readyToUpdate[telesub.id] = telesub
+				if tcb.deletedList[telesub.id] == nil {
+					tcb.deletedList[telesub.id] = pathSet{datapath: &present{duplicates: 1}}
+				} else {
+					if p, ok := tcb.deletedList[telesub.id][datapath]; !ok {
+						tcb.deletedList[telesub.id][datapath] = &present{duplicates: 1}
+					} else {
+						p.duplicates++
+					}
+				}
 			}
 		}
 	}
@@ -217,13 +248,16 @@ func (tcb *telemetryCtrl) OnChangeDeleted(slicepath []string) {
 					}
 					glog.Infof("telemetry[%d][%d].onchange(deleted).matched.path(%s)",
 						telesub.sessionid, telesub.id, path)
-					telesub.Duplicates++
-					if tcb.deletedList[telesub.id] == nil {
-						tcb.deletedList[telesub.id] = pathSet{datapath: present{}}
-					} else {
-						tcb.deletedList[telesub.id][datapath] = present{}
-					}
 					tcb.readyToUpdate[telesub.id] = telesub
+					if tcb.deletedList[telesub.id] == nil {
+						tcb.deletedList[telesub.id] = pathSet{datapath: &present{duplicates: 1}}
+					} else {
+						if p, ok := tcb.deletedList[telesub.id][datapath]; !ok {
+							tcb.deletedList[telesub.id][datapath] = &present{duplicates: 1}
+						} else {
+							p.duplicates++
+						}
+					}
 				}
 			}
 		}
@@ -237,12 +271,14 @@ func (tcb *telemetryCtrl) OnChangeFinished(changes ygot.GoStruct) {
 	for telesubid, telesub := range tcb.readyToUpdate {
 		if telesub.eventque != nil {
 			telesub.eventque <- &telemetryUpdateEvent{
+				createdList:  tcb.createdList[telesubid],
 				replacedList: tcb.replacedList[telesubid],
 				deletedList:  tcb.deletedList[telesubid],
 				updatedroot:  changes,
 			}
 		}
 		delete(tcb.readyToUpdate, telesubid)
+		delete(tcb.createdList, telesubid)
 		delete(tcb.replacedList, telesubid)
 		delete(tcb.deletedList, telesubid)
 	}
@@ -319,8 +355,7 @@ type telemetrySubscription struct {
 	SampleInterval    uint64                   `json:"sample_interval,omitempty"`   // ns between samples in SAMPLE mode.
 	SuppressRedundant bool                     `json:"suppress_redundant,omitempty"`
 	HeartbeatInterval uint64                   `json:"heartbeat_interval,omitempty"`
-	Duplicates        uint32                   `json:"duplicates,omitempty"` // Number of coalesced duplicates.
-
+	Duplicates        map[string]uint32        `json:"duplicates,omitempty"` // Number of coalesced duplicates.
 	// internal data
 	session            *telemetrySession
 	_subscriptionMode  pb.SubscriptionMode
@@ -328,13 +363,13 @@ type telemetrySubscription struct {
 	_suppressRedundant bool
 	_heartbeatInterval uint64
 
-	eventque       chan *telemetryUpdateEvent
-	replacedList   *trie.Trie
-	deletedList    *trie.Trie
-	started        bool
-	stop           chan struct{}
-	isPolling      bool
-	subscribedPath []string
+	eventque     chan *telemetryUpdateEvent
+	createdList  *trie.Trie
+	replacedList *trie.Trie
+	deletedList  *trie.Trie
+	started      bool
+	stop         chan struct{}
+	isPolling    bool
 
 	// // https://github.com/openconfig/gnmi/issues/45 - QoSMarking seems to be deprecated
 	// Qos              *pb.QOSMarking           `json:"qos,omitempty"`          // DSCP marking to be used.
@@ -385,11 +420,29 @@ func (telesub *telemetrySubscription) run(teleses *telemetrySession) {
 			glog.Infof("telemetry[%d][%d].event-received", telesub.sessionid, telesub.id)
 			switch telesub._subscriptionMode {
 			case pb.SubscriptionMode_ON_CHANGE, pb.SubscriptionMode_SAMPLE:
-				for p := range event.replacedList {
-					telesub.replacedList.Add(p, present{})
+				for p, d := range event.createdList {
+					if f, ok := telesub.createdList.Find(p); ok {
+						ps := f.Meta().(*present)
+						ps.duplicates++
+					} else {
+						telesub.createdList.Add(p, d)
+					}
 				}
-				for p := range event.deletedList {
-					telesub.deletedList.Add(p, present{})
+				for p, d := range event.replacedList {
+					if f, ok := telesub.replacedList.Find(p); ok {
+						ps := f.Meta().(*present)
+						ps.duplicates++
+					} else {
+						telesub.replacedList.Add(p, d)
+					}
+				}
+				for p, d := range event.deletedList {
+					if f, ok := telesub.deletedList.Find(p); ok {
+						ps := f.Meta().(*present)
+						ps.duplicates++
+					} else {
+						telesub.deletedList.Add(p, d)
+					}
 				}
 				if telesub._subscriptionMode == pb.SubscriptionMode_ON_CHANGE {
 					err := teleses.telemetryUpdate(telesub, event.updatedroot)
@@ -489,7 +542,7 @@ func getDeletes(telesub *telemetrySubscription, path *string, deleteOnly bool) (
 	return deletes, nil
 }
 
-func getUpdate(data *model.DataAndPath, encoding pb.Encoding) (*pb.Update, error) {
+func getUpdate(telesub *telemetrySubscription, data *model.DataAndPath, encoding pb.Encoding) (*pb.Update, error) {
 	typedValue, err := ygot.EncodeTypedValue(data.Value, encoding)
 	if err != nil {
 		return nil, fmt.Errorf("encoding-error(%s)", err.Error())
@@ -501,7 +554,22 @@ func getUpdate(data *model.DataAndPath, encoding pb.Encoding) (*pb.Update, error
 	if err != nil {
 		return nil, fmt.Errorf("update-path-conversion-error(%s)", data.Path)
 	}
-	return &pb.Update{Path: datapath, Val: typedValue}, nil
+	var duplicates uint32
+	if telesub != nil {
+		paths := telesub.createdList.PrefixSearch(data.Path)
+		for _, p := range paths {
+			if n, ok := telesub.createdList.Find(p); ok {
+				duplicates += n.Meta().(*present).duplicates
+			}
+		}
+		paths = telesub.replacedList.PrefixSearch(data.Path)
+		for _, p := range paths {
+			if n, ok := telesub.replacedList.Find(p); ok {
+				duplicates += n.Meta().(*present).duplicates
+			}
+		}
+	}
+	return &pb.Update{Path: datapath, Val: typedValue, Duplicates: duplicates}, nil
 }
 
 // initTelemetryUpdate - Process and generate responses for a init update.
@@ -568,7 +636,7 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 				continue
 			}
 			for _, data := range datalist {
-				u, err := getUpdate(data, encoding)
+				u, err := getUpdate(nil, data, encoding)
 				if err != nil {
 					return status.Error(codes.Internal, err.Error())
 				}
@@ -667,7 +735,7 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 				continue
 			}
 			for _, data := range datalist {
-				u, err := getUpdate(data, encoding)
+				u, err := getUpdate(telesub, data, encoding)
 				if err != nil {
 					return status.Error(codes.Internal, err.Error())
 				}
@@ -733,6 +801,8 @@ func (teleses *telemetrySession) addStreamSubscription(
 		SampleInterval:    sampleInterval,
 		SuppressRedundant: suppressRedundant,
 		HeartbeatInterval: heartbeatInterval,
+		Duplicates:        make(map[string]uint32),
+		createdList:       trie.New(),
 		replacedList:      trie.New(),
 		deletedList:       trie.New(),
 	}
