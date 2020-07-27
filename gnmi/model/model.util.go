@@ -135,7 +135,7 @@ func (dpath *dataAndPath) getAllChildren(prefix string) ([]*dataAndPath, bool) {
 			}
 			// var schemaEntry *yang.Entry
 			// if i == 0 {
-			// 	schemaEntry = FindSchemaData(iter.Value())
+			// 	schemaEntry = FindSchema(iter.Value())
 			// 	if schemaEntry == nil {
 			// 		return []*dataAndPath{}, false
 			// 	}

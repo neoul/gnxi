@@ -604,10 +604,9 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 	if err := utils.ValidateGNMIPath(prefix); err != nil {
 		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := model.FindAllData(s.modeldata.GetRoot(), prefix)
+	toplist, ok := s.model.FindAllData(s.modeldata.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
-		_, ok = model.FindAllSchemaTypes(s.modeldata.GetRoot(), prefix)
-		if ok {
+		if ok = s.model.ValidatePathSchema(prefix); ok {
 			// data-missing is not an error in SubscribeRPC
 			// doest send any of messages ahead of the sync response.
 			return teleses.sendTelemetryUpdate(buildSyncResponse())
@@ -631,7 +630,7 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
 				return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-			datalist, ok := model.FindAllData(branch, path)
+			datalist, ok := s.model.FindAllData(branch, path)
 			if !ok || len(datalist) <= 0 {
 				continue
 			}
@@ -695,10 +694,9 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 	if err := utils.ValidateGNMIPath(prefix); err != nil {
 		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := model.FindAllData(updatedroot, prefix)
+	toplist, ok := s.model.FindAllData(updatedroot, prefix)
 	if !ok || len(toplist) <= 0 {
-		_, ok = model.FindAllSchemaTypes(updatedroot, prefix)
-		if ok {
+		if ok = s.model.ValidatePathSchema(prefix); ok {
 			// data-missing is not an error in SubscribeRPC
 			// doest send any of messages before sync response.
 			return teleses.sendTelemetryUpdate(buildSyncResponse())
@@ -730,7 +728,7 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
 				return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-			datalist, ok := model.FindAllData(branch, path)
+			datalist, ok := s.model.FindAllData(branch, path)
 			if !ok || len(datalist) <= 0 {
 				continue
 			}

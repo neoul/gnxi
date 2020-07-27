@@ -65,7 +65,6 @@ func TestCapabilities(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	modeldata := &pb.ModelData{}
 	jsonConfigRoot := `{
 		"openconfig-messages:messages": {
 			"config": {
@@ -120,40 +119,45 @@ func TestGet(t *testing.T) {
 		modelData   []*pb.ModelData
 		wantRetCode codes.Code
 		wantRespVal interface{}
-	}{{
-		desc: "get valid but non-existing node",
-		textPbPath: `
+	}{
+		{
+			desc: "get valid but non-existing node",
+			textPbPath: `
 			elem: <name: "system" >
 		`,
-		wantRetCode: codes.NotFound,
-	}, {
-		desc:        "root node",
-		wantRetCode: codes.OK,
-		wantRespVal: jsonConfigRoot,
-	}, {
-		desc: "get non-enum type",
-		textPbPath: `
+			wantRetCode: codes.NotFound,
+		},
+		{
+			desc:        "root node",
+			wantRetCode: codes.OK,
+			wantRespVal: jsonConfigRoot,
+		},
+		{
+			desc: "get non-enum type",
+			textPbPath: `
 					elem: <name: "messages" >
 					elem: <name: "state" >
 					elem: <name: "message" >
 					elem: <name: "priority" >
 				`,
-		wantRetCode: codes.OK,
-		wantRespVal: uint64(10),
-	}, {
-		desc: "get enum type",
-		textPbPath: `
+			wantRetCode: codes.OK,
+			wantRespVal: uint64(10),
+		},
+		{
+			desc: "get enum type",
+			textPbPath: `
 					elem: <name: "messages" >
 					elem: <name: "state" >
 					elem: <name: "severity" >
 				`,
-		wantRetCode: codes.OK,
-		wantRespVal: "ERROR",
-	}, {
-		desc:        "root child node",
-		textPbPath:  `elem: <name: "interfaces" >`,
-		wantRetCode: codes.OK,
-		wantRespVal: `{
+			wantRetCode: codes.OK,
+			wantRespVal: "ERROR",
+		},
+		{
+			desc:        "root child node",
+			textPbPath:  `elem: <name: "interfaces" >`,
+			wantRetCode: codes.OK,
+			wantRespVal: `{
 						"openconfig-interfaces:interface": [
 							{
 								"name": "p1",
@@ -179,16 +183,17 @@ func TestGet(t *testing.T) {
 							}
 						]
 					}`,
-	}, {
-		desc: "node with attribute",
-		textPbPath: `
+		},
+		{
+			desc: "node with attribute",
+			textPbPath: `
 								elem: <name: "interfaces" >
 								elem: <
 									name: "interface"
 									key: <key: "name" value: "p1" >
 								>`,
-		wantRetCode: codes.OK,
-		wantRespVal: `{
+			wantRetCode: codes.OK,
+			wantRespVal: `{
 				"openconfig-interfaces:name": "p1",
 				"openconfig-interfaces:config": {
 					"name": "p1",
@@ -199,9 +204,10 @@ func TestGet(t *testing.T) {
 					"enabled": true
 				}
 			}`,
-	}, {
-		desc: "node with attribute in its parent",
-		textPbPath: `
+		},
+		{
+			desc: "node with attribute in its parent",
+			textPbPath: `
 								elem: <name: "interfaces" >
 								elem: <
 									name: "interface"
@@ -209,22 +215,24 @@ func TestGet(t *testing.T) {
 								>
 								elem: <name: "config" >
 								elem: <name: "type" >`,
-		wantRetCode: codes.OK,
-		wantRespVal: `ethernetCsmacd`,
-	}, {
-		desc: "ref leaf node",
-		textPbPath: `
+			wantRetCode: codes.OK,
+			wantRespVal: `ethernetCsmacd`,
+		},
+		{
+			desc: "ref leaf node",
+			textPbPath: `
 								elem: <name: "interfaces" >
 								elem: <
 									name: "interface"
 									key: <key: "name" value: "p1" >
 								>
 								elem: <name: "name" >`,
-		wantRetCode: codes.OK,
-		wantRespVal: "p1",
-	}, {
-		desc: "regular leaf node",
-		textPbPath: `
+			wantRetCode: codes.OK,
+			wantRespVal: "p1",
+		},
+		{
+			desc: "regular leaf node",
+			textPbPath: `
 								elem: <name: "interfaces" >
 								elem: <
 									name: "interface"
@@ -232,33 +240,37 @@ func TestGet(t *testing.T) {
 								>
 								elem: <name: "config" >
 								elem: <name: "name" >`,
-		wantRetCode: codes.OK,
-		wantRespVal: "p1",
-	}, {
-		desc: "non-existing node: wrong path name",
-		textPbPath: `
+			wantRetCode: codes.OK,
+			wantRespVal: "p1",
+		},
+		{
+			desc: "non-existing node: wrong path name",
+			textPbPath: `
 								elem: <name: "interfaces" >
 								elem: <
 									name: "interface"
 									key: <key: "name" value: "p1" >
 								>
 								elem: <name: "bar" >`,
-		wantRetCode: codes.NotFound,
-	}, {
-		desc: "non-existing node: wrong path attribute",
-		textPbPath: `
+			wantRetCode: codes.NotFound,
+		},
+		{
+			desc: "non-existing node: wrong path attribute",
+			textPbPath: `
 								elem: <name: "interfaces" >
 								elem: <
 									name: "interface"
 									key: <key: "foo" value: "p1" >
 								>
 								elem: <name: "name" >`,
-		wantRetCode: codes.NotFound,
-	}, {
-		desc:        "use of model data not supported",
-		modelData:   []*pb.ModelData{modeldata},
-		wantRetCode: codes.Unimplemented,
-	}}
+			wantRetCode: codes.NotFound,
+		},
+		{
+			desc:        "use of model data not supported",
+			modelData:   []*pb.ModelData{&pb.ModelData{}},
+			wantRetCode: codes.Unimplemented,
+		},
+	}
 
 	for _, td := range tds {
 		t.Run(td.desc, func(t *testing.T) {

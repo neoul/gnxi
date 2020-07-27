@@ -129,8 +129,8 @@ func (m *Model) GetModelData() []*gpb.ModelData {
 	return m.modelData
 }
 
-// FindSchemaData - find the yang.Entry for schema info.
-func (m *Model) FindSchemaData(t reflect.Type) *yang.Entry {
+// FindSchema - find the yang.Entry for schema info.
+func (m *Model) FindSchema(t reflect.Type) *yang.Entry {
 	if t == reflect.TypeOf(nil) {
 		return nil
 	}
@@ -141,6 +141,11 @@ func (m *Model) FindSchemaData(t reflect.Type) *yang.Entry {
 		}
 	}
 	return m.SchemaTree[t.Name()]
+}
+
+// FindSchemaByName - find the yang.Entry for schema info.
+func (m *Model) FindSchemaByName(parent *yang.Entry, name string) *yang.Entry {
+	return parent.Dir[name]
 }
 
 // FindAllPaths - finds all XPaths against to the gNMI Path that has wildcard
@@ -223,7 +228,7 @@ func (m *Model) findAllPaths(sp pathFinder, elems []*gpb.PathElem) []pathFinder 
 	keys := elem.GetKey()
 	if keys != nil && len(keys) > 0 {
 		if ydb.IsTypeMap(csp.t) {
-			schema := m.FindSchemaData(csp.t.Elem())
+			schema := m.FindSchema(csp.t.Elem())
 			if schema != nil {
 				npath := ""
 				knamelist := strings.Split(schema.Key, " ")
@@ -245,4 +250,86 @@ func (m *Model) findAllPaths(sp pathFinder, elems []*gpb.PathElem) []pathFinder 
 	}
 
 	return m.findAllPaths(csp, elems[1:])
+}
+
+// FindAllData - finds all data nodes matched to the gNMI Path.
+func (m *Model) FindAllData(gs ygot.GoStruct, path *gpb.Path) ([]*DataAndPath, bool) {
+	t := reflect.TypeOf(gs)
+	entry := m.FindSchema(t)
+	if entry == nil {
+		return []*DataAndPath{}, false
+	}
+
+	elems := path.GetElem()
+	if len(elems) <= 0 {
+		dataAndGNMIPath := &DataAndPath{
+			Value: gs, Path: "/",
+		}
+		return []*DataAndPath{dataAndGNMIPath}, true
+	}
+	for _, e := range elems {
+		entry = m.FindSchemaByName(entry, e.Name)
+		if entry == nil {
+			return []*DataAndPath{}, false
+		}
+		if e.Key != nil {
+			for kname := range e.Key {
+				if !strings.Contains(entry.Key, kname) {
+					return []*DataAndPath{}, false
+				}
+			}
+		}
+	}
+	v := reflect.ValueOf(gs)
+	datapath := &dataAndPath{Value: v, Key: []string{""}}
+	founds := findAllData(datapath, elems)
+	// fmt.Println(founds)
+	num := len(founds)
+	if num <= 0 {
+		return []*DataAndPath{}, false
+	}
+	i := 0
+	rvalues := make([]*DataAndPath, num)
+	for _, each := range founds {
+		if each.Value.CanInterface() {
+			dataAndGNMIPath := &DataAndPath{
+				Value: each.Value.Interface(),
+				Path:  strings.Join(each.Key, "/"),
+			}
+			rvalues[i] = dataAndGNMIPath
+			i++
+		}
+	}
+	if i > 0 {
+		return rvalues[:i], true
+	}
+	return []*DataAndPath{}, false
+}
+
+// ValidatePathSchema - validates all schema of the gNMI Path.
+func (m *Model) ValidatePathSchema(path *gpb.Path) bool {
+	t := m.StructRootType
+	entry := m.FindSchema(t)
+	if entry == nil {
+		return false
+	}
+
+	elems := path.GetElem()
+	if len(elems) <= 0 {
+		return true
+	}
+	for _, e := range elems {
+		entry = m.FindSchemaByName(entry, e.Name)
+		if entry == nil {
+			return false
+		}
+		if e.Key != nil {
+			for kname := range e.Key {
+				if !strings.Contains(entry.Key, kname) {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }

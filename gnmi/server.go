@@ -172,10 +172,9 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	if err := utils.ValidateGNMIPath(prefix); err != nil {
 		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := model.FindAllData(s.modeldata.GetRoot(), prefix)
+	toplist, ok := s.model.FindAllData(s.modeldata.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
-		_, ok = model.FindAllSchemaTypes(s.modeldata.GetRoot(), prefix)
-		if ok {
+		if ok = s.model.ValidatePathSchema(prefix); ok {
 			return nil, status.Errorf(codes.NotFound, "data-missing(%v)", xpath.ToXPATH(prefix))
 		}
 		return nil, status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPATH(prefix))
@@ -192,7 +191,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
 				return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-			datalist, ok := model.FindAllData(branch, path)
+			datalist, ok := s.model.FindAllData(branch, path)
 			if !ok || len(datalist) <= 0 {
 				continue
 			}
