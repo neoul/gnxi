@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package gnmi
+package server
 
 import (
 	"encoding/json"
@@ -343,7 +343,7 @@ func runTestGet(t *testing.T, s *Server, textPbPath string, wantRetCode codes.Co
 func TestGetWithYdb(t *testing.T) {
 
 	flag.Set("disable-ydb", "true")
-	yamlData, err := ioutil.ReadFile("model/data/sample.yaml")
+	yamlData, err := ioutil.ReadFile("../model/data/sample.yaml")
 	if err != nil {
 		glog.Exitf("error in reading config file: %v", err)
 	}

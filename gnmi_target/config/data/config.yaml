@@ -1,0 +1,9 @@
+
+# gnmi server configuration
+bind_address: ":10161"
+startup:
+  file: "../gnmi/model/data/sample.yaml"
+tls:
+  ca-cert: "../pki/ca.crt"
+  server-cert: "../pki/server.crt"
+  server-key: "../pki/server.key"

@@ -21,13 +21,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/neoul/gnxi/gnmi"
 	"github.com/neoul/gnxi/gnmi/model"
+	gnmiserver "github.com/neoul/gnxi/gnmi/server"
+	"github.com/neoul/gnxi/gnmi_target/config"
 
 	"github.com/neoul/gnxi/utils/credentials"
 	"github.com/neoul/gnxi/utils/netsession"
@@ -36,21 +38,42 @@ import (
 )
 
 var (
-	bindAddr       = flag.String("bind_address", ":10161", "Bind to address:port or just :port")
-	jsonConfigFile = flag.String("json-config", "", "IETF JSON file for target startup config")
-	yamlConfigFile = flag.String("yaml-config", "", "YAML file for target startup configuration")
+	bindAddr         = flag.String("bind_address", ":10161", "Bind to address:port or just :port")
+	startupFile      = flag.String("startup", "", "IETF JSON file or YAML file for target startup data")
+	serverConfigFile = flag.String("config", "", "YAML configuration file")
 )
 
 type server struct {
-	*gnmi.Server
+	*gnmiserver.Server
+	*config.Config
 }
 
-func newServer(model *model.Model, jsonConfig []byte, yamlConfig []byte) (*server, error) {
-	s, err := gnmi.NewServer(model, jsonConfig, yamlConfig)
+func newServer(model *model.Model) (*server, error) {
+	c, err := config.NewConfig(*serverConfigFile)
 	if err != nil {
 		return nil, err
 	}
-	return &server{Server: s}, nil
+	var startupJSON []byte
+	var startupYAML []byte
+	if c.Startup.File != "" {
+		var err error
+		var startup []byte
+		startup, err = ioutil.ReadFile(c.Startup.File)
+		if err != nil {
+			glog.Exitf("error in reading config file: %v", err)
+		}
+		if strings.HasSuffix(c.Startup.File, "yaml") ||
+			strings.HasSuffix(c.Startup.File, "yml") {
+			startupYAML = startup
+		} else {
+			startupJSON = startup
+		}
+	}
+	s, err := gnmiserver.NewServer(model, startupJSON, startupYAML)
+	if err != nil {
+		return nil, err
+	}
+	return &server{Server: s, Config: c}, nil
 }
 
 func main() {
@@ -66,39 +89,23 @@ func main() {
 	}
 
 	flag.Parse()
-
-	opts := credentials.ServerCredentials()
-	// opts = append(opts, grpc.UnaryInterceptor(credentials.UnaryInterceptor))
-	// opts = append(opts, grpc.StreamInterceptor(credentials.StreamInterceptor))
-	g := grpc.NewServer(opts...)
-
-	var jsonData []byte
-	if *jsonConfigFile != "" {
-		var err error
-		jsonData, err = ioutil.ReadFile(*jsonConfigFile)
-		if err != nil {
-			glog.Exitf("error in reading config file: %v", err)
-		}
-	}
-	var yamlData []byte
-	if *yamlConfigFile != "" {
-		var err error
-		yamlData, err = ioutil.ReadFile(*yamlConfigFile)
-		if err != nil {
-			glog.Exitf("error in reading config file: %v", err)
-		}
-	}
-	s, err := newServer(model, jsonData, yamlData)
+	s, err := newServer(model)
 	if err != nil {
 		glog.Exitf("error in creating gnmid: %v", err)
 	}
 	defer s.Close()
 
+	opts := credentials.ServerCredentials(
+		&s.TLS.CAFile, &s.TLS.CertFile, &s.TLS.KeyFile,
+		&s.TLS.Insecure, &s.NoTLS)
+	// opts = append(opts, grpc.UnaryInterceptor(credentials.UnaryInterceptor))
+	// opts = append(opts, grpc.StreamInterceptor(credentials.StreamInterceptor))
+	g := grpc.NewServer(opts...)
 	pb.RegisterGNMIServer(g, s)
 	reflection.Register(g)
 
-	glog.Infof("starting to listen on %s", *bindAddr)
-	listen, err := netsession.Listen("tcp", *bindAddr, s)
+	glog.Infof("starting to listen on %s", s.Config.BindAddress)
+	listen, err := netsession.Listen("tcp", s.Config.BindAddress, s)
 	glog.Info("starting to serve")
 	if err := g.Serve(listen); err != nil {
 		glog.Exitf("failed to serve: %v", err)

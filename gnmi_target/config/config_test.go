@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"reflect"
@@ -19,10 +19,7 @@ func TestNewConfig(t *testing.T) {
 			name: "config creating",
 			args: args{},
 			want: &Config{
-				Address: struct {
-					IPAddress string "yaml:\"ip-address,omitempty\""
-					Port      uint16 "yaml:\"port,omitempty\""
-				}{Port: defaultServerPort},
+				BindAddress: ":10161",
 				// GNMI: struct {
 				// 	SupportedEncoding []string "yaml:\"supported-encoding,omitempty\""
 				// }{
@@ -36,10 +33,7 @@ func TestNewConfig(t *testing.T) {
 				configfile: "data/config.yaml",
 			},
 			want: &Config{
-				Address: struct {
-					IPAddress string "yaml:\"ip-address,omitempty\""
-					Port      uint16 "yaml:\"port,omitempty\""
-				}{Port: defaultServerPort},
+				BindAddress: ":10161",
 				// GNMI: struct {
 				// 	SupportedEncoding []string "yaml:\"supported-encoding,omitempty\""
 				// }{
@@ -50,9 +44,9 @@ func TestNewConfig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got, err := newConfig(tt.args.configfile); err != nil || !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("newConfig() = %v, %v", got, err)
-				t.Errorf("newConfig() want %v", tt.want)
+			if got, err := NewConfig(tt.args.configfile); err != nil || !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewConfig() = %v, %v", got, err)
+				t.Errorf("NewConfig() want %v", tt.want)
 			}
 		})
 	}

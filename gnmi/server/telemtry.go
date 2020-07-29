@@ -1,4 +1,4 @@
-package gnmi
+package server
 
 import (
 	"fmt"

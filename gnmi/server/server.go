@@ -14,7 +14,7 @@ limitations under the License.
 */
 
 // Package gnmi implements a gnmi server to mock a device with YANG models.
-package gnmi
+package server
 
 import (
 	"bytes"

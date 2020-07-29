@@ -36,7 +36,7 @@ var (
 	cert           = flag.String("cert", "", "Certificate file.")
 	key            = flag.String("key", "", "Private key file.")
 	insecure       = flag.Bool("insecure", false, "Skip TLS validation.")
-	notls          = flag.Bool("notls", false, "Disable TLS validation. If true, no need to specify TLS related options.")
+	notls          = flag.Bool("no-tls", false, "Disable TLS validation. If true, no need to specify TLS related options.")
 	authorizedUser = userCredentials{}
 	usernameKey    = "username"
 	passwordKey    = "password"
@@ -64,18 +64,27 @@ func (a *userCredentials) RequireTransportSecurity() bool {
 }
 
 // LoadCertificates loads certificates from file.
-func LoadCertificates() ([]tls.Certificate, *x509.CertPool) {
-	if *ca == "" || *cert == "" || *key == "" {
+func LoadCertificates(cafile, certfile, keyfile *string) ([]tls.Certificate, *x509.CertPool) {
+	if cafile == nil {
+		cafile = ca
+	}
+	if certfile == nil {
+		certfile = cert
+	}
+	if keyfile == nil {
+		keyfile = key
+	}
+	if *cafile == "" || *certfile == "" || *keyfile == "" {
 		log.Exit("-ca -cert and -key must be set with file locations")
 	}
 
-	certificate, err := tls.LoadX509KeyPair(*cert, *key)
+	certificate, err := tls.LoadX509KeyPair(*certfile, *keyfile)
 	if err != nil {
-		log.Exitf("could not load client key pair: %s", err)
+		log.Exitf("could not load key pair: %s", err)
 	}
 
 	certPool := x509.NewCertPool()
-	caFile, err := ioutil.ReadFile(*ca)
+	caFile, err := ioutil.ReadFile(*cafile)
 	if err != nil {
 		log.Exitf("could not read CA certificate: %s", err)
 	}
@@ -99,7 +108,7 @@ func ClientCredentials(server string) []grpc.DialOption {
 		if *insecure {
 			tlsConfig.InsecureSkipVerify = true
 		} else {
-			certificates, certPool := LoadCertificates()
+			certificates, certPool := LoadCertificates(nil, nil, nil)
 			tlsConfig.ServerName = server
 			tlsConfig.Certificates = certificates
 			tlsConfig.RootCAs = certPool
@@ -114,14 +123,20 @@ func ClientCredentials(server string) []grpc.DialOption {
 }
 
 // ServerCredentials generates gRPC ServerOptions for existing credentials.
-func ServerCredentials() []grpc.ServerOption {
-	if *notls {
+func ServerCredentials(cafile, certfile, keyfile *string, insecureSkipVerify, noTLS *bool) []grpc.ServerOption {
+	if noTLS == nil {
+		noTLS = notls
+	}
+	if insecureSkipVerify == nil {
+		insecureSkipVerify = insecure
+	}
+	if *noTLS {
 		return []grpc.ServerOption{}
 	}
 
-	certificates, certPool := LoadCertificates()
+	certificates, certPool := LoadCertificates(cafile, certfile, keyfile)
 
-	if *insecure {
+	if *insecureSkipVerify {
 		return []grpc.ServerOption{grpc.Creds(credentials.NewTLS(&tls.Config{
 			ClientAuth:   tls.VerifyClientCertIfGiven,
 			Certificates: certificates,

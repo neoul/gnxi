@@ -1,8 +1,0 @@
-
-# gnmi server configuration
-
-address:
-  port: 10161
-gnmi:
-  supported-encoding:
-  - JSON_IETF
