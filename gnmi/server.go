@@ -43,7 +43,7 @@ import (
 
 var (
 	supportedEncodings = []pb.Encoding{pb.Encoding_JSON, pb.Encoding_JSON_IETF}
-	disableBundling    = flag.Bool("disable-update-bundling", false, "Disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1")
+	DisableBundling    = flag.Bool("disable-update-bundling", false, "Disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1")
 )
 
 // Server struct maintains the data structure for device config and implements the interface of gnmi server. It supports Capabilities, Get, and Set APIs.
@@ -57,8 +57,8 @@ var (
 //
 // For a real device, apply the config changes to the hardware in the callback function.
 // Arguments:
-//		newConfig: new root config to be applied on the device.
-// func callback(newConfig ygot.ValidatedGoStruct) error {
+//		newRoot: new root config to be applied on the device.
+// func callback(newRoot ygot.ValidatedGoStruct) error {
 //		// Apply the config to your device and return nil if success. return error if fails.
 //		//
 //		// Do something ...

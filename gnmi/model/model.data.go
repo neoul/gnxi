@@ -21,8 +21,8 @@ import (
 )
 
 var (
-	// Disable YDB update procedure
-	disableYdbChannel = flag.Bool("disable-ydb", false, "Disable YAML Datablock interface")
+	// DisableYdbChannel - Disable YDB update procedure
+	DisableYdbChannel = flag.Bool("disable-ydb", false, "Disable YAML Datablock interface")
 	pbRootPath        = &gpb.Path{}
 )
 
@@ -115,7 +115,7 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallb
 		utils.PrintStruct(root)
 	}
 
-	if !(*disableYdbChannel) {
+	if !(*DisableYdbChannel) {
 		err := mdata.block.Connect("uss://openconfig", "pub")
 		if err != nil {
 			mdata.block.Close()
@@ -176,12 +176,12 @@ func (mdata *ModelData) SetDelete(jsonTree map[string]interface{}, prefix, path 
 
 	// Apply the validated operation to the config tree and device.
 	if pathDeleted {
-		newConfig, err := mdata.toGoStruct(jsonTree)
+		newRoot, err := mdata.toGoStruct(jsonTree)
 		if err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 		if mdata.callback != nil {
-			if applyErr := execConfigCallback(mdata.callback, newConfig); applyErr != nil {
+			if applyErr := execConfigCallback(mdata.callback, newRoot); applyErr != nil {
 				if rollbackErr := execConfigCallback(mdata.callback, mdata.dataroot); rollbackErr != nil {
 					return nil, status.Errorf(codes.Internal, "error in rollback the failed operation (%v): %v", applyErr, rollbackErr)
 				}
@@ -271,14 +271,14 @@ func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op g
 			jsonTree[k] = v
 		}
 	}
-	newConfig, err := mdata.toGoStruct(jsonTree)
+	newRoot, err := mdata.toGoStruct(jsonTree)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	// Apply the validated operation to the device.
 	if mdata.callback != nil {
-		if applyErr := execConfigCallback(mdata.callback, newConfig); applyErr != nil {
+		if applyErr := execConfigCallback(mdata.callback, newRoot); applyErr != nil {
 			if rollbackErr := execConfigCallback(mdata.callback, mdata.dataroot); rollbackErr != nil {
 				return nil, status.Errorf(codes.Internal, "error in rollback the failed operation (%v): %v", applyErr, rollbackErr)
 			}
