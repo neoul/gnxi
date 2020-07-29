@@ -3,12 +3,11 @@ package model
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"reflect"
 	"strconv"
 
-	"github.com/neoul/gnxi/utils"
+	"github.com/neoul/gnxi/utilities"
 	"github.com/neoul/libydb/go/ydb"
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/value"
@@ -21,9 +20,7 @@ import (
 )
 
 var (
-	// DisableYdbChannel - Disable YDB update procedure
-	DisableYdbChannel = flag.Bool("disable-ydb", false, "Disable YAML Datablock interface")
-	pbRootPath        = &gpb.Path{}
+	pbRootPath = &gpb.Path{}
 )
 
 // ModelData - the data instance for the model
@@ -83,7 +80,7 @@ func NewGoStruct(m *Model, jsonData []byte) (ygot.ValidatedGoStruct, error) {
 }
 
 // NewModelData creates a ValidatedGoStruct of this model from jsonData. If jsonData is nil, creates an empty GoStruct.
-func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallback) (*ModelData, error) {
+func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallback, disableYdbChannel bool) (*ModelData, error) {
 	root, err := NewGoStruct(m, jsonData)
 	if err != nil {
 		return nil, err
@@ -112,10 +109,10 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallb
 		if err := execConfigCallback(mdata.callback, root); err != nil {
 			return nil, err
 		}
-		utils.PrintStruct(root)
+		utilities.PrintStruct(root)
 	}
 
-	if !(*DisableYdbChannel) {
+	if !disableYdbChannel {
 		err := mdata.block.Connect("uss://openconfig", "pub")
 		if err != nil {
 			mdata.block.Close()
@@ -144,7 +141,7 @@ func (mdata *ModelData) SetDelete(jsonTree map[string]interface{}, prefix, path 
 	// Update json tree of the device config
 	var curNode interface{} = jsonTree
 	pathDeleted := false
-	fullPath := utils.GNMIFullPath(prefix, path)
+	fullPath := utilities.GNMIFullPath(prefix, path)
 	schema := mdata.model.SchemaTreeRoot
 	for i, elem := range fullPath.Elem { // Delete sub-tree or leaf node.
 		node, ok := curNode.(map[string]interface{})
@@ -200,7 +197,7 @@ func (mdata *ModelData) SetDelete(jsonTree map[string]interface{}, prefix, path 
 // callback function to apply the operation to the device hardware.
 func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op gpb.UpdateResult_Operation, prefix, path *gpb.Path, val *gpb.TypedValue) (*gpb.UpdateResult, error) {
 	// Validate the operation.
-	fullPath := utils.GNMIFullPath(prefix, path)
+	fullPath := utilities.GNMIFullPath(prefix, path)
 	emptyNode, stat := ygotutils.NewNode(mdata.model.StructRootType, fullPath)
 	if stat.GetCode() != int32(cpb.Code_OK) {
 		return nil, status.Errorf(codes.NotFound, "path %v is not found in the config structure: %d %s", fullPath, stat.GetCode(), stat.GetMessage())

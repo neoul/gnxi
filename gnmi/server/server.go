@@ -13,14 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package gnmi implements a gnmi server to mock a device with YANG models.
+// Package server implements a gnmi server to mock a device with YANG models.
 package server
 
 import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -43,7 +42,6 @@ import (
 
 var (
 	supportedEncodings = []pb.Encoding{pb.Encoding_JSON, pb.Encoding_JSON_IETF}
-	DisableBundling    = flag.Bool("disable-update-bundling", false, "Disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1")
 )
 
 // Server struct maintains the data structure for device config and implements the interface of gnmi server. It supports Capabilities, Get, and Set APIs.
@@ -64,28 +62,38 @@ var (
 //		// Do something ...
 // }
 type Server struct {
+	disableBundling bool
+	disableYDB      bool
+	syncRequired    []string
+
 	model     *model.Model
 	modeldata *model.ModelData
 	*telemetryCtrl
-	Sessions   map[string]*Session
+	sessions   map[string]*Session
 	alias      map[string]*pb.Alias
 	useAliases bool
 }
 
+// Config - the gNMI server configuration
+type Config struct {
+}
+
 // NewServer creates an instance of Server with given json config.
-func NewServer(m *model.Model, jsonData []byte, yamlData []byte) (*Server, error) {
+func NewServer(m *model.Model, startup []byte, startupIsJSON, disableBundling, disableYDB bool) (*Server, error) {
+	var err error
 	s := &Server{
+		syncRequired:  []string{},
 		model:         m,
 		alias:         map[string]*pb.Alias{},
-		Sessions:      map[string]*Session{},
+		sessions:      map[string]*Session{},
 		telemetryCtrl: newTelemetryCB(),
 	}
-	mdata, err := model.NewModelData(m, jsonData, yamlData, s)
-	if err != nil {
-		return nil, err
+	if startupIsJSON {
+		s.modeldata, err = model.NewModelData(m, startup, nil, s, disableYDB)
+	} else {
+		s.modeldata, err = model.NewModelData(m, nil, startup, s, disableYDB)
 	}
-	s.modeldata = mdata
-	return s, nil
+	return s, err
 }
 
 // Close the connected YDB instance

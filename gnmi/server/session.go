@@ -67,7 +67,7 @@ var (
 // Started - netsession interface to receive the session started event
 func (s *Server) Started(local, remote net.Addr) {
 	remoteaddr := remote.String()
-	session, ok := s.Sessions[remoteaddr]
+	session, ok := s.sessions[remoteaddr]
 	if ok {
 		return
 	}
@@ -84,18 +84,18 @@ func (s *Server) Started(local, remote net.Addr) {
 		alias:              map[string]*pb.Alias{},
 		server:             s, SID: remoteaddr,
 	}
-	s.Sessions[remoteaddr] = session
+	s.sessions[remoteaddr] = session
 }
 
 // Closed - netsession interface to receive the session closed event
 func (s *Server) Closed(local, remote net.Addr) {
 	remoteaddr := remote.String()
-	delete(s.Sessions, remoteaddr)
+	delete(s.sessions, remoteaddr)
 }
 
 // updateSession - Updated and Validate the session user
 func (s *Server) updateSession(ctx context.Context, SID string) (*Session, error) {
-	session, ok := s.Sessions[SID]
+	session, ok := s.sessions[SID]
 	if !ok {
 		return nil, errInvalidSession
 	}
@@ -123,7 +123,7 @@ func (s *Server) getSession(ctx context.Context) (*Session, error) {
 	if !ok {
 		return nil, errMissingMetadata
 	}
-	session, ok := s.Sessions[peer]
+	session, ok := s.sessions[peer]
 	if !ok {
 		localaddr, remoteaddr, ok := utilities.QueryAddr(ctx)
 		if !ok {
@@ -131,7 +131,7 @@ func (s *Server) getSession(ctx context.Context) (*Session, error) {
 		}
 		s.Started(localaddr, remoteaddr)
 		s.updateSession(ctx, peer)
-		session, ok = s.Sessions[peer]
+		session, ok = s.sessions[peer]
 		if !ok {
 			return nil, errInvalidSession
 		}

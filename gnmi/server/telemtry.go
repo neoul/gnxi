@@ -575,7 +575,7 @@ func getUpdate(telesub *telemetrySubscription, data *model.DataAndPath, encoding
 // initTelemetryUpdate - Process and generate responses for a init update.
 func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) error {
 	s := teleses.server
-	bundling := !*DisableBundling
+	bundling := !s.disableBundling
 	subscriptionList := req.GetSubscribe()
 	subList := subscriptionList.GetSubscription()
 	updateOnly := subscriptionList.GetUpdatesOnly()
@@ -666,8 +666,7 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 	telesub.session.rlock()
 	defer telesub.session.runlock()
 	s := teleses.server
-	bundling := !*DisableBundling
-
+	bundling := !s.disableBundling
 	prefix := telesub.Prefix
 	encoding := telesub.Encoding
 	useAliases := telesub.UseAliases
