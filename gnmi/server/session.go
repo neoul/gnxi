@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/neoul/gnxi/utils"
+	"github.com/neoul/gnxi/utilities"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 	"golang.org/x/net/context"
 )
@@ -99,7 +99,7 @@ func (s *Server) updateSession(ctx context.Context, SID string) (*Session, error
 	if !ok {
 		return nil, errInvalidSession
 	}
-	m, ok := utils.GetMetadata(ctx)
+	m, ok := utilities.GetMetadata(ctx)
 	if !ok {
 		return nil, errMissingMetadata
 	}
@@ -119,13 +119,13 @@ func (s *Server) updateSession(ctx context.Context, SID string) (*Session, error
 
 // getSession - Updated and Validate the session user
 func (s *Server) getSession(ctx context.Context) (*Session, error) {
-	peer, ok := utils.QueryMetadata(ctx, "peer")
+	peer, ok := utilities.QueryMetadata(ctx, "peer")
 	if !ok {
 		return nil, errMissingMetadata
 	}
 	session, ok := s.Sessions[peer]
 	if !ok {
-		localaddr, remoteaddr, ok := utils.QueryAddr(ctx)
+		localaddr, remoteaddr, ok := utilities.QueryAddr(ctx)
 		if !ok {
 			return nil, errMissingMetadata
 		}

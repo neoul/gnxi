@@ -8,8 +8,8 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/neoul/gnxi/gnmi/model"
-	"github.com/neoul/gnxi/utils"
-	"github.com/neoul/gnxi/utils/xpath"
+	"github.com/neoul/gnxi/utilities"
+	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/trie"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
@@ -54,7 +54,7 @@ func (tcb *telemetryCtrl) registerTelemetry(m *model.Model, telesub *telemetrySu
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
 	for _, path := range telesub.Paths {
-		fullpath := utils.GNMIFullPath(telesub.Prefix, path)
+		fullpath := utilities.GNMIFullPath(telesub.Prefix, path)
 		allpaths, ok := m.FindAllPaths(fullpath)
 		if ok {
 			for _, p := range allpaths {
@@ -601,7 +601,7 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 	}
 	s.modeldata.RLock()
 	defer s.modeldata.RUnlock()
-	if err := utils.ValidateGNMIPath(prefix); err != nil {
+	if err := utilities.ValidateGNMIPath(prefix); err != nil {
 		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
 	toplist, ok := s.model.FindAllData(s.modeldata.GetRoot(), prefix)
@@ -627,7 +627,7 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 		}
 		for _, updateEntry := range subList {
 			path := updateEntry.Path
-			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
+			if err := utilities.ValidateGNMIFullPath(prefix, path); err != nil {
 				return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
 			datalist, ok := s.model.FindAllData(branch, path)
@@ -691,7 +691,7 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 	if updatedroot == nil {
 		updatedroot = s.modeldata.GetRoot()
 	}
-	if err := utils.ValidateGNMIPath(prefix); err != nil {
+	if err := utilities.ValidateGNMIPath(prefix); err != nil {
 		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
 	toplist, ok := s.model.FindAllData(updatedroot, prefix)
@@ -725,7 +725,7 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 		}
 
 		for _, path := range telesub.Paths {
-			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
+			if err := utilities.ValidateGNMIFullPath(prefix, path); err != nil {
 				return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
 			datalist, ok := s.model.FindAllData(branch, path)

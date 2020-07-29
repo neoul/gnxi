@@ -33,8 +33,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/neoul/gnxi/gnmi/model"
-	"github.com/neoul/gnxi/utils"
-	"github.com/neoul/gnxi/utils/xpath"
+	"github.com/neoul/gnxi/utilities"
+	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/openconfig/ygot/ygot"
 
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
@@ -169,7 +169,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	defer s.modeldata.RUnlock()
 
 	// each prefix + path ==> one notification message
-	if err := utils.ValidateGNMIPath(prefix); err != nil {
+	if err := utilities.ValidateGNMIPath(prefix); err != nil {
 		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
 	toplist, ok := s.model.FindAllData(s.modeldata.GetRoot(), prefix)
@@ -188,7 +188,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 			return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
 		}
 		for _, path := range paths {
-			if err := utils.ValidateGNMIFullPath(prefix, path); err != nil {
+			if err := utilities.ValidateGNMIFullPath(prefix, path); err != nil {
 				return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
 			datalist, ok := s.model.FindAllData(branch, path)
@@ -226,7 +226,7 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 	s.modeldata.Lock()
 	defer s.modeldata.Unlock()
 
-	utils.PrintProto(req)
+	utilities.PrintProto(req)
 
 	jsonTree, err := ygot.ConstructIETFJSON(s.modeldata.GetRoot(), &ygot.RFC7951JSONConfig{})
 	if err != nil {

@@ -25,8 +25,8 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"github.com/neoul/gnxi/utils"
-	"github.com/neoul/gnxi/utils/credentials"
+	"github.com/neoul/gnxi/utilities"
+	"github.com/neoul/gnxi/utilities/credentials"
 
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )
@@ -58,5 +58,5 @@ func main() {
 	}
 
 	fmt.Println("== capabilitiesResponse:")
-	utils.PrintProto(capResponse)
+	utilities.PrintProto(capResponse)
 }

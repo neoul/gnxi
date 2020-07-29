@@ -24,7 +24,7 @@ import (
 	"fmt"
 
 	"github.com/neoul/gnxi/gnoi/cert"
-	"github.com/neoul/gnxi/utils/entity"
+	"github.com/neoul/gnxi/utilities/entity"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )

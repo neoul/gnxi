@@ -31,14 +31,14 @@ import (
 	gnmiserver "github.com/neoul/gnxi/gnmi/server"
 	"github.com/neoul/gnxi/gnmi_target/config"
 
-	"github.com/neoul/gnxi/utils/credentials"
-	"github.com/neoul/gnxi/utils/netsession"
+	"github.com/neoul/gnxi/utilities/credentials"
+	"github.com/neoul/gnxi/utilities/netsession"
 
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
 var (
-	bindAddr         = flag.String("bind_address", ":10161", "Bind to address:port or just :port")
+	bindAddr         = flag.String("bind_address", ":10161", "Bind to address:port")
 	startupFile      = flag.String("startup", "", "IETF JSON file or YAML file for target startup data")
 	serverConfigFile = flag.String("config", "", "YAML configuration file")
 )

@@ -3,7 +3,7 @@ package credentials
 
 import (
 	"github.com/golang/glog"
-	"github.com/neoul/gnxi/utils"
+	"github.com/neoul/gnxi/utilities"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -37,7 +37,7 @@ func validateUser(m map[string]string) error {
 
 // UnaryInterceptor - used to validate authentication
 func UnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	meta, ok := utils.GetMetadata(ctx)
+	meta, ok := utilities.GetMetadata(ctx)
 	if !ok {
 		return nil, errMissingMetadata
 	}
@@ -77,7 +77,7 @@ func newWrappedStream(s grpc.ServerStream) grpc.ServerStream {
 
 // StreamInterceptor - used to validate authentication
 func StreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	meta, ok := utils.GetMetadata(ss.Context())
+	meta, ok := utilities.GetMetadata(ss.Context())
 	if !ok {
 		return errMissingMetadata
 	}

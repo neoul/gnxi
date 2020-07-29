@@ -1,5 +1,5 @@
 // Package utils implements utilities for gnxi.
-package utils
+package utilities
 
 import (
 	"flag"
