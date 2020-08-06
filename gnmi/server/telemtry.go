@@ -697,8 +697,8 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 	if !ok || len(toplist) <= 0 {
 		if ok = s.model.ValidatePathSchema(prefix); ok {
 			// data-missing is not an error in SubscribeRPC
-			// doest send any of messages before sync response.
-			return teleses.sendTelemetryUpdate(buildSyncResponse())
+			// doest send any of messages.
+			return nil
 		}
 		return status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPATH(prefix))
 	}

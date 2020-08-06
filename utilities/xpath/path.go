@@ -66,7 +66,7 @@ func ToGNMIPath(xpath string) (*pb.Path, error) {
 	return &pb.Path{Elem: pbPathElements}, nil
 }
 
-// ToSchemaPath - returns the schema path of the xpath
+// ToSchemaPath - returns the schema path of the data xpath
 func ToSchemaPath(xpath string) (string, error) {
 	xpathElements, err := ParseStringPath(xpath)
 	if err != nil {
