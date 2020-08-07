@@ -17,8 +17,14 @@ func ValidateGNMIPath(path *gpb.Path) error {
 
 // ValidateGNMIFullPath - check the validation of the gNMI full path
 func ValidateGNMIFullPath(prefix, path *gpb.Path) error {
+	if path == nil {
+		return fmt.Errorf("no path input")
+	}
 	if path.GetElem() == nil && path.GetElement() != nil {
 		return fmt.Errorf("deprecated path element")
+	}
+	if prefix == nil {
+		return nil
 	}
 	oPre, oPath := prefix.GetOrigin(), path.GetOrigin()
 	switch {

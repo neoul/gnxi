@@ -599,6 +599,12 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 		// prefix = nil
 		// alias = xxx
 	}
+	paths := make([]*pb.Path, 0, len(subList))
+	for _, updateEntry := range subList {
+		paths = append(paths, updateEntry.Path)
+	}
+	s.modeldata.SyncUpdatePathData(prefix, paths)
+
 	s.modeldata.RLock()
 	defer s.modeldata.RUnlock()
 	if err := utilities.ValidateGNMIPath(prefix); err != nil {
@@ -684,6 +690,7 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 		// prefix = nil
 		// alias = xxx
 	}
+	s.modeldata.SyncUpdatePathData(prefix, telesub.Paths)
 
 	s.modeldata.RLock()
 	defer s.modeldata.RUnlock()

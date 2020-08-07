@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"time"
 
 	"github.com/neoul/gnxi/utilities"
 	"github.com/neoul/libydb/go/ydb"
+	"github.com/neoul/trie"
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/value"
 	"github.com/openconfig/goyang/pkg/yang"
@@ -20,16 +22,22 @@ import (
 )
 
 var (
-	pbRootPath = &gpb.Path{}
+	pbRootPath                    = &gpb.Path{}
+	defaultSyncRequiredSchemaPath = []string{
+		"/interfaces/interface/state/counters",
+		"/interfaces/interface/time-sensitive-networking/state/statistics",
+		"/interfaces/interface/radio-over-ethernet/state/statistics",
+	}
 )
 
 // ModelData - the data instance for the model
 type ModelData struct {
-	dataroot    ygot.ValidatedGoStruct // the current data tree of the Model
-	updatedroot ygot.GoStruct          // a fake data tree to represent the changed data.
-	callback    DataCallback
-	block       *ydb.YDB
-	model       *Model
+	dataroot     ygot.ValidatedGoStruct // the current data tree of the Model
+	updatedroot  ygot.GoStruct          // a fake data tree to represent the changed data.
+	callback     DataCallback
+	block        *ydb.YDB
+	syncRequired *trie.Trie
+	model        *Model
 }
 
 // Lock - Lock the YDB instance for use.
@@ -87,9 +95,13 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallb
 	}
 
 	mdata := &ModelData{
-		dataroot: root,
-		callback: callback,
-		model:    m,
+		dataroot:     root,
+		callback:     callback,
+		model:        m,
+		syncRequired: trie.New(),
+	}
+	for _, p := range defaultSyncRequiredSchemaPath {
+		mdata.syncRequired.Add(p, true)
 	}
 
 	if jsonData != nil {
@@ -133,6 +145,39 @@ func (mdata *ModelData) GetRoot() ygot.ValidatedGoStruct {
 func (mdata *ModelData) ChangeRoot(root ygot.ValidatedGoStruct) error {
 	mdata.dataroot = root
 	return mdata.block.RelaceTargetStruct(root, false)
+}
+
+// SyncUpdatePathData - synchronizes the data in the path
+func (mdata *ModelData) SyncUpdatePathData(prefix *gpb.Path, paths []*gpb.Path) {
+	m := mdata.model
+	t := m.StructRootType
+	entry := m.FindSchema(t)
+	if entry == nil {
+		return
+	}
+	syncPaths := make([]string, 0, 8)
+	for _, path := range paths {
+		var elems []*gpb.PathElem
+		if prefix != nil {
+			elems = append(prefix.GetElem(), path.GetElem()...)
+		} else {
+			elems = path.GetElem()
+		}
+		if len(elems) > 0 {
+			paths := m.findSchemaPath("", entry, elems)
+			for _, path := range paths {
+				requiredPath := mdata.syncRequired.PrefixSearch(path)
+				syncPaths = append(syncPaths, requiredPath...)
+				if rpath, ok := mdata.syncRequired.FindLongestMatch(path); ok {
+					syncPaths = append(syncPaths, rpath)
+				}
+			}
+		} else {
+			requiredPath := mdata.syncRequired.PrefixSearch("/")
+			syncPaths = append(syncPaths, requiredPath...)
+		}
+	}
+	mdata.block.SyncTo(time.Second*5, true, syncPaths...)
 }
 
 // SetDelete deletes the path from the json tree if the path exists. If success,

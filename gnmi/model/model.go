@@ -22,6 +22,8 @@ import (
 	"strings"
 
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
+	"github.com/neoul/gnxi/utilities"
+	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/openconfig/goyang/pkg/yang"
 	"github.com/openconfig/ygot/ygot"
@@ -58,7 +60,7 @@ func NewModel() *Model {
 			break
 		}
 	}
-	return &Model{
+	m := &Model{
 		name:            name,
 		modelData:       gostruct.ΓModelData,
 		StructRootType:  reflect.TypeOf((*gostruct.Device)(nil)),
@@ -67,6 +69,8 @@ func NewModel() *Model {
 		JSONUnmarshaler: gostruct.Unmarshal,
 		EnumData:        gostruct.ΛEnum,
 	}
+
+	return m
 }
 
 // NewCustomModel returns an instance of Model struct.
@@ -86,7 +90,7 @@ func NewCustomModel(
 			break
 		}
 	}
-	return &Model{
+	m := &Model{
 		name:            name,
 		modelData:       modelData,
 		StructRootType:  structRootType,
@@ -95,6 +99,7 @@ func NewCustomModel(
 		JSONUnmarshaler: jSONUnmarshaler,
 		EnumData:        enumData,
 	}
+	return m
 }
 
 // SupportedModels returns a list of supported models.
@@ -146,6 +151,32 @@ func (m *Model) FindSchema(t reflect.Type) *yang.Entry {
 // FindSchemaByName - find the yang.Entry for schema info.
 func (m *Model) FindSchemaByName(parent *yang.Entry, name string) *yang.Entry {
 	return parent.Dir[name]
+}
+
+// FindSchemaByPath - find the yang.Entry for schema info.
+func (m *Model) FindSchemaByPath(path string) (*yang.Entry, error) {
+	slicedPath, err := xpath.ParseStringPath(path)
+	if err != nil {
+		return nil, err
+	}
+	entry := m.SchemaTreeRoot
+	for _, elem := range slicedPath {
+		switch v := elem.(type) {
+		case string:
+			entry = entry.Dir[v]
+			if entry == nil {
+				return nil, fmt.Errorf("no schema entry found for '%s'", v)
+			}
+		case map[string]string:
+			// skip keys
+		default:
+			return nil, fmt.Errorf("wrong data type: %v(%T)", v, v)
+		}
+	}
+	if entry == nil {
+		return nil, fmt.Errorf("no schema entry found")
+	}
+	return entry, nil
 }
 
 // FindAllPaths - finds all XPaths against to the gNMI Path that has wildcard
@@ -332,4 +363,69 @@ func (m *Model) ValidatePathSchema(path *gpb.Path) bool {
 		}
 	}
 	return true
+}
+
+// FindSchemaPaths - validates all schema of the gNMI Path.
+func (m *Model) FindSchemaPaths(prefix, path *gpb.Path) ([]string, bool) {
+	t := m.StructRootType
+	entry := m.FindSchema(t)
+	if entry == nil {
+		return nil, false
+	}
+	if err := utilities.ValidateGNMIFullPath(prefix, path); err != nil {
+		return nil, false
+	}
+	var elems []*gpb.PathElem
+	if prefix != nil {
+		elems = append(prefix.GetElem(), path.GetElem()...)
+	} else {
+		elems = path.GetElem()
+	}
+	if len(elems) == 0 {
+		return []string{"/"}, true
+	}
+	paths := m.findSchemaPath("", entry, elems)
+	// for i, p := range paths {
+	// 	fmt.Println(i, p)
+	// }
+	return paths, true
+}
+
+func (m *Model) findSchemaPath(prefix string, parent *yang.Entry, elems []*gpb.PathElem) []string {
+	if len(elems) == 0 {
+		return []string{prefix}
+	}
+	if parent.Dir == nil || len(parent.Dir) == 0 {
+		return nil
+	}
+	e := elems[0]
+	if e.Name == "*" {
+		founds := make([]string, 0, 8)
+		for cname, centry := range parent.Dir {
+			founds = append(founds,
+				m.findSchemaPath(prefix+"/"+cname, centry, elems[1:])...)
+		}
+		return founds
+	} else if e.Name == "..." {
+		founds := make([]string, 0, 16)
+		for cname, centry := range parent.Dir {
+			founds = append(founds,
+				m.findSchemaPath(prefix+"/"+cname, centry, elems[1:])...)
+			founds = append(founds,
+				m.findSchemaPath(prefix+"/"+cname, centry, elems[0:])...)
+		}
+		return founds
+	}
+	entry := m.FindSchemaByName(parent, e.Name)
+	if entry == nil {
+		return nil
+	}
+	if e.Key != nil {
+		for kname := range e.Key {
+			if !strings.Contains(entry.Key, kname) {
+				return nil
+			}
+		}
+	}
+	return m.findSchemaPath(prefix+"/"+e.Name, entry, elems[1:])
 }

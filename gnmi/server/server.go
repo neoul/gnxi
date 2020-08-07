@@ -44,6 +44,10 @@ var (
 	supportedEncodings = []pb.Encoding{pb.Encoding_JSON, pb.Encoding_JSON_IETF}
 )
 
+// func init() {
+// 	ydb.SetInternalLog(ydb.LogDebug)
+// }
+
 // Server struct maintains the data structure for device config and implements the interface of gnmi server. It supports Capabilities, Get, and Set APIs.
 // Typical usage:
 //	g := grpc.NewServer()
@@ -172,6 +176,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 
 	prefix := req.GetPrefix()
 	paths := req.GetPath()
+	s.modeldata.SyncUpdatePathData(prefix, paths)
 
 	s.modeldata.RLock()
 	defer s.modeldata.RUnlock()
