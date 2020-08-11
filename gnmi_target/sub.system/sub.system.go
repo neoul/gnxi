@@ -167,6 +167,7 @@ func marshal(s *IfStats) []byte {
 	format := `
 interfaces:
   interface[name=%s]:
+    name: %s
     state:
       name: %s
       counters:
@@ -179,7 +180,7 @@ interfaces:
         out-errors: %d
         out-discards: %d
 `
-	outstr := fmt.Sprintf(format, s.Name, s.Name,
+	outstr := fmt.Sprintf(format, s.Name, s.Name, s.Name,
 		s.RxPacket,
 		s.RxBytes,
 		s.RxError,

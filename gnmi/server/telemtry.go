@@ -656,7 +656,7 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 				}
 			}
 		}
-		if bundling {
+		if bundling && len(updates) > 0 {
 			err = teleses.sendTelemetryUpdate(
 				buildSubscribeResponse(prefix, alias, updates, nil))
 			if err != nil {

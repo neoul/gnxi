@@ -33,22 +33,20 @@ func FindAllData(gs ygot.GoStruct, path *gpb.Path) ([]*DataAndPath, bool) {
 	if num <= 0 {
 		return []*DataAndPath{}, false
 	}
-	i := 0
-	rvalues := make([]*DataAndPath, num)
+	rvalues := make([]*DataAndPath, 0, num)
 	for _, each := range founds {
 		if each.Value.CanInterface() {
 			dataAndGNMIPath := &DataAndPath{
 				Value: each.Value.Interface(),
 				Path:  strings.Join(each.Key, "/"),
 			}
-			rvalues[i] = dataAndGNMIPath
-			i++
+			rvalues = append(rvalues, dataAndGNMIPath)
 		}
 	}
-	if i > 0 {
-		return rvalues[:i], true
+	if len(rvalues) > 0 {
+		return rvalues, true
 	}
-	return []*DataAndPath{}, false
+	return rvalues, false
 }
 
 // dataAndPath - used to retrieve of the data and path from ygot go structure internally.
@@ -77,8 +75,7 @@ func (dpath *dataAndPath) getAllChildren(prefix string) ([]*dataAndPath, bool) {
 	case reflect.Struct:
 		length := dpath.Value.NumField()
 		more := []*dataAndPath{}
-		rval := make([]*dataAndPath, length)
-		rlen := 0
+		rval := make([]*dataAndPath, 0, length)
 		for i := 0; i < length; i++ {
 			sft := dpath.Value.Type().Field(i)
 			fv := dpath.Value.Field(i)
@@ -101,20 +98,17 @@ func (dpath *dataAndPath) getAllChildren(prefix string) ([]*dataAndPath, bool) {
 					more = append(more, _rval...)
 				}
 			} else {
-
-				rval[rlen] = &dataAndPath{Value: fv, Key: appendCopy(dpath.Key, key)}
-				rlen++
+				rval = append(rval, &dataAndPath{Value: fv, Key: appendCopy(dpath.Key, key)})
 			}
 		}
 		ok := false
-		if rlen > 0 || len(more) > 0 {
+		if len(rval) > 0 || len(more) > 0 {
 			ok = true
 		}
-		return append(rval[:rlen], more...), ok
+		return append(rval, more...), ok
 	case reflect.Map:
-		rval := make([]*dataAndPath, dpath.Value.Len())
+		rval := make([]*dataAndPath, 0, dpath.Value.Len())
 		iter := dpath.Value.MapRange()
-		i := 0
 		for iter.Next() {
 			// [FIXME] - Need to check another way to get the key of a list.
 			ev := iter.Value()
@@ -127,7 +121,7 @@ func (dpath *dataAndPath) getAllChildren(prefix string) ([]*dataAndPath, bool) {
 			}
 			keymap, err := listStruct.ΛListKeyMap()
 			if err != nil {
-				return []*dataAndPath{}, false
+				continue
 			}
 			key := prefix
 			for kname, kvalue := range keymap {
@@ -141,14 +135,13 @@ func (dpath *dataAndPath) getAllChildren(prefix string) ([]*dataAndPath, bool) {
 			// 	}
 			// }
 			// key, err := ydb.StrKeyGen(iter.Key(), schemaEntry.Name, schemaEntry.Key)
-			if err != nil {
-				return []*dataAndPath{}, false
-			}
-			rval[i] = &dataAndPath{Value: iter.Value(), Key: appendCopy(dpath.Key, key)}
-			i++
+			// if err != nil {
+			// 	continue
+			// }
+			rval = append(rval, &dataAndPath{Value: iter.Value(), Key: appendCopy(dpath.Key, key)})
 		}
 		ok := false
-		if i > 0 {
+		if len(rval) > 0 {
 			ok = true
 		}
 		return rval, ok
@@ -505,20 +498,22 @@ func getAllSchemaPaths(sp pathFinder) ([]pathFinder, bool) {
 		sp.t = sp.t.Elem()
 		return getAllSchemaPaths(sp)
 	case reflect.Struct:
+		found := false
 		length := sp.t.NumField()
-		rtype := make([]pathFinder, 0)
+		rtype := make([]pathFinder, 0, length)
 		for i := 0; i < length; i++ {
 			sft := sp.t.Field(i)
 			st := sft.Type
 			if st != nt && ydb.IsStartedWithUpper(sft.Name) {
 				p, ok := sft.Tag.Lookup("path")
 				if ok {
+					found = true
 					np := *sp.path + "/" + p
 					rtype = append(rtype, pathFinder{t: st, path: &np})
 				}
 			}
 		}
-		return rtype, true
+		return rtype, found
 	case reflect.Map, reflect.Slice:
 		sp.t = sp.t.Elem()
 		return []pathFinder{sp}, true
