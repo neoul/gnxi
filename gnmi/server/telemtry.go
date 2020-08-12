@@ -603,7 +603,8 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 	for _, updateEntry := range subList {
 		paths = append(paths, updateEntry.Path)
 	}
-	s.modeldata.SyncUpdatePathData(prefix, paths)
+	syncPaths := s.modeldata.GetSyncUpdatePath(prefix, paths)
+	s.modeldata.RunSyncUpdate(time.Second*3, syncPaths)
 
 	s.modeldata.RLock()
 	defer s.modeldata.RUnlock()
@@ -690,7 +691,8 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 		// prefix = nil
 		// alias = xxx
 	}
-	s.modeldata.SyncUpdatePathData(prefix, telesub.Paths)
+	syncPaths := s.modeldata.GetSyncUpdatePath(prefix, telesub.Paths)
+	s.modeldata.RunSyncUpdate(time.Second*3, syncPaths)
 
 	s.modeldata.RLock()
 	defer s.modeldata.RUnlock()

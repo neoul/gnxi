@@ -176,7 +176,8 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 
 	prefix := req.GetPrefix()
 	paths := req.GetPath()
-	s.modeldata.SyncUpdatePathData(prefix, paths)
+	syncPaths := s.modeldata.GetSyncUpdatePath(prefix, paths)
+	s.modeldata.RunSyncUpdate(time.Second*3, syncPaths)
 
 	s.modeldata.RLock()
 	defer s.modeldata.RUnlock()
@@ -305,7 +306,7 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 			select {
 			case resp, ok := <-telemetrychannel:
 				if ok {
-					fmt.Println(proto.MarshalTextString(resp))
+					// fmt.Println(proto.MarshalTextString(resp))
 					stream.Send(resp)
 				} else {
 					return
@@ -327,7 +328,7 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 			}
 			return err
 		}
-		fmt.Println(proto.MarshalTextString(req))
+		// fmt.Println(proto.MarshalTextString(req))
 		err = processSR(teleses, req)
 		if err != nil {
 			return err

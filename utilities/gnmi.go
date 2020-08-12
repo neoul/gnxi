@@ -56,3 +56,23 @@ func GNMIFullPath(prefix, path *gpb.Path) *gpb.Path {
 	}
 	return fullPath
 }
+
+// IsSchemaPath - returns the path is schema path.
+func IsSchemaPath(prefix, path *gpb.Path) bool {
+	isSchemaPath := true
+	if prefix != nil {
+		for _, e := range prefix.Elem {
+			if e.Key != nil && len(e.Key) > 0 {
+				isSchemaPath = false
+			}
+		}
+	}
+	if path != nil {
+		for _, e := range path.Elem {
+			if e.Key != nil && len(e.Key) > 0 {
+				isSchemaPath = false
+			}
+		}
+	}
+	return isSchemaPath
+}

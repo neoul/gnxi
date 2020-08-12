@@ -2,6 +2,7 @@ package model
 
 import (
 	"testing"
+	"time"
 
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
 )
@@ -74,8 +75,8 @@ func TestModel_ValidatePathAndSync(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mdata.SyncUpdatePathData(tt.args.prefix, tt.args.paths)
-
+			syncPaths := mdata.GetSyncUpdatePath(tt.args.prefix, tt.args.paths)
+			mdata.RunSyncUpdate(time.Second*10, syncPaths)
 		})
 	}
 }

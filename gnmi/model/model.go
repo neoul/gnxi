@@ -179,6 +179,24 @@ func (m *Model) FindSchemaByPath(path string) (*yang.Entry, error) {
 	return entry, nil
 }
 
+// func FindSchemaByPath(m *Model, schemaPath string) *yang.Entry {
+// 	entry := m.FindSchema(m.StructRootType)
+// 	if entry == nil {
+// 		return nil
+// 	}
+// 	spaths := strings.Split(schemaPath, "/")
+// 	for _, p := range spaths {
+// 		if entry.Dir == nil || len(entry.Dir) == 0 {
+// 			return nil
+// 		}
+// 		entry := m.FindSchemaByName(entry, p)
+// 		if entry == nil {
+// 			return nil
+// 		}
+// 	}
+// 	return entry
+// }
+
 // FindAllPaths - finds all XPaths against to the gNMI Path that has wildcard
 func (m *Model) FindAllPaths(path *gpb.Path) ([]string, bool) {
 	elems := path.GetElem()
@@ -428,4 +446,123 @@ func (m *Model) findSchemaPath(prefix string, parent *yang.Entry, elems []*gpb.P
 		}
 	}
 	return m.findSchemaPath(prefix+"/"+e.Name, entry, elems[1:])
+}
+
+func (m *Model) findDataPath(prefix string, parent *yang.Entry, elems []*gpb.PathElem) []string {
+	if len(elems) == 0 {
+		return []string{prefix}
+	}
+	if parent.Dir == nil || len(parent.Dir) == 0 {
+		return nil
+	}
+	e := elems[0]
+	if e.Name == "*" {
+		founds := make([]string, 0, 8)
+		for cname, centry := range parent.Dir {
+			founds = append(founds,
+				m.findDataPath(prefix+"/"+cname, centry, elems[1:])...)
+		}
+		return founds
+	} else if e.Name == "..." {
+		founds := make([]string, 0, 16)
+		for cname, centry := range parent.Dir {
+			founds = append(founds,
+				m.findDataPath(prefix+"/"+cname, centry, elems[1:])...)
+			founds = append(founds,
+				m.findDataPath(prefix+"/"+cname, centry, elems[0:])...)
+		}
+		return founds
+	}
+	name := e.Name
+	entry := m.FindSchemaByName(parent, e.Name)
+	if entry == nil {
+		return nil
+	}
+	if e.Key != nil {
+		for kname := range e.Key {
+			if !strings.Contains(entry.Key, kname) {
+				return nil
+			}
+		}
+		knames := strings.Split(entry.Key, " ")
+		for _, kname := range knames {
+			if kval, ok := e.Key[kname]; ok {
+				if kval == "*" {
+					break
+				}
+				name = fmt.Sprintf("%s[%s=%s]", name, kname, kval)
+			} else {
+				break
+			}
+		}
+	}
+	return m.findDataPath(prefix+"/"+name, entry, elems[1:])
+}
+
+type dataAndSchemaPath struct {
+	schemaPath *string
+	dataPath   *string
+}
+
+func (m *Model) findSchemaAndDataPath(path dataAndSchemaPath, parent *yang.Entry, elems []*gpb.PathElem) []dataAndSchemaPath {
+	if len(elems) == 0 {
+		return []dataAndSchemaPath{path}
+	}
+	if parent.Dir == nil || len(parent.Dir) == 0 {
+		return nil
+	}
+	e := elems[0]
+	if e.Name == "*" {
+		founds := make([]dataAndSchemaPath, 0, 8)
+		for cname, centry := range parent.Dir {
+			datapath := *path.dataPath + "/" + cname
+			schemapath := *path.schemaPath + "/" + cname
+			path.dataPath = &datapath
+			path.schemaPath = &schemapath
+			founds = append(founds,
+				m.findSchemaAndDataPath(path, centry, elems[1:])...)
+		}
+		return founds
+	} else if e.Name == "..." {
+		founds := make([]dataAndSchemaPath, 0, 16)
+		for cname, centry := range parent.Dir {
+			datapath := *path.dataPath + "/" + cname
+			schemapath := *path.schemaPath + "/" + cname
+			path.dataPath = &datapath
+			path.schemaPath = &schemapath
+			founds = append(founds,
+				m.findSchemaAndDataPath(path, centry, elems[1:])...)
+			founds = append(founds,
+				m.findSchemaAndDataPath(path, centry, elems[0:])...)
+		}
+		return founds
+	}
+	name := e.Name
+	entry := m.FindSchemaByName(parent, e.Name)
+	if entry == nil {
+		return nil
+	}
+	if e.Key != nil {
+		for kname := range e.Key {
+			if !strings.Contains(entry.Key, kname) {
+				return nil
+			}
+		}
+		knames := strings.Split(entry.Key, " ")
+		for _, kname := range knames {
+			if kval, ok := e.Key[kname]; ok {
+				if kval == "*" {
+					break
+				}
+				name = fmt.Sprintf("%s[%s=%s]", name, kname, kval)
+			} else {
+				break
+			}
+		}
+	}
+	datapath := *path.dataPath + "/" + name
+	schemapath := *path.schemaPath + "/" + e.Name
+	path.dataPath = &datapath
+	path.schemaPath = &schemapath
+	return m.findSchemaAndDataPath(path, entry, elems[1:])
 }

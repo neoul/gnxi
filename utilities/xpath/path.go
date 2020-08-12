@@ -140,3 +140,24 @@ func ToXPATH(p *pb.Path) string {
 	}
 	return strings.Join(pe, "/")
 }
+
+// PathElemToXPATH - returns XPATH string converted from gNMI Path
+func PathElemToXPATH(elem []*pb.PathElem) string {
+	if elem == nil {
+		return ""
+	}
+
+	pe := []string{""}
+	for _, e := range elem {
+		if e.GetKey() != nil {
+			ke := []string{e.GetName()}
+			for k, kv := range e.GetKey() {
+				ke = append(ke, fmt.Sprintf("[%s=%s]", k, kv))
+			}
+			pe = append(pe, strings.Join(ke, ""))
+		} else {
+			pe = append(pe, e.GetName())
+		}
+	}
+	return strings.Join(pe, "/")
+}

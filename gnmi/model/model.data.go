@@ -8,7 +8,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/neoul/gnxi/utilities"
+	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/neoul/trie"
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
@@ -101,7 +103,16 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallb
 		syncRequired: trie.New(),
 	}
 	for _, p := range defaultSyncRequiredSchemaPath {
-		mdata.syncRequired.Add(p, true)
+		entry, err := m.FindSchemaByPath(p)
+		if err != nil {
+			continue
+		}
+		sentries := []*yang.Entry{}
+		for entry != nil {
+			sentries = append(sentries, entry)
+			entry = entry.Parent
+		}
+		mdata.syncRequired.Add(p, sentries)
 	}
 
 	if jsonData != nil {
@@ -147,16 +158,22 @@ func (mdata *ModelData) ChangeRoot(root ygot.ValidatedGoStruct) error {
 	return mdata.block.RelaceTargetStruct(root, false)
 }
 
-// SyncUpdatePathData - synchronizes the data in the path
-func (mdata *ModelData) SyncUpdatePathData(prefix *gpb.Path, paths []*gpb.Path) {
-	m := mdata.model
-	t := m.StructRootType
-	entry := m.FindSchema(t)
-	if entry == nil {
-		return
+func buildSyncUpdatePath(entries []*yang.Entry, elems []*gpb.PathElem) string {
+	entrieslen := len(entries)
+	elemslen := len(elems)
+	if entrieslen > elemslen {
+		return xpath.PathElemToXPATH(elems)
 	}
+	return xpath.PathElemToXPATH(elems[:entrieslen])
+}
+
+// GetSyncUpdatePath - synchronizes the data in the path
+func (mdata *ModelData) GetSyncUpdatePath(prefix *gpb.Path, paths []*gpb.Path) []string {
+	m := mdata.model
+	entry := m.SchemaTreeRoot
 	syncPaths := make([]string, 0, 8)
 	for _, path := range paths {
+		// glog.Info(":::SynUpdate:::", xpath.ToXPATH(utilities.GNMIFullPath(prefix, path)))
 		var elems []*gpb.PathElem
 		if prefix != nil {
 			elems = append(prefix.GetElem(), path.GetElem()...)
@@ -164,12 +181,24 @@ func (mdata *ModelData) SyncUpdatePathData(prefix *gpb.Path, paths []*gpb.Path) 
 			elems = path.GetElem()
 		}
 		if len(elems) > 0 {
-			paths := m.findSchemaPath("", entry, elems)
-			for _, path := range paths {
-				requiredPath := mdata.syncRequired.PrefixSearch(path)
-				syncPaths = append(syncPaths, requiredPath...)
-				if rpath, ok := mdata.syncRequired.FindLongestMatch(path); ok {
-					syncPaths = append(syncPaths, rpath)
+			schemaPaths := m.findSchemaPath("", entry, elems)
+			for _, spath := range schemaPaths {
+				requiredPath := mdata.syncRequired.PrefixSearch(spath)
+				for _, rpath := range requiredPath {
+					if n, ok := mdata.syncRequired.Find(rpath); ok {
+						entires := n.Meta().([]*yang.Entry)
+						if entires != nil {
+							syncPaths = append(syncPaths, buildSyncUpdatePath(entires, elems))
+						}
+					}
+				}
+				if rpath, ok := mdata.syncRequired.FindLongestMatch(spath); ok {
+					if n, ok := mdata.syncRequired.Find(rpath); ok {
+						entires := n.Meta().([]*yang.Entry)
+						if entires != nil {
+							syncPaths = append(syncPaths, buildSyncUpdatePath(entires, elems))
+						}
+					}
 				}
 			}
 		} else {
@@ -177,7 +206,18 @@ func (mdata *ModelData) SyncUpdatePathData(prefix *gpb.Path, paths []*gpb.Path) 
 			syncPaths = append(syncPaths, requiredPath...)
 		}
 	}
-	mdata.block.SyncTo(time.Second*5, true, syncPaths...)
+	return syncPaths
+}
+
+// RunSyncUpdate - synchronizes & update the data in the path. It locks model data.
+func (mdata *ModelData) RunSyncUpdate(syncIgnoreTime time.Duration, syncPaths []string) {
+	if syncPaths == nil || len(syncPaths) == 0 {
+		return
+	}
+	for _, sp := range syncPaths {
+		glog.Infof("sync-update %s", sp)
+	}
+	mdata.block.SyncTo(syncIgnoreTime, true, syncPaths...)
 }
 
 // SetDelete deletes the path from the json tree if the path exists. If success,
