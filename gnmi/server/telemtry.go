@@ -420,6 +420,7 @@ func (telesub *telemetrySubscription) run(teleses *telemetrySession) {
 			glog.Infof("telemetry[%d][%d].event-received", telesub.sessionid, telesub.id)
 			switch telesub._subscriptionMode {
 			case pb.SubscriptionMode_ON_CHANGE, pb.SubscriptionMode_SAMPLE:
+				// glog.Info("replaced,deleted ", event.replacedList, event.deletedList)
 				for p, d := range event.createdList {
 					if f, ok := telesub.createdList.Find(p); ok {
 						ps := f.Meta().(*present)
@@ -450,6 +451,9 @@ func (telesub *telemetrySubscription) run(teleses *telemetrySession) {
 						glog.Errorf("telemetry[%d][%d].failed(%v)", telesub.sessionid, telesub.id, err)
 						return
 					}
+					telesub.createdList = trie.New()
+					telesub.replacedList = trie.New()
+					telesub.deletedList = trie.New()
 				}
 			}
 		case <-samplingTimer.C:
@@ -464,6 +468,7 @@ func (telesub *telemetrySubscription) run(teleses *telemetrySession) {
 					return
 				}
 			}
+			telesub.createdList = trie.New()
 			telesub.replacedList = trie.New()
 			telesub.deletedList = trie.New()
 		case <-heartbeatTimer.C:
@@ -473,6 +478,7 @@ func (telesub *telemetrySubscription) run(teleses *telemetrySession) {
 				glog.Errorf("telemetry[%d][%d].failed(%v)", telesub.sessionid, telesub.id, err)
 				return
 			}
+			telesub.createdList = trie.New()
 			telesub.replacedList = trie.New()
 			telesub.deletedList = trie.New()
 		case <-shutdown:
@@ -646,13 +652,15 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 				if err != nil {
 					return status.Error(codes.Internal, err.Error())
 				}
-				if bundling {
-					updates = append(updates, u)
-				} else if u != nil {
-					err = teleses.sendTelemetryUpdate(
-						buildSubscribeResponse(prefix, alias, []*pb.Update{u}, nil))
-					if err != nil {
-						return err
+				if u != nil {
+					if bundling {
+						updates = append(updates, u)
+					} else {
+						err = teleses.sendTelemetryUpdate(
+							buildSubscribeResponse(prefix, alias, []*pb.Update{u}, nil))
+						if err != nil {
+							return err
+						}
 					}
 				}
 			}
@@ -745,18 +753,20 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 				if err != nil {
 					return status.Error(codes.Internal, err.Error())
 				}
-				if bundling {
-					updates = append(updates, u)
-				} else if u != nil {
-					fullpath := bpath + data.Path
-					deletes, err = getDeletes(telesub, &fullpath, false)
-					if err != nil {
-						return status.Error(codes.Internal, err.Error())
-					}
-					err = teleses.sendTelemetryUpdate(
-						buildSubscribeResponse(prefix, alias, []*pb.Update{u}, nil))
-					if err != nil {
-						return err
+				if u != nil {
+					if bundling {
+						updates = append(updates, u)
+					} else {
+						fullpath := bpath + data.Path
+						deletes, err = getDeletes(telesub, &fullpath, false)
+						if err != nil {
+							return status.Error(codes.Internal, err.Error())
+						}
+						err = teleses.sendTelemetryUpdate(
+							buildSubscribeResponse(prefix, alias, []*pb.Update{u}, nil))
+						if err != nil {
+							return err
+						}
 					}
 				}
 			}
