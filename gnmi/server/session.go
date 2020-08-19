@@ -67,7 +67,7 @@ var (
 // Started - netsession interface to receive the session started event
 func (s *Server) Started(local, remote net.Addr) {
 	remoteaddr := remote.String()
-	session, ok := s.sessions[remoteaddr]
+	_, ok := s.sessions[remoteaddr]
 	if ok {
 		return
 	}

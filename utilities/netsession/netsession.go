@@ -86,7 +86,7 @@ func (l *NetListener) Close() error {
 }
 
 // Session Started and Closed interfaces -
-// These interface will be invoked if registed on which
+// These interface will be invoked if registered on which
 // a connection is started or terminated.
 type Session interface {
 	Started(local, remote net.Addr)

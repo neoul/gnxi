@@ -1,4 +1,4 @@
-// Package utils implements utilities for gnxi.
+// Package utilities implements utilities for gnxi.
 package utilities
 
 import (
@@ -59,15 +59,18 @@ func QueryMetadata(ctx context.Context, name string) (string, bool) {
 	return "", true
 }
 
+// QueryAddress - for net.Addr interface
 type QueryAddress struct {
 	address string
 	network string
 }
 
+// Network - for net.Addr interface
 func (a QueryAddress) Network() string {
 	return a.network
 }
 
+// String - for net.Addr interface
 func (a QueryAddress) String() string {
 	return a.address
 }

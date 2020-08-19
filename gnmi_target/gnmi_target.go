@@ -160,6 +160,9 @@ func main() {
 
 	glog.Infof("starting to listen on %s", s.BindAddress)
 	listen, err := netsession.Listen("tcp", s.BindAddress, s)
+	if err != nil {
+		glog.Exitf("failed to listen: %s", err)
+	}
 	glog.Info("starting to serve")
 	if err := g.Serve(listen); err != nil {
 		glog.Exitf("failed to serve: %v", err)

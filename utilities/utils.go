@@ -1,4 +1,4 @@
-// Package utils implements utilities for gnxi.
+// Package utilities implements utilities for gnxi.
 package utilities
 
 import (
