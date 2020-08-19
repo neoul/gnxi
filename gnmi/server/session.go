@@ -75,7 +75,7 @@ func (s *Server) Started(local, remote net.Addr) {
 	index := strings.LastIndex(remoteaddr, ":")
 	destinationAddress := remoteaddr[:index]
 	destinationPort, _ := strconv.ParseUint(remoteaddr[index+1:], 0, 16)
-	session = &Session{
+	session := &Session{
 		ID:                 sessionID,
 		LoginTime:          time.Now(),
 		DestinationAddress: destinationAddress,

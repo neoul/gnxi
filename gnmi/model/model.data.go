@@ -109,7 +109,7 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallb
 		}
 		sentries := []*yang.Entry{}
 		for entry != nil {
-			sentries = append(sentries, entry)
+			sentries = append([]*yang.Entry{entry}, sentries...)
 			entry = entry.Parent
 		}
 		mdata.syncRequired.Add(p, sentries)
@@ -162,6 +162,9 @@ func buildSyncUpdatePath(entries []*yang.Entry, elems []*gpb.PathElem) string {
 	entrieslen := len(entries)
 	elemslen := len(elems)
 	if entrieslen > elemslen {
+		for i := elemslen + 1; i < entrieslen; i++ {
+			elems = append(elems, &gpb.PathElem{Name: entries[i].Name})
+		}
 		return xpath.PathElemToXPATH(elems)
 	}
 	return xpath.PathElemToXPATH(elems[:entrieslen])
