@@ -446,6 +446,7 @@ func (telesub *telemetrySubscription) run(teleses *telemetrySession) {
 					}
 				}
 				if telesub._subscriptionMode == pb.SubscriptionMode_ON_CHANGE {
+					// utilities.PrintStruct(event.updatedroot)
 					err := teleses.telemetryUpdate(telesub, event.updatedroot)
 					if err != nil {
 						glog.Errorf("telemetry[%d][%d].failed(%v)", telesub.sessionid, telesub.id, err)
@@ -699,8 +700,10 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 		// prefix = nil
 		// alias = xxx
 	}
-	syncPaths := s.modeldata.GetSyncUpdatePath(prefix, telesub.Paths)
-	s.modeldata.RunSyncUpdate(time.Second*3, syncPaths)
+	if telesub._subscriptionMode != pb.SubscriptionMode_ON_CHANGE {
+		syncPaths := s.modeldata.GetSyncUpdatePath(prefix, telesub.Paths)
+		s.modeldata.RunSyncUpdate(time.Second*3, syncPaths)
+	}
 
 	s.modeldata.RLock()
 	defer s.modeldata.RUnlock()

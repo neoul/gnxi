@@ -16,5 +16,4 @@ go build
   -cert ../pki/server.crt \
   -ca ../pki/ca.crt \
   -alsologtostderr \
-  -stderrthreshold 0 \
-  -disable-update-bundling
+  -stderrthreshold 0
