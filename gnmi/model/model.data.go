@@ -42,6 +42,11 @@ type ModelData struct {
 	model        *Model
 }
 
+// GetYDB - Get YAML DataBlock
+func (mdata *ModelData) GetYDB() *ydb.YDB {
+	return mdata.block
+}
+
 // Lock - Lock the YDB instance for use.
 func (mdata *ModelData) Lock() {
 	mdata.block.Lock()

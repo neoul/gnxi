@@ -70,8 +70,8 @@ type Server struct {
 	disableYDB      bool
 	syncRequired    []string
 
-	model     *model.Model
-	modeldata *model.ModelData
+	Model     *model.Model
+	ModelData *model.ModelData
 	*telemetryCtrl
 	sessions   map[string]*Session
 	alias      map[string]*pb.Alias
@@ -87,22 +87,22 @@ func NewServer(m *model.Model, startup []byte, startupIsJSON, disableBundling, d
 	var err error
 	s := &Server{
 		syncRequired:  []string{},
-		model:         m,
+		Model:         m,
 		alias:         map[string]*pb.Alias{},
 		sessions:      map[string]*Session{},
 		telemetryCtrl: newTelemetryCB(),
 	}
 	if startupIsJSON {
-		s.modeldata, err = model.NewModelData(m, startup, nil, s, disableYDB)
+		s.ModelData, err = model.NewModelData(m, startup, nil, s, disableYDB)
 	} else {
-		s.modeldata, err = model.NewModelData(m, nil, startup, s, disableYDB)
+		s.ModelData, err = model.NewModelData(m, nil, startup, s, disableYDB)
 	}
 	return s, err
 }
 
 // Close the connected YDB instance
 func (s *Server) Close() {
-	s.modeldata.Close()
+	s.ModelData.Close()
 }
 
 // checkEncoding checks whether encoding and models are supported by the server. Return error if anything is unsupported.
@@ -152,7 +152,7 @@ func (s *Server) Capabilities(ctx context.Context, req *pb.CapabilityRequest) (*
 		return nil, status.Errorf(codes.Internal, "error in getting gnmi service version: %v", err)
 	}
 	return &pb.CapabilityResponse{
-		SupportedModels:    s.model.GetModelData(),
+		SupportedModels:    s.Model.GetModelData(),
 		SupportedEncodings: supportedEncodings,
 		GNMIVersion:        *ver,
 	}, nil
@@ -165,7 +165,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 		return nil, status.Errorf(codes.Unimplemented, "unsupported request type: %s",
 			pb.GetRequest_DataType_name[int32(req.GetType())])
 	}
-	if err := s.model.CheckModels(req.GetUseModels()); err != nil {
+	if err := s.Model.CheckModels(req.GetUseModels()); err != nil {
 		return nil, status.Errorf(codes.Unimplemented, err.Error())
 	}
 	if err := s.checkEncoding(req.GetEncoding()); err != nil {
@@ -176,19 +176,19 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 
 	prefix := req.GetPrefix()
 	paths := req.GetPath()
-	syncPaths := s.modeldata.GetSyncUpdatePath(prefix, paths)
-	s.modeldata.RunSyncUpdate(time.Second*3, syncPaths)
+	syncPaths := s.ModelData.GetSyncUpdatePath(prefix, paths)
+	s.ModelData.RunSyncUpdate(time.Second*3, syncPaths)
 
-	s.modeldata.RLock()
-	defer s.modeldata.RUnlock()
+	s.ModelData.RLock()
+	defer s.ModelData.RUnlock()
 
 	// each prefix + path ==> one notification message
 	if err := utilities.ValidateGNMIPath(prefix); err != nil {
 		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := s.model.FindAllData(s.modeldata.GetRoot(), prefix)
+	toplist, ok := s.Model.FindAllData(s.ModelData.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
-		if ok = s.model.ValidatePathSchema(prefix); ok {
+		if ok = s.Model.ValidatePathSchema(prefix); ok {
 			return nil, status.Errorf(codes.NotFound, "data-missing(%v)", xpath.ToXPATH(prefix))
 		}
 		return nil, status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPATH(prefix))
@@ -205,7 +205,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 			if err := utilities.ValidateGNMIFullPath(prefix, path); err != nil {
 				return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-			datalist, ok := s.model.FindAllData(branch, path)
+			datalist, ok := s.Model.FindAllData(branch, path)
 			if !ok || len(datalist) <= 0 {
 				continue
 			}
@@ -237,12 +237,12 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 
 // Set implements the Set RPC in gNMI spec.
 func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, error) {
-	s.modeldata.Lock()
-	defer s.modeldata.Unlock()
+	s.ModelData.Lock()
+	defer s.ModelData.Unlock()
 
 	utilities.PrintProto(req)
 
-	jsonTree, err := ygot.ConstructIETFJSON(s.modeldata.GetRoot(), &ygot.RFC7951JSONConfig{})
+	jsonTree, err := ygot.ConstructIETFJSON(s.ModelData.GetRoot(), &ygot.RFC7951JSONConfig{})
 	if err != nil {
 		msg := fmt.Sprintf("error in constructing IETF JSON tree from config struct: %v", err)
 		return nil, status.Error(codes.Internal, msg)
@@ -252,21 +252,21 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 	var results []*pb.UpdateResult
 
 	for _, path := range req.GetDelete() {
-		res, grpcStatusError := s.modeldata.SetDelete(jsonTree, prefix, path)
+		res, grpcStatusError := s.ModelData.SetDelete(jsonTree, prefix, path)
 		if grpcStatusError != nil {
 			return nil, grpcStatusError
 		}
 		results = append(results, res)
 	}
 	for _, upd := range req.GetReplace() {
-		res, grpcStatusError := s.modeldata.SetReplaceOrUpdate(jsonTree, pb.UpdateResult_REPLACE, prefix, upd.GetPath(), upd.GetVal())
+		res, grpcStatusError := s.ModelData.SetReplaceOrUpdate(jsonTree, pb.UpdateResult_REPLACE, prefix, upd.GetPath(), upd.GetVal())
 		if grpcStatusError != nil {
 			return nil, grpcStatusError
 		}
 		results = append(results, res)
 	}
 	for _, upd := range req.GetUpdate() {
-		res, grpcStatusError := s.modeldata.SetReplaceOrUpdate(jsonTree, pb.UpdateResult_UPDATE, prefix, upd.GetPath(), upd.GetVal())
+		res, grpcStatusError := s.ModelData.SetReplaceOrUpdate(jsonTree, pb.UpdateResult_UPDATE, prefix, upd.GetPath(), upd.GetVal())
 		if grpcStatusError != nil {
 			return nil, grpcStatusError
 		}
@@ -278,12 +278,12 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 		msg := fmt.Sprintf("error in marshaling IETF JSON tree to bytes: %v", err)
 		return nil, status.Error(codes.Internal, msg)
 	}
-	newRoot, err := model.NewGoStruct(s.model, jsonDump)
+	newRoot, err := model.NewGoStruct(s.Model, jsonDump)
 	if err != nil {
 		msg := fmt.Sprintf("error in creating config struct from IETF JSON data: %v", err)
 		return nil, status.Error(codes.Internal, msg)
 	}
-	s.modeldata.ChangeRoot(newRoot)
+	s.ModelData.ChangeRoot(newRoot)
 	return &pb.SetResponse{
 		Prefix:   req.GetPrefix(),
 		Response: results,
@@ -338,8 +338,8 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 
 // InternalUpdate is an experimental feature to let the server update its
 // internal states. Use it with your own risk.
-func (s *Server) InternalUpdate(funcPtr func(modeldata ygot.ValidatedGoStruct) error) error {
-	s.modeldata.Lock()
-	defer s.modeldata.Unlock()
-	return funcPtr(s.modeldata.GetRoot())
+func (s *Server) InternalUpdate(funcPtr func(ModelData ygot.ValidatedGoStruct) error) error {
+	s.ModelData.Lock()
+	defer s.ModelData.Unlock()
+	return funcPtr(s.ModelData.GetRoot())
 }

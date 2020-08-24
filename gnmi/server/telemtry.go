@@ -496,7 +496,7 @@ func (telesub *telemetrySubscription) run(teleses *telemetrySession) {
 func (teleses *telemetrySession) StartTelmetryUpdate(telesub *telemetrySubscription) error {
 	teleses.lock()
 	defer teleses.unlock()
-	teleses.server.registerTelemetry(teleses.server.model, telesub)
+	teleses.server.registerTelemetry(teleses.server.Model, telesub)
 	if !telesub.started {
 		telesub.started = true
 		teleses.waitgroup.Add(1)
@@ -610,17 +610,17 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 	for _, updateEntry := range subList {
 		paths = append(paths, updateEntry.Path)
 	}
-	syncPaths := s.modeldata.GetSyncUpdatePath(prefix, paths)
-	s.modeldata.RunSyncUpdate(time.Second*3, syncPaths)
+	syncPaths := s.ModelData.GetSyncUpdatePath(prefix, paths)
+	s.ModelData.RunSyncUpdate(time.Second*3, syncPaths)
 
-	s.modeldata.RLock()
-	defer s.modeldata.RUnlock()
+	s.ModelData.RLock()
+	defer s.ModelData.RUnlock()
 	if err := utilities.ValidateGNMIPath(prefix); err != nil {
 		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := s.model.FindAllData(s.modeldata.GetRoot(), prefix)
+	toplist, ok := s.Model.FindAllData(s.ModelData.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
-		if ok = s.model.ValidatePathSchema(prefix); ok {
+		if ok = s.Model.ValidatePathSchema(prefix); ok {
 			// data-missing is not an error in SubscribeRPC
 			// doest send any of messages ahead of the sync response.
 			return teleses.sendTelemetryUpdate(buildSyncResponse())
@@ -644,7 +644,7 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 			if err := utilities.ValidateGNMIFullPath(prefix, path); err != nil {
 				return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-			datalist, ok := s.model.FindAllData(branch, path)
+			datalist, ok := s.Model.FindAllData(branch, path)
 			if !ok || len(datalist) <= 0 {
 				continue
 			}
@@ -701,21 +701,21 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 		// alias = xxx
 	}
 	if telesub._subscriptionMode != pb.SubscriptionMode_ON_CHANGE {
-		syncPaths := s.modeldata.GetSyncUpdatePath(prefix, telesub.Paths)
-		s.modeldata.RunSyncUpdate(time.Second*3, syncPaths)
+		syncPaths := s.ModelData.GetSyncUpdatePath(prefix, telesub.Paths)
+		s.ModelData.RunSyncUpdate(time.Second*3, syncPaths)
 	}
 
-	s.modeldata.RLock()
-	defer s.modeldata.RUnlock()
+	s.ModelData.RLock()
+	defer s.ModelData.RUnlock()
 	if updatedroot == nil {
-		updatedroot = s.modeldata.GetRoot()
+		updatedroot = s.ModelData.GetRoot()
 	}
 	if err := utilities.ValidateGNMIPath(prefix); err != nil {
 		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := s.model.FindAllData(updatedroot, prefix)
+	toplist, ok := s.Model.FindAllData(updatedroot, prefix)
 	if !ok || len(toplist) <= 0 {
-		if ok = s.model.ValidatePathSchema(prefix); ok {
+		if ok = s.Model.ValidatePathSchema(prefix); ok {
 			// data-missing is not an error in SubscribeRPC
 			// doest send any of messages.
 			return nil
@@ -747,7 +747,7 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 			if err := utilities.ValidateGNMIFullPath(prefix, path); err != nil {
 				return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-			datalist, ok := s.model.FindAllData(branch, path)
+			datalist, ok := s.Model.FindAllData(branch, path)
 			if !ok || len(datalist) <= 0 {
 				continue
 			}
@@ -952,7 +952,7 @@ func processSR(teleses *telemetrySession, req *pb.SubscribeRequest) error {
 	encoding := subscriptionList.GetEncoding()
 	useModules := subscriptionList.GetUseModels()
 
-	if err := teleses.server.model.CheckModels(useModules); err != nil {
+	if err := teleses.server.Model.CheckModels(useModules); err != nil {
 		return status.Errorf(codes.Unimplemented, err.Error())
 	}
 	if err := teleses.server.checkEncoding(encoding); err != nil {
