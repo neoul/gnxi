@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -34,6 +35,7 @@ var (
 
 // ModelData - the data instance for the model
 type ModelData struct {
+	mutex        *sync.RWMutex
 	dataroot     ygot.ValidatedGoStruct // the current data tree of the Model
 	updatedroot  ygot.GoStruct          // a fake data tree to represent the changed data.
 	callback     DataCallback
@@ -47,24 +49,29 @@ func (mdata *ModelData) GetYDB() *ydb.YDB {
 	return mdata.block
 }
 
+// GetLock - Get the mutex of the ModelData
+func (mdata *ModelData) GetLock() *sync.RWMutex {
+	return mdata.mutex
+}
+
 // Lock - Lock the YDB instance for use.
 func (mdata *ModelData) Lock() {
-	mdata.block.Lock()
+	mdata.mutex.Lock()
 }
 
 // Unlock - Unlock of the YDB instance.
 func (mdata *ModelData) Unlock() {
-	mdata.block.Unlock()
+	mdata.mutex.Unlock()
 }
 
 // RLock - Lock the YDB instance for read.
 func (mdata *ModelData) RLock() {
-	mdata.block.RLock()
+	mdata.mutex.RLock()
 }
 
 // RUnlock - Unlock of the YDB instance for read.
 func (mdata *ModelData) RUnlock() {
-	mdata.block.RUnlock()
+	mdata.mutex.RUnlock()
 }
 
 // Close the connected YDB instance
@@ -127,6 +134,7 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallb
 	}
 
 	mdata.block, _ = ydb.OpenWithTargetStruct("gnmi_target", mdata)
+	mdata.mutex = mdata.block.Mutex
 	if yamlData != nil {
 		if err := mdata.block.Parse(yamlData); err != nil {
 			return nil, err
