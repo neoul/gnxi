@@ -1,6 +1,6 @@
 
 # gnmi server configuration
-bindAddress: ":10161"
+bind-address: ":10161"
 startup: "../gnmi/model/data/sample.yaml"
 tls:
   ca-cert: "../pki/ca.crt"
