@@ -1,6 +1,7 @@
 package model
 
 import (
+	"flag"
 	"testing"
 	"time"
 
@@ -9,7 +10,8 @@ import (
 
 func TestModel_ValidatePathAndSync(t *testing.T) {
 	m := NewModel()
-	mdata, _ := NewModelData(m, nil, nil, nil, true)
+	flag.Set("disable-ydb", "true")
+	mdata, _ := NewModelData(m, nil, nil, nil)
 
 	type args struct {
 		prefix *gpb.Path

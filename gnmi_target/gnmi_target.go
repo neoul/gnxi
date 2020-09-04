@@ -24,13 +24,13 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	"gopkg.in/yaml.v2"
 
 	"github.com/neoul/gnxi/gnmi/model"
 	gnmiserver "github.com/neoul/gnxi/gnmi/server"
-	"github.com/neoul/gnxi/utilities"
 
 	"github.com/neoul/gnxi/utilities/credentials"
 	"github.com/neoul/gnxi/utilities/netsession"
@@ -39,94 +39,113 @@ import (
 )
 
 var (
-	bindAddr          = flag.String("bind_address", ":10161", "Bind to address:port")
-	startupFile       = flag.String("startup", "", "IETF JSON file or YAML file for target startup data")
-	configFile        = flag.String("config", "", "YAML configuration file")
-	disableBundling   = flag.Bool("disable-update-bundling", false, "Disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1")
-	disableYdbChannel = flag.Bool("disable-ydb", false, "Disable YAML Datablock interface")
+	configFile      = pflag.StringP("config", "c", "", "configuration file for gnmid; search gnmid.conf from $PWD, /etc and $HOME/.gnmid if not specified")
+	bindAddr        = pflag.StringP("bind-address", "b", ":10161", "bind to address:port")
+	startupFile     = pflag.String("startup", "", "IETF JSON or YAML file for target startup data")
+	disableBundling = pflag.Bool("disable-update-bundling", false, "disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1")
+	help            = pflag.BoolP("help", "h", false, "help for gnmi_target")
 )
 
 type server struct {
-	*gnmiserver.Server `yaml:"server,omitempty"`
-	ConfigFile         string `yaml:"config,omitempty"`
-	BindAddress        string `yaml:"bind_address"`
+	*gnmiserver.Server
+	config *configuration
+}
 
-	NoTLS bool `yaml:"no-tls,omitempty"`
-	TLS   struct {
-		Insecure bool   `yaml:"insecure,omitempty"`
-		CAFile   string `yaml:"ca-cert,omitempty"`
-		CertFile string `yaml:"server-cert,omitempty"`
-		KeyFile  string `yaml:"server-key,omitempty"`
-	} `yaml:"tls,omitempty"`
-	GNMIServer struct {
-		DisableBundling bool     `yaml:"disable-update-bundling,omitempty"`
-		DisableYDB      bool     `yaml:"disable-ydb,omitempty"`
-		SyncRequired    []string `yaml:"sync-required,omitempty"`
+type configuration struct {
+	BindAddress     string `mapstructure:"bind-address"`
+	Startup         string `mapstructure:"startup,omitempty"`
+	DisableBundling bool   `mapstructure:"disable-update-bundling,omitempty"`
+	DisableYDB      bool   `mapstructure:"disable-ydb,omitempty"`
+	NoTLS           bool   `mapstructure:"no-tls,omitempty"`
+
+	TLS struct {
+		Insecure bool   `mapstructure:"insecure,omitempty"`
+		CAFile   string `mapstructure:"ca-cert,omitempty"`
+		CertFile string `mapstructure:"server-cert,omitempty"`
+		KeyFile  string `mapstructure:"server-key,omitempty"`
+	} `mapstructure:"tls,omitempty"`
+}
+
+func loadConfig() (*configuration, error) {
+	var config configuration
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
+	if *help {
+		fmt.Fprintf(os.Stderr, "gnmi_target:\n")
+		fmt.Fprintf(os.Stderr, "  gRPC Network Management Interface (gNMI) server\n")
+		fmt.Fprintf(os.Stderr, "\n")
+		fmt.Fprintf(os.Stderr, "Usage:\n")
+		fmt.Fprintf(os.Stderr, "  %s [Flag]\n", os.Args[0])
+		pflag.PrintDefaults()
+		os.Exit(1)
 	}
-
-	Startup struct {
-		File string `yaml:"file,omitempty"`
-	} `yaml:"startup,omitempty"`
-	Debug struct {
-		LogLevel int `yaml:"cert-file,omitempty"`
-	} `yaml:"debug,omitempty"`
+	viper.BindPFlags(pflag.CommandLine)
+	viper.SetConfigType("yaml")
+	if *configFile != "" {
+		f, err := os.Open(*configFile)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		err = viper.ReadConfig(f)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		viper.SetConfigName("gnmid.conf")
+		viper.AddConfigPath(".")
+		viper.AddConfigPath("/etc")                  // path to look for the config file in
+		viper.AddConfigPath("$HOME/.gnmid")          // call multiple times to add many search paths
+		if err := viper.ReadInConfig(); err != nil { // Handle errors reading the config file
+			if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+				// Config file was found but another error was produced
+				return nil, err
+			}
+		}
+	}
+	err := viper.Unmarshal(&config)
+	if err != nil {
+		return nil, err
+	}
+	syncReq := viper.Get("sync-required-path")
+	if syncReqList, ok := syncReq.([]interface{}); ok {
+		for i := range syncReqList {
+			flag.Set("sync-required-path", syncReqList[i].(string))
+		}
+	}
+	// utilities.PrintStruct(config)
+	return &config, nil
 }
 
 func newServer(model *model.Model) (*server, error) {
-	s := server{}
-	s.BindAddress = utilities.GetFlag("bind_address", ":10161").(string)
-	s.Startup.File = utilities.GetFlag("startup", s.Startup.File).(string)
-	s.NoTLS = utilities.GetFlag("no-tls", s.NoTLS).(bool)
-	if !s.NoTLS {
-		s.TLS.Insecure = utilities.GetFlag("insecure", s.TLS.Insecure).(bool)
-		s.TLS.CAFile = utilities.GetFlag("ca", s.TLS.CAFile).(string)
-		s.TLS.CertFile = utilities.GetFlag("cert", s.TLS.CertFile).(string)
-		s.TLS.KeyFile = utilities.GetFlag("key", s.TLS.KeyFile).(string)
-	}
-	s.GNMIServer.DisableBundling = utilities.GetFlag("disable-update-bundling", false).(bool)
-	s.GNMIServer.DisableYDB = utilities.GetFlag("disable-ydb", false).(bool)
-	s.GNMIServer.SyncRequired = []string{}
-	s.Startup.File = utilities.GetFlag("startup", s.Startup.File).(string)
-	s.ConfigFile = utilities.GetFlag("config", "").(string)
-	if s.ConfigFile != "" {
-		f, err := os.Open(s.ConfigFile)
-		if err != nil {
-			return nil, err
-		}
-		decoder := yaml.NewDecoder(f)
-		err = decoder.Decode(&s)
-		if err != nil {
-			return nil, err
-		}
-		f.Close()
-	}
 	var err error
+	s := server{}
+	s.config, err = loadConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	var startup []byte
 	var startupIsJSON bool = true
-	if s.Startup.File != "" {
-		startup, err = ioutil.ReadFile(s.Startup.File)
+	if s.config.Startup != "" {
+		startup, err = ioutil.ReadFile(s.config.Startup)
 		if err != nil {
-			glog.Exitf("error in reading config file: %v", err)
+			glog.Exitf("error in reading startup file: %v", err)
 		}
-		if strings.HasSuffix(s.Startup.File, "yaml") ||
-			strings.HasSuffix(s.Startup.File, "yml") {
+		if strings.HasSuffix(s.config.Startup, "yaml") ||
+			strings.HasSuffix(s.config.Startup, "yml") {
 			startupIsJSON = false
 		} else {
 			startupIsJSON = false
 		}
 	}
 
-	b, err := yaml.Marshal(&s)
-	if err == nil {
-		fmt.Println("[configuration]")
-		fmt.Println(string(b))
-	}
-
 	s.Server, err = gnmiserver.NewServer(model, startup, startupIsJSON,
-		s.GNMIServer.DisableBundling, s.GNMIServer.DisableYDB)
+		s.config.DisableBundling)
 	if err != nil {
 		return nil, err
 	}
+
 	return &s, nil
 }
 
@@ -142,7 +161,6 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	flag.Parse()
 	s, err := newServer(model)
 	if err != nil {
 		glog.Exitf("error in creating gnmid: %v", err)
@@ -150,16 +168,16 @@ func main() {
 	defer s.Close()
 
 	opts := credentials.ServerCredentials(
-		&s.TLS.CAFile, &s.TLS.CertFile, &s.TLS.KeyFile,
-		&s.TLS.Insecure, &s.NoTLS)
+		&s.config.TLS.CAFile, &s.config.TLS.CertFile, &s.config.TLS.KeyFile,
+		&s.config.TLS.Insecure, &s.config.NoTLS)
 	// opts = append(opts, grpc.UnaryInterceptor(credentials.UnaryInterceptor))
 	// opts = append(opts, grpc.StreamInterceptor(credentials.StreamInterceptor))
 	g := grpc.NewServer(opts...)
 	pb.RegisterGNMIServer(g, s)
 	reflection.Register(g)
 
-	glog.Infof("starting to listen on %s", s.BindAddress)
-	listen, err := netsession.Listen("tcp", s.BindAddress, s)
+	glog.Infof("starting to listen on %s", s.config.BindAddress)
+	listen, err := netsession.Listen("tcp", s.config.BindAddress, s)
 	if err != nil {
 		glog.Exitf("failed to listen: %s", err)
 	}

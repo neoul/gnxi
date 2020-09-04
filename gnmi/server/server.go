@@ -67,11 +67,8 @@ var (
 // }
 type Server struct {
 	disableBundling bool
-	disableYDB      bool
-	syncRequired    []string
-
-	Model     *model.Model
-	ModelData *model.ModelData
+	Model           *model.Model
+	ModelData       *model.ModelData
 	*telemetryCtrl
 	sessions   map[string]*Session
 	alias      map[string]*pb.Alias
@@ -83,19 +80,19 @@ type Config struct {
 }
 
 // NewServer creates an instance of Server with given json config.
-func NewServer(m *model.Model, startup []byte, startupIsJSON, disableBundling, disableYDB bool) (*Server, error) {
+func NewServer(m *model.Model, startup []byte, startupIsJSON, disableBundling bool) (*Server, error) {
 	var err error
 	s := &Server{
-		syncRequired:  []string{},
-		Model:         m,
-		alias:         map[string]*pb.Alias{},
-		sessions:      map[string]*Session{},
-		telemetryCtrl: newTelemetryCB(),
+		disableBundling: disableBundling,
+		Model:           m,
+		alias:           map[string]*pb.Alias{},
+		sessions:        map[string]*Session{},
+		telemetryCtrl:   newTelemetryCB(),
 	}
 	if startupIsJSON {
-		s.ModelData, err = model.NewModelData(m, startup, nil, s, disableYDB)
+		s.ModelData, err = model.NewModelData(m, startup, nil, s)
 	} else {
-		s.ModelData, err = model.NewModelData(m, nil, startup, s, disableYDB)
+		s.ModelData, err = model.NewModelData(m, nil, startup, s)
 	}
 	return s, err
 }

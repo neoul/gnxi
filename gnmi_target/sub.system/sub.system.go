@@ -235,8 +235,8 @@ func initSyslog(db *ydb.YDB) {
 	// server.SetFormat(syslog.RFC3164)
 	server.SetFormat(syslog.Automatic)
 	server.SetHandler(handler)
-	server.ListenUDP("0.0.0.0:1514")
-	server.ListenTCP("0.0.0.0:1514")
+	server.ListenUDP("0.0.0.0:11514")
+	server.ListenTCP("0.0.0.0:11514")
 
 	server.Boot()
 
@@ -336,7 +336,7 @@ func main() {
 	info := &IfInfo{Ifstats: make(map[string]*IfStats)}
 	db, dbclose := ydb.OpenWithTargetStruct("subsystem", info)
 	defer dbclose()
-	err := db.Connect("uss://openconfig", "pub")
+	err := db.Connect("uss://gnmi", "pub")
 	if err != nil {
 		log.Println(err)
 		return

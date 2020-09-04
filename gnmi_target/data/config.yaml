@@ -1,9 +1,14 @@
 
 # gnmi server configuration
-bind_address: ":10161"
-startup:
-  file: "../gnmi/model/data/sample.yaml"
+bindAddress: ":10161"
+startup: "../gnmi/model/data/sample.yaml"
 tls:
   ca-cert: "../pki/ca.crt"
   server-cert: "../pki/server.crt"
   server-key: "../pki/server.key"
+sync-required-path:
+  - "/interfaces/interface/state/counters"
+  - "/interfaces/interface/time-sensitive-networking/state/statistics"
+  - "/interfaces/interface/radio-over-ethernet/state/statistics"
+disable-update-bundling: true
+disable-ydb: true

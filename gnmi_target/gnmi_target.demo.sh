@@ -11,9 +11,10 @@ cd ..
 go build
 ./gnmi_target \
   -v 2 \
-  -bind_address :10161 \
-  -key ../pki/server.key \
-  -cert ../pki/server.crt \
-  -ca ../pki/ca.crt \
-  -alsologtostderr \
-  -stderrthreshold 0
+  --bind-address :10161 \
+  --sync-required-path /interfaces/interface/state/counters \
+  --server-key ../pki/server.key \
+  --server-cert ../pki/server.crt \
+  --ca-cert ../pki/ca.crt \
+  --alsologtostderr \
+  --stderrthreshold 0 \

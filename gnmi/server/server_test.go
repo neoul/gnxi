@@ -17,6 +17,7 @@ package server
 
 import (
 	"encoding/json"
+	"flag"
 	"io/ioutil"
 	"reflect"
 	"testing"
@@ -44,7 +45,8 @@ var (
 )
 
 func TestCapabilities(t *testing.T) {
-	s, err := NewServer(mo, nil, false, false, true)
+	flag.Set("disable-ydb", "true")
+	s, err := NewServer(mo, nil, false, false)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -103,7 +105,8 @@ func TestGet(t *testing.T) {
 			]
 		}
 	}`
-	s, err := NewServer(mo, []byte(jsonConfigRoot), true, false, true)
+	flag.Set("disable-ydb", "true")
+	s, err := NewServer(mo, []byte(jsonConfigRoot), true, false)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -341,7 +344,8 @@ func TestGetWithYdb(t *testing.T) {
 	if err != nil {
 		glog.Exitf("error in reading config file: %v", err)
 	}
-	s, err := NewServer(mo, yamlData, false, false, true)
+	flag.Set("disable-ydb", "true")
+	s, err := NewServer(mo, yamlData, false, false)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}

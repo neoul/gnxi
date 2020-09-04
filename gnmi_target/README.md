@@ -12,7 +12,7 @@ go install github.com/neoul/gnxi/gnmi_target
 ## Run
 
 ```bash
-ydb -r pub -a uss://openconfig -f ../gnmi/model/data/m6424.sample.yaml -d -v debug
+ydb -r pub -a uss://gnmi -f ../gnmi/model/data/m6424.sample.yaml -d -v debug
 ```
 
 ```bash

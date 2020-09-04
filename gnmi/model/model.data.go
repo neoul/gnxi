@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -24,14 +25,34 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var (
-	pbRootPath                    = &gpb.Path{}
-	defaultSyncRequiredSchemaPath = []string{
-		"/interfaces/interface/state/counters",
-		"/interfaces/interface/time-sensitive-networking/state/statistics",
-		"/interfaces/interface/radio-over-ethernet/state/statistics",
-	}
-)
+var pbRootPath = &gpb.Path{}
+
+// var (
+// 	defaultSyncRequiredSchemaPath = []string{
+// 		"/interfaces/interface/state/counters",
+// 		"/interfaces/interface/time-sensitive-networking/state/statistics",
+// 		"/interfaces/interface/radio-over-ethernet/state/statistics",
+// 	}
+// )
+
+type syncRequiredPaths []string
+
+func (srpaths *syncRequiredPaths) String() string {
+	return fmt.Sprint(*srpaths)
+}
+
+func (srpaths *syncRequiredPaths) Set(value string) error {
+	*srpaths = append(*srpaths, value)
+	return nil
+}
+
+var srpaths syncRequiredPaths
+var disableYdbChannel = flag.Bool("disable-ydb", false, "disable YAML Datablock interface")
+
+func init() {
+	flag.Var(&srpaths, "sync-required-path", "path required YDB sync operation to update data")
+	// flag.Set("sync-required-path", "/interfaces/interface/state/counters")
+}
 
 // ModelData - the data instance for the model
 type ModelData struct {
@@ -52,6 +73,17 @@ func (mdata *ModelData) GetYDB() *ydb.YDB {
 // GetLock - Get the mutex of the ModelData
 func (mdata *ModelData) GetLock() *sync.RWMutex {
 	return mdata.mutex
+}
+
+// SetLock - Set the mutex of the ModelData
+func (mdata *ModelData) SetLock(m *sync.RWMutex) error {
+	if m == nil {
+		return fmt.Errorf("nil RWMutex")
+	}
+	mdata.mutex.Lock()
+	defer mdata.mutex.Unlock()
+	mdata.mutex = m
+	return nil
 }
 
 // Lock - Lock the YDB instance for use.
@@ -102,7 +134,7 @@ func NewGoStruct(m *Model, jsonData []byte) (ygot.ValidatedGoStruct, error) {
 }
 
 // NewModelData creates a ValidatedGoStruct of this model from jsonData. If jsonData is nil, creates an empty GoStruct.
-func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallback, disableYdbChannel bool) (*ModelData, error) {
+func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallback) (*ModelData, error) {
 	root, err := NewGoStruct(m, jsonData)
 	if err != nil {
 		return nil, err
@@ -114,7 +146,9 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallb
 		model:        m,
 		syncRequired: trie.New(),
 	}
-	for _, p := range defaultSyncRequiredSchemaPath {
+
+	for _, p := range srpaths {
+		// glog.Infof("sync-required-path %s", p)
 		entry, err := m.FindSchemaByPath(p)
 		if err != nil {
 			continue
@@ -133,7 +167,7 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallb
 		}
 	}
 
-	mdata.block, _ = ydb.OpenWithTargetStruct("gnmi_target", mdata)
+	mdata.block, _ = ydb.OpenWithTargetStruct("gnmi.target", mdata)
 	mdata.mutex = mdata.block.Mutex
 	if yamlData != nil {
 		if err := mdata.block.Parse(yamlData); err != nil {
@@ -147,9 +181,8 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallb
 		}
 		utilities.PrintStruct(root)
 	}
-
-	if !disableYdbChannel {
-		err := mdata.block.Connect("uss://openconfig", "pub")
+	if !*disableYdbChannel {
+		err := mdata.block.Connect("uss://gnmi", "pub")
 		if err != nil {
 			mdata.block.Close()
 			return nil, err

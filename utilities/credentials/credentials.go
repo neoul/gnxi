@@ -32,11 +32,11 @@ import (
 )
 
 var (
-	ca             = flag.String("ca", "", "CA certificate file.")
-	cert           = flag.String("cert", "", "Certificate file.")
-	key            = flag.String("key", "", "Private key file.")
-	insecure       = flag.Bool("insecure", false, "Skip TLS validation.")
-	notls          = flag.Bool("no-tls", false, "Disable TLS validation. If true, no need to specify TLS related options.")
+	ca             = flag.String("ca-cert", "", "ca certificate file")
+	cert           = flag.String("server-cert", "", "server certificate file")
+	key            = flag.String("server-key", "", "server private key file")
+	insecure       = flag.Bool("insecure", false, "skip TLS validation")
+	notls          = flag.Bool("no-tls", false, "disable TLS validation. If true, no need to specify TLS related options.")
 	authorizedUser = userCredentials{}
 	usernameKey    = "username"
 	passwordKey    = "password"
@@ -65,17 +65,17 @@ func (a *userCredentials) RequireTransportSecurity() bool {
 
 // LoadCertificates loads certificates from file.
 func LoadCertificates(cafile, certfile, keyfile *string) ([]tls.Certificate, *x509.CertPool) {
-	if cafile == nil {
+	if cafile == nil || *cafile == "" {
 		cafile = ca
 	}
-	if certfile == nil {
+	if certfile == nil || *certfile == "" {
 		certfile = cert
 	}
-	if keyfile == nil {
+	if keyfile == nil || *keyfile == "" {
 		keyfile = key
 	}
 	if *cafile == "" || *certfile == "" || *keyfile == "" {
-		log.Exit("-ca -cert and -key must be set with file locations")
+		log.Exit("ca-cert, sever-cert and server-key must be set with file locations")
 	}
 
 	certificate, err := tls.LoadX509KeyPair(*certfile, *keyfile)
