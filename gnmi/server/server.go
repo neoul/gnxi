@@ -19,7 +19,6 @@ package server
 import (
 	"bytes"
 	"compress/gzip"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -234,57 +233,58 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 
 // Set implements the Set RPC in gNMI spec.
 func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, error) {
-	s.ModelData.Lock()
-	defer s.ModelData.Unlock()
+	return nil, status.Error(codes.Unimplemented, "Set not implemented")
+	// s.ModelData.Lock()
+	// defer s.ModelData.Unlock()
 
-	utilities.PrintProto(req)
+	// utilities.PrintProto(req)
 
-	jsonTree, err := ygot.ConstructIETFJSON(s.ModelData.GetRoot(), &ygot.RFC7951JSONConfig{})
-	if err != nil {
-		msg := fmt.Sprintf("error in constructing IETF JSON tree from config struct: %v", err)
-		return nil, status.Error(codes.Internal, msg)
-	}
+	// jsonTree, err := ygot.ConstructIETFJSON(s.ModelData.GetRoot(), &ygot.RFC7951JSONConfig{})
+	// if err != nil {
+	// 	msg := fmt.Sprintf("error in constructing IETF JSON tree from config struct: %v", err)
+	// 	return nil, status.Error(codes.Internal, msg)
+	// }
 
-	prefix := req.GetPrefix()
-	var results []*pb.UpdateResult
+	// prefix := req.GetPrefix()
+	// var results []*pb.UpdateResult
 
-	for _, path := range req.GetDelete() {
-		res, grpcStatusError := s.ModelData.SetDelete(jsonTree, prefix, path)
-		if grpcStatusError != nil {
-			return nil, grpcStatusError
-		}
-		results = append(results, res)
-	}
-	for _, upd := range req.GetReplace() {
-		res, grpcStatusError := s.ModelData.SetReplaceOrUpdate(jsonTree, pb.UpdateResult_REPLACE, prefix, upd.GetPath(), upd.GetVal())
-		if grpcStatusError != nil {
-			return nil, grpcStatusError
-		}
-		results = append(results, res)
-	}
-	for _, upd := range req.GetUpdate() {
-		res, grpcStatusError := s.ModelData.SetReplaceOrUpdate(jsonTree, pb.UpdateResult_UPDATE, prefix, upd.GetPath(), upd.GetVal())
-		if grpcStatusError != nil {
-			return nil, grpcStatusError
-		}
-		results = append(results, res)
-	}
+	// for _, path := range req.GetDelete() {
+	// 	res, grpcStatusError := s.ModelData.SetDelete(jsonTree, prefix, path)
+	// 	if grpcStatusError != nil {
+	// 		return nil, grpcStatusError
+	// 	}
+	// 	results = append(results, res)
+	// }
+	// for _, upd := range req.GetReplace() {
+	// 	res, grpcStatusError := s.ModelData.SetReplaceOrUpdate(jsonTree, pb.UpdateResult_REPLACE, prefix, upd.GetPath(), upd.GetVal())
+	// 	if grpcStatusError != nil {
+	// 		return nil, grpcStatusError
+	// 	}
+	// 	results = append(results, res)
+	// }
+	// for _, upd := range req.GetUpdate() {
+	// 	res, grpcStatusError := s.ModelData.SetReplaceOrUpdate(jsonTree, pb.UpdateResult_UPDATE, prefix, upd.GetPath(), upd.GetVal())
+	// 	if grpcStatusError != nil {
+	// 		return nil, grpcStatusError
+	// 	}
+	// 	results = append(results, res)
+	// }
 
-	jsonDump, err := json.Marshal(jsonTree)
-	if err != nil {
-		msg := fmt.Sprintf("error in marshaling IETF JSON tree to bytes: %v", err)
-		return nil, status.Error(codes.Internal, msg)
-	}
-	newRoot, err := model.NewGoStruct(s.Model, jsonDump)
-	if err != nil {
-		msg := fmt.Sprintf("error in creating config struct from IETF JSON data: %v", err)
-		return nil, status.Error(codes.Internal, msg)
-	}
-	s.ModelData.ChangeRoot(newRoot)
-	return &pb.SetResponse{
-		Prefix:   req.GetPrefix(),
-		Response: results,
-	}, nil
+	// jsonDump, err := json.Marshal(jsonTree)
+	// if err != nil {
+	// 	msg := fmt.Sprintf("error in marshaling IETF JSON tree to bytes: %v", err)
+	// 	return nil, status.Error(codes.Internal, msg)
+	// }
+	// newRoot, err := model.NewGoStruct(s.Model, jsonDump)
+	// if err != nil {
+	// 	msg := fmt.Sprintf("error in creating config struct from IETF JSON data: %v", err)
+	// 	return nil, status.Error(codes.Internal, msg)
+	// }
+	// s.ModelData.ChangeRoot(newRoot)
+	// return &pb.SetResponse{
+	// 	Prefix:   req.GetPrefix(),
+	// 	Response: results,
+	// }, nil
 }
 
 // Subscribe implements the Subscribe RPC in gNMI spec.
