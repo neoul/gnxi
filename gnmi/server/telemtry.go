@@ -17,7 +17,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type telemetryID uint64
+// TelemetryID - Telemetry Session ID
+type TelemetryID uint64
 type present struct {
 	duplicates uint32
 }
@@ -31,26 +32,26 @@ type telemetryUpdateEvent struct {
 }
 
 type telemetryCtrl struct {
-	// map[uint]*telemetrySubscription: uint = is subscription.id
-	lookupTeleSub map[string]map[telemetryID]*telemetrySubscription
-	readyToUpdate map[telemetryID]*telemetrySubscription
-	createdList   map[telemetryID]pathSet // paths
-	replacedList  map[telemetryID]pathSet // paths
-	deletedList   map[telemetryID]pathSet // paths
+	// map[uint]*TelemetrySubscription: uint = is subscription.ID
+	lookupTeleSub map[string]map[TelemetryID]*TelemetrySubscription
+	readyToUpdate map[TelemetryID]*TelemetrySubscription
+	createdList   map[TelemetryID]pathSet // paths
+	replacedList  map[TelemetryID]pathSet // paths
+	deletedList   map[TelemetryID]pathSet // paths
 	mutex         sync.RWMutex
 }
 
 func newTelemetryCB() *telemetryCtrl {
 	return &telemetryCtrl{
-		lookupTeleSub: map[string]map[telemetryID]*telemetrySubscription{},
-		readyToUpdate: map[telemetryID]*telemetrySubscription{},
-		createdList:   map[telemetryID]pathSet{},
-		replacedList:  map[telemetryID]pathSet{},
-		deletedList:   map[telemetryID]pathSet{},
+		lookupTeleSub: map[string]map[TelemetryID]*TelemetrySubscription{},
+		readyToUpdate: map[TelemetryID]*TelemetrySubscription{},
+		createdList:   map[TelemetryID]pathSet{},
+		replacedList:  map[TelemetryID]pathSet{},
+		deletedList:   map[TelemetryID]pathSet{},
 	}
 }
 
-func (tcb *telemetryCtrl) registerTelemetry(m *model.Model, telesub *telemetrySubscription) error {
+func (tcb *telemetryCtrl) registerTelemetry(m *model.Model, telesub *TelemetrySubscription) error {
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
 	for _, path := range telesub.Paths {
@@ -60,10 +61,10 @@ func (tcb *telemetryCtrl) registerTelemetry(m *model.Model, telesub *telemetrySu
 			for _, p := range allpaths {
 				subgroup, ok := tcb.lookupTeleSub[p]
 				if !ok || subgroup == nil {
-					tcb.lookupTeleSub[p] = map[telemetryID]*telemetrySubscription{}
+					tcb.lookupTeleSub[p] = map[TelemetryID]*TelemetrySubscription{}
 					subgroup = tcb.lookupTeleSub[p]
 				}
-				subgroup[telesub.id] = telesub
+				subgroup[telesub.ID] = telesub
 			}
 		}
 	}
@@ -71,13 +72,13 @@ func (tcb *telemetryCtrl) registerTelemetry(m *model.Model, telesub *telemetrySu
 	return nil
 }
 
-func (tcb *telemetryCtrl) unregisterTelemetry(telesub *telemetrySubscription) {
+func (tcb *telemetryCtrl) unregisterTelemetry(telesub *TelemetrySubscription) {
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
 	for _, subgroup := range tcb.lookupTeleSub {
-		_, ok := subgroup[telesub.id]
+		_, ok := subgroup[telesub.ID]
 		if ok {
-			delete(subgroup, telesub.id)
+			delete(subgroup, telesub.ID)
 		}
 	}
 }
@@ -86,10 +87,10 @@ func (tcb *telemetryCtrl) unregisterTelemetry(telesub *telemetrySubscription) {
 func (tcb *telemetryCtrl) OnChangeStarted(changes ygot.GoStruct) {
 	tcb.mutex.RLock()
 	defer tcb.mutex.RUnlock()
-	tcb.readyToUpdate = map[telemetryID]*telemetrySubscription{}
-	tcb.createdList = map[telemetryID]pathSet{}
-	tcb.replacedList = map[telemetryID]pathSet{}
-	tcb.deletedList = map[telemetryID]pathSet{}
+	tcb.readyToUpdate = map[TelemetryID]*TelemetrySubscription{}
+	tcb.createdList = map[TelemetryID]pathSet{}
+	tcb.replacedList = map[TelemetryID]pathSet{}
+	tcb.deletedList = map[TelemetryID]pathSet{}
 }
 
 // OnChangeCreated - callback for Telemetry subscription on data changes
@@ -103,17 +104,17 @@ func (tcb *telemetryCtrl) OnChangeCreated(slicepath []string, changes ygot.GoStr
 		subgroup, ok := tcb.lookupTeleSub[path]
 		if ok {
 			for _, telesub := range subgroup {
-				if telesub.isPolling {
+				if telesub.IsPolling {
 					continue
 				}
 				glog.Infof("telemetry[%d][%d].onchange(created).matched.path(%s)",
-					telesub.sessionid, telesub.id, path)
-				tcb.readyToUpdate[telesub.id] = telesub
-				if tcb.createdList[telesub.id] == nil {
-					tcb.createdList[telesub.id] = pathSet{datapath: &present{duplicates: 1}}
+					telesub.SessionID, telesub.ID, path)
+				tcb.readyToUpdate[telesub.ID] = telesub
+				if tcb.createdList[telesub.ID] == nil {
+					tcb.createdList[telesub.ID] = pathSet{datapath: &present{duplicates: 1}}
 				} else {
-					if p, ok := tcb.createdList[telesub.id][datapath]; !ok {
-						tcb.createdList[telesub.id][datapath] = &present{duplicates: 1}
+					if p, ok := tcb.createdList[telesub.ID][datapath]; !ok {
+						tcb.createdList[telesub.ID][datapath] = &present{duplicates: 1}
 					} else {
 						p.duplicates++
 					}
@@ -128,17 +129,17 @@ func (tcb *telemetryCtrl) OnChangeCreated(slicepath []string, changes ygot.GoStr
 			subgroup, ok := tcb.lookupTeleSub[path]
 			if ok {
 				for _, telesub := range subgroup {
-					if telesub.isPolling {
+					if telesub.IsPolling {
 						continue
 					}
 					glog.Infof("telemetry[%d][%d].onchange(created).matched.path(%s)",
-						telesub.sessionid, telesub.id, path)
-					tcb.readyToUpdate[telesub.id] = telesub
-					if tcb.createdList[telesub.id] == nil {
-						tcb.createdList[telesub.id] = pathSet{datapath: &present{duplicates: 1}}
+						telesub.SessionID, telesub.ID, path)
+					tcb.readyToUpdate[telesub.ID] = telesub
+					if tcb.createdList[telesub.ID] == nil {
+						tcb.createdList[telesub.ID] = pathSet{datapath: &present{duplicates: 1}}
 					} else {
-						if p, ok := tcb.createdList[telesub.id][datapath]; !ok {
-							tcb.createdList[telesub.id][datapath] = &present{duplicates: 1}
+						if p, ok := tcb.createdList[telesub.ID][datapath]; !ok {
+							tcb.createdList[telesub.ID][datapath] = &present{duplicates: 1}
 						} else {
 							p.duplicates++
 						}
@@ -160,17 +161,17 @@ func (tcb *telemetryCtrl) OnChangeReplaced(slicepath []string, changes ygot.GoSt
 		subgroup, ok := tcb.lookupTeleSub[path]
 		if ok {
 			for _, telesub := range subgroup {
-				if telesub.isPolling {
+				if telesub.IsPolling {
 					continue
 				}
 				glog.Infof("telemetry[%d][%d].onchange(replaced).matched.path(%s)",
-					telesub.sessionid, telesub.id, path)
-				tcb.readyToUpdate[telesub.id] = telesub
-				if tcb.replacedList[telesub.id] == nil {
-					tcb.replacedList[telesub.id] = pathSet{datapath: &present{duplicates: 1}}
+					telesub.SessionID, telesub.ID, path)
+				tcb.readyToUpdate[telesub.ID] = telesub
+				if tcb.replacedList[telesub.ID] == nil {
+					tcb.replacedList[telesub.ID] = pathSet{datapath: &present{duplicates: 1}}
 				} else {
-					if p, ok := tcb.replacedList[telesub.id][datapath]; !ok {
-						tcb.replacedList[telesub.id][datapath] = &present{duplicates: 1}
+					if p, ok := tcb.replacedList[telesub.ID][datapath]; !ok {
+						tcb.replacedList[telesub.ID][datapath] = &present{duplicates: 1}
 					} else {
 						p.duplicates++
 						fmt.Println("p.duplicates++", p.duplicates)
@@ -186,17 +187,17 @@ func (tcb *telemetryCtrl) OnChangeReplaced(slicepath []string, changes ygot.GoSt
 			subgroup, ok := tcb.lookupTeleSub[path]
 			if ok {
 				for _, telesub := range subgroup {
-					if telesub.isPolling {
+					if telesub.IsPolling {
 						continue
 					}
 					glog.Infof("telemetry[%d][%d].onchange(replaced).matched.path(%s)",
-						telesub.sessionid, telesub.id, path)
-					tcb.readyToUpdate[telesub.id] = telesub
-					if tcb.replacedList[telesub.id] == nil {
-						tcb.replacedList[telesub.id] = pathSet{datapath: &present{duplicates: 1}}
+						telesub.SessionID, telesub.ID, path)
+					tcb.readyToUpdate[telesub.ID] = telesub
+					if tcb.replacedList[telesub.ID] == nil {
+						tcb.replacedList[telesub.ID] = pathSet{datapath: &present{duplicates: 1}}
 					} else {
-						if p, ok := tcb.replacedList[telesub.id][datapath]; !ok {
-							tcb.replacedList[telesub.id][datapath] = &present{duplicates: 1}
+						if p, ok := tcb.replacedList[telesub.ID][datapath]; !ok {
+							tcb.replacedList[telesub.ID][datapath] = &present{duplicates: 1}
 						} else {
 							p.duplicates++
 						}
@@ -218,17 +219,17 @@ func (tcb *telemetryCtrl) OnChangeDeleted(slicepath []string) {
 		subgroup, ok := tcb.lookupTeleSub[path]
 		if ok {
 			for _, telesub := range subgroup {
-				if telesub.isPolling {
+				if telesub.IsPolling {
 					continue
 				}
 				glog.Infof("telemetry[%d][%d].onchange(deleted).matched.path(%s)",
-					telesub.sessionid, telesub.id, path)
-				tcb.readyToUpdate[telesub.id] = telesub
-				if tcb.deletedList[telesub.id] == nil {
-					tcb.deletedList[telesub.id] = pathSet{datapath: &present{duplicates: 1}}
+					telesub.SessionID, telesub.ID, path)
+				tcb.readyToUpdate[telesub.ID] = telesub
+				if tcb.deletedList[telesub.ID] == nil {
+					tcb.deletedList[telesub.ID] = pathSet{datapath: &present{duplicates: 1}}
 				} else {
-					if p, ok := tcb.deletedList[telesub.id][datapath]; !ok {
-						tcb.deletedList[telesub.id][datapath] = &present{duplicates: 1}
+					if p, ok := tcb.deletedList[telesub.ID][datapath]; !ok {
+						tcb.deletedList[telesub.ID][datapath] = &present{duplicates: 1}
 					} else {
 						p.duplicates++
 					}
@@ -243,17 +244,17 @@ func (tcb *telemetryCtrl) OnChangeDeleted(slicepath []string) {
 			subgroup, ok := tcb.lookupTeleSub[path]
 			if ok {
 				for _, telesub := range subgroup {
-					if telesub.isPolling {
+					if telesub.IsPolling {
 						continue
 					}
 					glog.Infof("telemetry[%d][%d].onchange(deleted).matched.path(%s)",
-						telesub.sessionid, telesub.id, path)
-					tcb.readyToUpdate[telesub.id] = telesub
-					if tcb.deletedList[telesub.id] == nil {
-						tcb.deletedList[telesub.id] = pathSet{datapath: &present{duplicates: 1}}
+						telesub.SessionID, telesub.ID, path)
+					tcb.readyToUpdate[telesub.ID] = telesub
+					if tcb.deletedList[telesub.ID] == nil {
+						tcb.deletedList[telesub.ID] = pathSet{datapath: &present{duplicates: 1}}
 					} else {
-						if p, ok := tcb.deletedList[telesub.id][datapath]; !ok {
-							tcb.deletedList[telesub.id][datapath] = &present{duplicates: 1}
+						if p, ok := tcb.deletedList[telesub.ID][datapath]; !ok {
+							tcb.deletedList[telesub.ID][datapath] = &present{duplicates: 1}
 						} else {
 							p.duplicates++
 						}
@@ -284,10 +285,10 @@ func (tcb *telemetryCtrl) OnChangeFinished(changes ygot.GoStruct) {
 	}
 }
 
-// telemetrySession - gNMI gRPC Subscribe RPC (Telemetry) session information managed by server
-type telemetrySession struct {
-	id        telemetryID
-	telesub   map[string]*telemetrySubscription
+// TelemetrySession - gNMI gRPC Subscribe RPC (Telemetry) session information managed by server
+type TelemetrySession struct {
+	ID        TelemetryID
+	Telesub   map[string]*TelemetrySubscription
 	respchan  chan *pb.SubscribeResponse
 	shutdown  chan struct{}
 	waitgroup *sync.WaitGroup
@@ -297,31 +298,31 @@ type telemetrySession struct {
 }
 
 var (
-	sessID telemetryID
-	subID  telemetryID
+	sessID TelemetryID
+	subID  TelemetryID
 )
 
-func (teleses *telemetrySession) lock() {
+func (teleses *TelemetrySession) lock() {
 	teleses.mutex.Lock()
 }
 
-func (teleses *telemetrySession) unlock() {
+func (teleses *TelemetrySession) unlock() {
 	teleses.mutex.Unlock()
 }
 
-func (teleses *telemetrySession) rlock() {
+func (teleses *TelemetrySession) rlock() {
 	teleses.mutex.RLock()
 }
 
-func (teleses *telemetrySession) runlock() {
+func (teleses *TelemetrySession) runlock() {
 	teleses.mutex.RUnlock()
 }
 
-func newTelemetrySession(s *Server) *telemetrySession {
+func newTelemetrySession(s *Server) *TelemetrySession {
 	sessID++
-	return &telemetrySession{
-		id:        sessID,
-		telesub:   map[string]*telemetrySubscription{},
+	return &TelemetrySession{
+		ID:        sessID,
+		Telesub:   map[string]*TelemetrySubscription{},
 		respchan:  make(chan *pb.SubscribeResponse, 256),
 		shutdown:  make(chan struct{}),
 		waitgroup: new(sync.WaitGroup),
@@ -330,20 +331,20 @@ func newTelemetrySession(s *Server) *telemetrySession {
 	}
 }
 
-func (teleses *telemetrySession) stopTelemetrySession() {
+func (teleses *TelemetrySession) stopTelemetrySession() {
 	teleses.lock()
 	defer teleses.unlock()
-	for _, telesub := range teleses.telesub {
+	for _, telesub := range teleses.Telesub {
 		teleses.server.unregisterTelemetry(telesub)
 	}
 	close(teleses.shutdown)
 	teleses.waitgroup.Wait()
 }
 
-// telemetrySubscription - Default structure for Telemetry Update Subscription
-type telemetrySubscription struct {
-	id                telemetryID
-	sessionid         telemetryID
+// TelemetrySubscription - Default structure for Telemetry Update Subscription
+type TelemetrySubscription struct {
+	ID                TelemetryID
+	SessionID         TelemetryID
 	key               *string
 	Prefix            *pb.Path                 `json:"prefix,omitempty"`
 	UseAliases        bool                     `json:"use_aliases,omitempty"`
@@ -357,11 +358,14 @@ type telemetrySubscription struct {
 	HeartbeatInterval uint64                   `json:"heartbeat_interval,omitempty"`
 	Duplicates        map[string]uint32        `json:"duplicates,omitempty"` // Number of coalesced duplicates.
 	// internal data
-	session            *telemetrySession
-	_subscriptionMode  pb.SubscriptionMode
-	_sampleInterval    uint64
-	_suppressRedundant bool
-	_heartbeatInterval uint64
+	session    *TelemetrySession
+	Configured struct {
+		SubscriptionMode  pb.SubscriptionMode
+		SampleInterval    uint64
+		SuppressRedundant bool
+		HeartbeatInterval uint64
+	}
+	IsPolling bool
 
 	eventque     chan *telemetryUpdateEvent
 	createdList  *trie.Trie
@@ -369,7 +373,6 @@ type telemetrySubscription struct {
 	deletedList  *trie.Trie
 	started      bool
 	stop         chan struct{}
-	isPolling    bool
 
 	// // https://github.com/openconfig/gnmi/issues/45 - QoSMarking seems to be deprecated
 	// Qos              *pb.QOSMarking           `json:"qos,omitempty"`          // DSCP marking to be used.
@@ -381,25 +384,25 @@ type telemetrySubscription struct {
 	// 2. keys (The path to the subscription data)
 }
 
-func (telesub *telemetrySubscription) run(teleses *telemetrySession) {
+func (telesub *TelemetrySubscription) run(teleses *TelemetrySession) {
 	var samplingTimer, heartbeatTimer *time.Ticker
 	shutdown := teleses.shutdown
 	waitgroup := teleses.waitgroup
 	defer func() {
-		glog.Warningf("telemetry[%d][%d].quit", telesub.sessionid, telesub.id)
+		glog.Warningf("telemetry[%d][%d].quit", telesub.SessionID, telesub.ID)
 		telesub.started = false
 		waitgroup.Done()
 	}()
-	if telesub._sampleInterval > 0 {
-		tick := time.Duration(telesub._sampleInterval)
+	if telesub.Configured.SampleInterval > 0 {
+		tick := time.Duration(telesub.Configured.SampleInterval)
 		samplingTimer = time.NewTicker(tick * time.Nanosecond)
 	} else {
 		tick := time.Duration(defaultInterval)
 		samplingTimer = time.NewTicker(tick * time.Nanosecond)
 		samplingTimer.Stop() // stop
 	}
-	if telesub._heartbeatInterval > 0 {
-		tick := time.Duration(telesub._heartbeatInterval)
+	if telesub.Configured.HeartbeatInterval > 0 {
+		tick := time.Duration(telesub.Configured.HeartbeatInterval)
 		heartbeatTimer = time.NewTicker(tick * time.Nanosecond)
 	} else {
 		tick := time.Duration(defaultInterval)
@@ -407,18 +410,18 @@ func (telesub *telemetrySubscription) run(teleses *telemetrySession) {
 		heartbeatTimer.Stop() // stop
 	}
 	if samplingTimer == nil || heartbeatTimer == nil {
-		glog.Errorf("telemetry[%d][%d].timer-failed", telesub.sessionid, telesub.id)
+		glog.Errorf("telemetry[%d][%d].timer-failed", telesub.SessionID, telesub.ID)
 		return
 	}
 	for {
 		select {
 		case event, ok := <-telesub.eventque:
 			if !ok {
-				glog.Errorf("telemetry[%d][%d].event-queue-closed", telesub.sessionid, telesub.id)
+				glog.Errorf("telemetry[%d][%d].event-queue-closed", telesub.SessionID, telesub.ID)
 				return
 			}
-			glog.Infof("telemetry[%d][%d].event-received", telesub.sessionid, telesub.id)
-			switch telesub._subscriptionMode {
+			glog.Infof("telemetry[%d][%d].event-received", telesub.SessionID, telesub.ID)
+			switch telesub.Configured.SubscriptionMode {
 			case pb.SubscriptionMode_ON_CHANGE, pb.SubscriptionMode_SAMPLE:
 				// glog.Info("replaced,deleted ", event.replacedList, event.deletedList)
 				for p, d := range event.createdList {
@@ -445,11 +448,11 @@ func (telesub *telemetrySubscription) run(teleses *telemetrySession) {
 						telesub.deletedList.Add(p, d)
 					}
 				}
-				if telesub._subscriptionMode == pb.SubscriptionMode_ON_CHANGE {
+				if telesub.Configured.SubscriptionMode == pb.SubscriptionMode_ON_CHANGE {
 					// utilities.PrintStruct(event.updatedroot)
 					err := teleses.telemetryUpdate(telesub, event.updatedroot)
 					if err != nil {
-						glog.Errorf("telemetry[%d][%d].failed(%v)", telesub.sessionid, telesub.id, err)
+						glog.Errorf("telemetry[%d][%d].failed(%v)", telesub.SessionID, telesub.ID, err)
 						return
 					}
 					telesub.createdList = trie.New()
@@ -458,14 +461,14 @@ func (telesub *telemetrySubscription) run(teleses *telemetrySession) {
 				}
 			}
 		case <-samplingTimer.C:
-			glog.Infof("telemetry[%d][%d].sampling-timer-expired", telesub.sessionid, telesub.id)
+			glog.Infof("telemetry[%d][%d].sampling-timer-expired", telesub.SessionID, telesub.ID)
 			// suppress_redundant - skips the telemetry update if no changes
-			if !telesub._suppressRedundant ||
+			if !telesub.Configured.SuppressRedundant ||
 				telesub.replacedList.Size() > 0 ||
 				telesub.deletedList.Size() > 0 {
 				err := teleses.telemetryUpdate(telesub, nil)
 				if err != nil {
-					glog.Errorf("telemetry[%d][%d].failed(%v)", telesub.sessionid, telesub.id, err)
+					glog.Errorf("telemetry[%d][%d].failed(%v)", telesub.SessionID, telesub.ID, err)
 					return
 				}
 			}
@@ -473,27 +476,27 @@ func (telesub *telemetrySubscription) run(teleses *telemetrySession) {
 			telesub.replacedList = trie.New()
 			telesub.deletedList = trie.New()
 		case <-heartbeatTimer.C:
-			glog.Infof("telemetry[%d][%d].heartbeat-timer-expired", telesub.sessionid, telesub.id)
+			glog.Infof("telemetry[%d][%d].heartbeat-timer-expired", telesub.SessionID, telesub.ID)
 			err := teleses.telemetryUpdate(telesub, nil)
 			if err != nil {
-				glog.Errorf("telemetry[%d][%d].failed(%v)", telesub.sessionid, telesub.id, err)
+				glog.Errorf("telemetry[%d][%d].failed(%v)", telesub.SessionID, telesub.ID, err)
 				return
 			}
 			telesub.createdList = trie.New()
 			telesub.replacedList = trie.New()
 			telesub.deletedList = trie.New()
 		case <-shutdown:
-			glog.Infof("telemetry[%d][%d].shutdown", teleses.id, telesub.id)
+			glog.Infof("telemetry[%d][%d].shutdown", teleses.ID, telesub.ID)
 			return
 		case <-telesub.stop:
-			glog.Infof("telemetry[%d][%d].stopped", teleses.id, telesub.id)
+			glog.Infof("telemetry[%d][%d].stopped", teleses.ID, telesub.ID)
 			return
 		}
 	}
 }
 
 // StartTelmetryUpdate - returns a key for telemetry comparison
-func (teleses *telemetrySession) StartTelmetryUpdate(telesub *telemetrySubscription) error {
+func (teleses *TelemetrySession) StartTelmetryUpdate(telesub *TelemetrySubscription) error {
 	teleses.lock()
 	defer teleses.unlock()
 	teleses.server.registerTelemetry(teleses.server.Model, telesub)
@@ -506,7 +509,7 @@ func (teleses *telemetrySession) StartTelmetryUpdate(telesub *telemetrySubscript
 }
 
 // StopTelemetryUpdate - returns a key for telemetry comparison
-func (teleses *telemetrySession) StopTelemetryUpdate(telesub *telemetrySubscription) error {
+func (teleses *TelemetrySession) StopTelemetryUpdate(telesub *TelemetrySubscription) error {
 	teleses.lock()
 	defer teleses.unlock()
 	teleses.server.unregisterTelemetry(telesub)
@@ -518,14 +521,14 @@ func (teleses *telemetrySession) StopTelemetryUpdate(telesub *telemetrySubscript
 	return nil
 }
 
-func (teleses *telemetrySession) sendTelemetryUpdate(responses []*pb.SubscribeResponse) error {
+func (teleses *TelemetrySession) sendTelemetryUpdate(responses []*pb.SubscribeResponse) error {
 	for _, response := range responses {
 		teleses.respchan <- response
 	}
 	return nil
 }
 
-func getDeletes(telesub *telemetrySubscription, path *string, deleteOnly bool) ([]*pb.Path, error) {
+func getDeletes(telesub *TelemetrySubscription, path *string, deleteOnly bool) ([]*pb.Path, error) {
 	deletesNum := telesub.replacedList.Size() + telesub.deletedList.Size()
 	deletes := make([]*pb.Path, 0, deletesNum)
 	if !deleteOnly {
@@ -549,7 +552,7 @@ func getDeletes(telesub *telemetrySubscription, path *string, deleteOnly bool) (
 	return deletes, nil
 }
 
-func getUpdate(telesub *telemetrySubscription, data *model.DataAndPath, encoding pb.Encoding) (*pb.Update, error) {
+func getUpdate(telesub *TelemetrySubscription, data *model.DataAndPath, encoding pb.Encoding) (*pb.Update, error) {
 	typedValue, err := ygot.EncodeTypedValue(data.Value, encoding)
 	if err != nil {
 		return nil, fmt.Errorf("encoding-error(%s)", err.Error())
@@ -580,7 +583,7 @@ func getUpdate(telesub *telemetrySubscription, data *model.DataAndPath, encoding
 }
 
 // initTelemetryUpdate - Process and generate responses for a init update.
-func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) error {
+func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) error {
 	s := teleses.server
 	bundling := !s.disableBundling
 	subscriptionList := req.GetSubscribe()
@@ -678,7 +681,7 @@ func (teleses *telemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 }
 
 // telemetryUpdate - Process and generate responses for a telemetry update.
-func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription, updatedroot ygot.GoStruct) error {
+func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription, updatedroot ygot.GoStruct) error {
 	telesub.session.rlock()
 	defer telesub.session.runlock()
 	s := teleses.server
@@ -700,7 +703,7 @@ func (teleses *telemetrySession) telemetryUpdate(telesub *telemetrySubscription,
 		// prefix = nil
 		// alias = xxx
 	}
-	if telesub._subscriptionMode != pb.SubscriptionMode_ON_CHANGE {
+	if telesub.Configured.SubscriptionMode != pb.SubscriptionMode_ON_CHANGE {
 		syncPaths := s.ModelData.GetSyncUpdatePath(prefix, telesub.Paths)
 		s.ModelData.RunSyncUpdate(time.Second*3, syncPaths)
 	}
@@ -802,14 +805,14 @@ const (
 	minimumInterval = 1000000000
 )
 
-func (teleses *telemetrySession) addStreamSubscription(
+func (teleses *TelemetrySession) addStreamSubscription(
 	prefix *pb.Path, useAliases bool, streamingMode pb.SubscriptionList_Mode, allowAggregation bool,
 	encoding pb.Encoding, paths []*pb.Path, subscriptionMode pb.SubscriptionMode,
 	sampleInterval uint64, suppressRedundant bool, heartbeatInterval uint64,
-) (*telemetrySubscription, error) {
+) (*TelemetrySubscription, error) {
 
-	telesub := &telemetrySubscription{
-		sessionid:         teleses.id,
+	telesub := &TelemetrySubscription{
+		SessionID:         teleses.ID,
 		Prefix:            prefix,
 		UseAliases:        useAliases,
 		StreamingMode:     streamingMode,
@@ -833,19 +836,19 @@ func (teleses *telemetrySession) addStreamSubscription(
 	switch telesub.SubscriptionMode {
 	case pb.SubscriptionMode_TARGET_DEFINED:
 		// vendor specific mode
-		telesub._subscriptionMode = pb.SubscriptionMode_SAMPLE
-		telesub._sampleInterval = defaultInterval / 10
-		telesub._suppressRedundant = true
-		telesub._heartbeatInterval = 0
+		telesub.Configured.SubscriptionMode = pb.SubscriptionMode_SAMPLE
+		telesub.Configured.SampleInterval = defaultInterval / 10
+		telesub.Configured.SuppressRedundant = true
+		telesub.Configured.HeartbeatInterval = 0
 	case pb.SubscriptionMode_ON_CHANGE:
 		if telesub.HeartbeatInterval < minimumInterval && telesub.HeartbeatInterval != 0 {
 			return nil, status.Errorf(codes.InvalidArgument,
 				"heartbeat_interval(< 1sec) is not supported")
 		}
-		telesub._subscriptionMode = pb.SubscriptionMode_ON_CHANGE
-		telesub._sampleInterval = 0
-		telesub._suppressRedundant = false
-		telesub._heartbeatInterval = telesub.HeartbeatInterval
+		telesub.Configured.SubscriptionMode = pb.SubscriptionMode_ON_CHANGE
+		telesub.Configured.SampleInterval = 0
+		telesub.Configured.SuppressRedundant = false
+		telesub.Configured.HeartbeatInterval = telesub.HeartbeatInterval
 	case pb.SubscriptionMode_SAMPLE:
 		if telesub.SampleInterval < minimumInterval && telesub.SampleInterval != 0 {
 			return nil, status.Errorf(codes.InvalidArgument,
@@ -855,17 +858,17 @@ func (teleses *telemetrySession) addStreamSubscription(
 			return nil, status.Errorf(codes.InvalidArgument,
 				"heartbeat_interval(< 1sec) is not supported")
 		}
-		telesub._subscriptionMode = pb.SubscriptionMode_SAMPLE
-		telesub._sampleInterval = telesub.SampleInterval
+		telesub.Configured.SubscriptionMode = pb.SubscriptionMode_SAMPLE
+		telesub.Configured.SampleInterval = telesub.SampleInterval
 		if telesub.SampleInterval == 0 {
 			// Set minimal sampling interval (1sec)
-			telesub._sampleInterval = minimumInterval
+			telesub.Configured.SampleInterval = minimumInterval
 		}
-		telesub._suppressRedundant = telesub.SuppressRedundant
-		telesub._heartbeatInterval = telesub.HeartbeatInterval
+		telesub.Configured.SuppressRedundant = telesub.SuppressRedundant
+		telesub.Configured.HeartbeatInterval = telesub.HeartbeatInterval
 	}
 	key := fmt.Sprintf("%d-%s-%s-%s-%s-%d-%d-%t-%t-%t",
-		telesub.sessionid,
+		telesub.SessionID,
 		telesub.StreamingMode, telesub.Encoding, telesub.SubscriptionMode,
 		xpath.ToXPATH(telesub.Prefix), telesub.SampleInterval, telesub.HeartbeatInterval,
 		telesub.UseAliases, telesub.AllowAggregation, telesub.SuppressRedundant,
@@ -874,44 +877,44 @@ func (teleses *telemetrySession) addStreamSubscription(
 	telesub.eventque = make(chan *telemetryUpdateEvent, 64)
 	teleses.lock()
 	defer teleses.unlock()
-	if t, ok := teleses.telesub[key]; ok {
+	if t, ok := teleses.Telesub[key]; ok {
 		// only updates the new path
 		t.Paths = append(t.Paths, telesub.Paths...)
 		telesub = t
-		glog.Infof("telemetry[%d][%s].add-path(%s)", teleses.id, key, xpath.ToXPATH(telesub.Paths[len(telesub.Paths)-1]))
+		glog.Infof("telemetry[%d][%s].add-path(%s)", teleses.ID, key, xpath.ToXPATH(telesub.Paths[len(telesub.Paths)-1]))
 		return nil, nil
 	}
 	subID++
 	id := subID
-	telesub.id = id
+	telesub.ID = id
 	telesub.session = teleses
-	teleses.telesub[key] = telesub
-	glog.Infof("telemetry[%d][%d].new(%s)", teleses.id, telesub.id, *telesub.key)
-	glog.Infof("telemetry[%d][%d].add-path(%s)", teleses.id, telesub.id, xpath.ToXPATH(telesub.Paths[0]))
+	teleses.Telesub[key] = telesub
+	glog.Infof("telemetry[%d][%d].new(%s)", teleses.ID, telesub.ID, *telesub.key)
+	glog.Infof("telemetry[%d][%d].add-path(%s)", teleses.ID, telesub.ID, xpath.ToXPATH(telesub.Paths[0]))
 	return telesub, nil
 }
 
-// addPollSubscription - Create new telemetrySubscription
-func (teleses *telemetrySession) addPollSubscription() error {
-	telesub := telemetrySubscription{
+// addPollSubscription - Create new TelemetrySubscription
+func (teleses *TelemetrySession) addPollSubscription() error {
+	telesub := TelemetrySubscription{
 		StreamingMode: pb.SubscriptionList_POLL,
 		Paths:         []*pb.Path{},
-		isPolling:     true,
+		IsPolling:     true,
 		session:       teleses,
 	}
 	subID++
 	id := subID
 	key := fmt.Sprintf("%s", telesub.StreamingMode)
-	telesub.id = id
+	telesub.ID = id
 	telesub.key = &key
 	teleses.lock()
 	defer teleses.unlock()
-	teleses.telesub[key] = &telesub
-	glog.Infof("telemetry[%d][%d].new(%s)", teleses.id, telesub.id, *telesub.key)
+	teleses.Telesub[key] = &telesub
+	glog.Infof("telemetry[%d][%d].new(%s)", teleses.ID, telesub.ID, *telesub.key)
 	return nil
 }
 
-func (teleses *telemetrySession) updateAliases(aliaslist []*pb.Alias) error {
+func (teleses *TelemetrySession) updateAliases(aliaslist []*pb.Alias) error {
 	teleses.lock()
 	defer teleses.unlock()
 	for _, alias := range aliaslist {
@@ -925,7 +928,7 @@ func (teleses *telemetrySession) updateAliases(aliaslist []*pb.Alias) error {
 	return nil
 }
 
-func processSR(teleses *telemetrySession, req *pb.SubscribeRequest) error {
+func processSR(teleses *TelemetrySession, req *pb.SubscribeRequest) error {
 	// SubscribeRequest for poll Subscription indication
 	pollMode := req.GetPoll()
 	if pollMode != nil {
@@ -970,17 +973,17 @@ func processSR(teleses *telemetrySession, req *pb.SubscribeRequest) error {
 	prefix := subscriptionList.GetPrefix()
 	useAliases := subscriptionList.GetUseAliases()
 	allowAggregation := subscriptionList.GetAllowAggregation()
-	startingList := []*telemetrySubscription{}
+	startingList := []*TelemetrySubscription{}
 	for _, updateEntry := range subList {
 		path := updateEntry.GetPath()
 		submod := updateEntry.GetMode()
-		_sampleInterval := updateEntry.GetSampleInterval()
+		SampleInterval := updateEntry.GetSampleInterval()
 		supressRedundant := updateEntry.GetSuppressRedundant()
 		heartBeatInterval := updateEntry.GetHeartbeatInterval()
 		telesub, err := teleses.addStreamSubscription(
 			prefix, useAliases, pb.SubscriptionList_STREAM,
 			allowAggregation, encoding, []*pb.Path{path}, submod,
-			_sampleInterval, supressRedundant, heartBeatInterval)
+			SampleInterval, supressRedundant, heartBeatInterval)
 		if err != nil {
 			return err
 		}
