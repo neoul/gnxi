@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/neoul/trie"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -69,7 +71,6 @@ func (tcb *telemetryCtrl) registerTelemetry(m *model.Model, telesub *TelemetrySu
 			}
 		}
 	}
-	fmt.Println(tcb)
 	return nil
 }
 
@@ -175,7 +176,7 @@ func (tcb *telemetryCtrl) OnChangeReplaced(slicepath []string, changes ygot.GoSt
 						tcb.replacedList[telesub.ID][datapath] = &present{duplicates: 1}
 					} else {
 						p.duplicates++
-						fmt.Println("p.duplicates++", p.duplicates)
+						// fmt.Println("p.duplicates++", p.duplicates)
 					}
 				}
 			}
@@ -289,6 +290,8 @@ func (tcb *telemetryCtrl) OnChangeFinished(changes ygot.GoStruct) {
 // TelemetrySession - gNMI gRPC Subscribe RPC (Telemetry) session information managed by server
 type TelemetrySession struct {
 	ID        TelemetryID
+	Address   string
+	Port      uint16
 	Telesub   map[string]*TelemetrySubscription
 	respchan  chan *pb.SubscribeResponse
 	shutdown  chan struct{}
@@ -319,10 +322,21 @@ func (teleses *TelemetrySession) runlock() {
 	teleses.mutex.RUnlock()
 }
 
-func newTelemetrySession(s *Server) *TelemetrySession {
+func newTelemetrySession(ctx context.Context, s *Server) *TelemetrySession {
+	var address string
+	var port int
 	sessID++
+	_, remoteaddr, _ := utilities.QueryAddr(ctx)
+	addr := remoteaddr.String()
+	end := strings.LastIndex(addr, ":")
+	if end < 0 {
+		address = addr[:end]
+		port, _ = strconv.Atoi(addr[end+1:])
+	}
 	return &TelemetrySession{
 		ID:        sessID,
+		Address:   address,
+		Port:      uint16(port),
 		Telesub:   map[string]*TelemetrySubscription{},
 		respchan:  make(chan *pb.SubscribeResponse, 256),
 		shutdown:  make(chan struct{}),
@@ -1031,7 +1045,8 @@ func addDynamicTeleSubscriptionInfo(targetDataBlock *ydb.YDB, telesubs []*Teleme
 	for _, telesub := range telesubs {
 		s += fmt.Sprintf(dynamicTeleSubInfoFormat,
 			telesub.ID, telesub.ID, telesub.ID,
-			"127.0.0.1", 55555,
+			telesub.session.Address,
+			telesub.session.Port,
 			telesub.Configured.SampleInterval,
 			telesub.Configured.HeartbeatInterval,
 			telesub.Configured.SuppressRedundant,
