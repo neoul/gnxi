@@ -193,7 +193,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	for _, top := range toplist {
 		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
-		bprefix, err := xpath.ToGNMIPath(bpath)
+		bprefix, err := ToGNMIPath(bpath)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
 		}
@@ -211,7 +211,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "encoding-error(%s)", err.Error())
 				}
-				datapath, err := xpath.ToGNMIPath(data.Path)
+				datapath, err := ToGNMIPath(data.Path)
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", data.Path)
 				}

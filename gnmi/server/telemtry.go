@@ -10,6 +10,7 @@ import (
 	"github.com/neoul/gnxi/gnmi/model"
 	"github.com/neoul/gnxi/utilities"
 	"github.com/neoul/gnxi/utilities/xpath"
+	"github.com/neoul/libydb/go/ydb"
 	"github.com/neoul/trie"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
@@ -332,6 +333,8 @@ func newTelemetrySession(s *Server) *TelemetrySession {
 }
 
 func (teleses *TelemetrySession) stopTelemetrySession() {
+	block := teleses.server.ModelData.GetYDB()
+	delDynamicTeleSubscriptionInfo(block, teleses)
 	teleses.lock()
 	defer teleses.unlock()
 	for _, telesub := range teleses.Telesub {
@@ -513,7 +516,6 @@ func (teleses *TelemetrySession) StopTelemetryUpdate(telesub *TelemetrySubscript
 	teleses.lock()
 	defer teleses.unlock()
 	teleses.server.unregisterTelemetry(telesub)
-
 	close(telesub.stop)
 	if telesub.eventque != nil {
 		close(telesub.eventque)
@@ -534,18 +536,18 @@ func getDeletes(telesub *TelemetrySubscription, path *string, deleteOnly bool) (
 	if !deleteOnly {
 		rpaths := telesub.replacedList.PrefixSearch(*path)
 		for _, rpath := range rpaths {
-			datapath, err := xpath.ToGNMIPath(rpath)
+			datapath, err := ToGNMIPath(rpath)
 			if err != nil {
-				return nil, fmt.Errorf("path-conversion-error(%s)", datapath)
+				return nil, fmt.Errorf("path-conversion-error(%s)", rpath)
 			}
 			deletes = append(deletes, datapath)
 		}
 	}
 	dpaths := telesub.deletedList.PrefixSearch(*path)
 	for _, dpath := range dpaths {
-		datapath, err := xpath.ToGNMIPath(dpath)
+		datapath, err := ToGNMIPath(dpath)
 		if err != nil {
-			return nil, fmt.Errorf("path-conversion-error(%s)", datapath)
+			return nil, fmt.Errorf("path-conversion-error(%s)", dpath)
 		}
 		deletes = append(deletes, datapath)
 	}
@@ -560,7 +562,7 @@ func getUpdate(telesub *TelemetrySubscription, data *model.DataAndPath, encoding
 	if typedValue == nil {
 		return nil, nil
 	}
-	datapath, err := xpath.ToGNMIPath(data.Path)
+	datapath, err := ToGNMIPath(data.Path)
 	if err != nil {
 		return nil, fmt.Errorf("update-path-conversion-error(%s)", data.Path)
 	}
@@ -635,7 +637,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 	for _, top := range toplist {
 		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
-		bprefix, err := xpath.ToGNMIPath(bpath)
+		bprefix, err := ToGNMIPath(bpath)
 		if err != nil {
 			return status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
 		}
@@ -732,7 +734,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 	for _, top := range toplist {
 		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
-		bprefix, err := xpath.ToGNMIPath(bpath)
+		bprefix, err := ToGNMIPath(bpath)
 		if err != nil {
 			return status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
 		}
@@ -991,6 +993,8 @@ func processSR(teleses *TelemetrySession, req *pb.SubscribeRequest) error {
 			startingList = append(startingList, telesub)
 		}
 	}
+	block := teleses.server.ModelData.GetYDB()
+	addDynamicTeleSubscriptionInfo(block, startingList)
 	for _, telesub := range startingList {
 		err = teleses.StartTelmetryUpdate(telesub)
 		if err != nil {
@@ -998,4 +1002,63 @@ func processSR(teleses *TelemetrySession, req *pb.SubscribeRequest) error {
 		}
 	}
 	return nil
+}
+
+var dynamicTeleSubInfoFormat string = `
+telemetry-system:
+ subscriptions:
+  dynamic-subscriptions:
+   dynamic-subscription[id=%d]:
+    id: %d
+    state:
+     id: %d
+     destination-address: %s
+     destination-port: %d
+     sample-interval: %d
+     heartbeat-interval: %d
+     suppress-redundant: %v
+     protocol: %s
+     encoding: ENC_%s
+    sensor-paths:`
+
+var dynamicTeleSubInfoPathFormat string = `
+     sensor-path[path=%s]:
+      state:
+       path: %s`
+
+func addDynamicTeleSubscriptionInfo(targetDataBlock *ydb.YDB, telesubs []*TelemetrySubscription) {
+	s := ""
+	for _, telesub := range telesubs {
+		s += fmt.Sprintf(dynamicTeleSubInfoFormat,
+			telesub.ID, telesub.ID, telesub.ID,
+			"127.0.0.1", 55555,
+			telesub.Configured.SampleInterval,
+			telesub.Configured.HeartbeatInterval,
+			telesub.Configured.SuppressRedundant,
+			"STREAM_GRPC",
+			telesub.Encoding,
+		)
+		for i := range telesub.Paths {
+			p := xpath.ToXPATH(telesub.Paths[i])
+			s += fmt.Sprintf(dynamicTeleSubInfoPathFormat, p, p)
+		}
+	}
+	if s != "" {
+		targetDataBlock.Write([]byte(s))
+	}
+}
+
+func delDynamicTeleSubscriptionInfo(targetDataBlock *ydb.YDB, teleses *TelemetrySession) {
+	s := ""
+	for _, telesub := range teleses.Telesub {
+		s += fmt.Sprintf(`
+telemetry-system:
+ subscriptions:
+  dynamic-subscriptions:
+   dynamic-subscription[id=%d]:
+`, telesub.ID)
+	}
+	if s != "" {
+		targetDataBlock.Delete([]byte(s))
+	}
 }
