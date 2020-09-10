@@ -10,7 +10,8 @@ SUBSYS=$!
 cd ..
 go build
 ./gnmi_target \
-  -v 2 \
+  --v 2 \
+  --cheat-code admin \
   --bind-address :10161 \
   --sync-required-path /interfaces/interface/state/counters \
   --server-key ../pki/server.key \

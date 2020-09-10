@@ -9,6 +9,8 @@ import (
 	"github.com/neoul/gnxi/utilities"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // StreamProtocol - The type of the subscription protocol
@@ -61,7 +63,9 @@ type Session struct {
 }
 
 var (
-	sessionID uint64
+	sessionID          uint64
+	errMissingMetadata = status.Errorf(codes.InvalidArgument, "missing metadata")
+	errInvalidSession  = status.Errorf(codes.InvalidArgument, "invalid session")
 )
 
 // Started - netsession interface to receive the session started event

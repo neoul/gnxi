@@ -4,7 +4,7 @@ A simple shell binary that requests for Capabilities from a gNMI Target.
 
 ## Install
 
-```
+```bash
 go get github.com/neoul/gnxi/gnmi_capabilities
 go install github.com/neoul/gnxi/gnmi_capabilities
 ```
@@ -28,7 +28,9 @@ go run gnmi_capabilities.go \
   -key ../pki/client.key \
   -cert ../pki/client.crt \
   -ca ../pki/ca.crt \
-  -alsologtostderr
+  -alsologtostderr \
+  -username root \
+  -password admin
 ```
 
 ## To Be Check

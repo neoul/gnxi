@@ -26,7 +26,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/neoul/gnxi/utilities"
-	"github.com/neoul/gnxi/utilities/credentials"
+	"github.com/neoul/gnxi/utilities/client/credentials"
 
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )

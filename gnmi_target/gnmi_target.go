@@ -32,8 +32,9 @@ import (
 	"github.com/neoul/gnxi/gnmi/model"
 	gnmiserver "github.com/neoul/gnxi/gnmi/server"
 
-	"github.com/neoul/gnxi/utilities/credentials"
 	"github.com/neoul/gnxi/utilities/netsession"
+	"github.com/neoul/gnxi/utilities/server/credentials"
+	"github.com/neoul/gnxi/utilities/server/login"
 
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )
@@ -41,7 +42,7 @@ import (
 var (
 	configFile      = pflag.StringP("config", "c", "", "configuration file for gnmid; search gnmid.conf from $PWD, /etc and $HOME/.gnmid if not specified")
 	bindAddr        = pflag.StringP("bind-address", "b", ":10161", "bind to address:port")
-	startupFile     = pflag.String("startup", "", "IETF JSON or YAML file for target startup data")
+	startup         = pflag.String("startup", "", "IETF JSON or YAML file for target startup data")
 	disableBundling = pflag.Bool("disable-update-bundling", false, "disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1")
 	help            = pflag.BoolP("help", "h", false, "help for gnmi_target")
 )
@@ -59,10 +60,10 @@ type configuration struct {
 	NoTLS           bool   `mapstructure:"no-tls,omitempty"`
 
 	TLS struct {
-		Insecure bool   `mapstructure:"insecure,omitempty"`
-		CAFile   string `mapstructure:"ca-cert,omitempty"`
-		CertFile string `mapstructure:"server-cert,omitempty"`
-		KeyFile  string `mapstructure:"server-key,omitempty"`
+		SkipVerify bool   `mapstructure:"skip-verify,omitempty"`
+		CAFile     string `mapstructure:"ca-cert,omitempty"`
+		CertFile   string `mapstructure:"server-cert,omitempty"`
+		KeyFile    string `mapstructure:"server-key,omitempty"`
 	} `mapstructure:"tls,omitempty"`
 }
 
@@ -107,12 +108,42 @@ func loadConfig() (*configuration, error) {
 	if err != nil {
 		return nil, err
 	}
+	// update flags if configured.
+	if config.BindAddress != "" {
+		pflag.Set("bind-address", config.BindAddress)
+	}
+	if config.Startup != "" {
+		pflag.Set("startup", config.Startup)
+	}
+	if config.DisableBundling {
+		pflag.Set("disable-update-bundling", fmt.Sprint(config.DisableBundling))
+	}
+	if config.DisableYDB {
+		pflag.Set("disable-ydb", fmt.Sprint(config.DisableYDB))
+	}
+	if config.NoTLS {
+		pflag.Set("no-tls", fmt.Sprint(config.NoTLS))
+	}
+	if config.TLS.SkipVerify {
+		pflag.Set("skip-verify", fmt.Sprint(config.TLS.SkipVerify))
+	}
+	if config.TLS.CAFile != "" {
+		pflag.Set("ca-cert", config.TLS.CAFile)
+	}
+	if config.TLS.CertFile != "" {
+		pflag.Set("server-cert", config.TLS.CertFile)
+	}
+	if config.TLS.KeyFile != "" {
+		pflag.Set("server-key", config.TLS.KeyFile)
+	}
+
 	syncReq := viper.Get("sync-required-path")
 	if syncReqList, ok := syncReq.([]interface{}); ok {
 		for i := range syncReqList {
 			flag.Set("sync-required-path", syncReqList[i].(string))
 		}
 	}
+
 	// utilities.PrintStruct(config)
 	return &config, nil
 }
@@ -166,12 +197,11 @@ func main() {
 		glog.Exitf("error in creating gnmid: %v", err)
 	}
 	defer s.Close()
-
-	opts := credentials.ServerCredentials(
-		&s.config.TLS.CAFile, &s.config.TLS.CertFile, &s.config.TLS.KeyFile,
-		&s.config.TLS.Insecure, &s.config.NoTLS)
-	// opts = append(opts, grpc.UnaryInterceptor(credentials.UnaryInterceptor))
-	// opts = append(opts, grpc.StreamInterceptor(credentials.StreamInterceptor))
+	opts := credentials.ServerCredentials(s.config.TLS.CAFile,
+		s.config.TLS.CertFile, s.config.TLS.KeyFile,
+		s.config.TLS.SkipVerify, s.config.NoTLS)
+	opts = append(opts, grpc.UnaryInterceptor(login.UnaryInterceptor))
+	opts = append(opts, grpc.StreamInterceptor(login.StreamInterceptor))
 	g := grpc.NewServer(opts...)
 	pb.RegisterGNMIServer(g, s)
 	reflection.Register(g)
