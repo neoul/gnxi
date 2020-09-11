@@ -58,6 +58,7 @@ type configuration struct {
 	DisableBundling bool   `mapstructure:"disable-update-bundling,omitempty"`
 	DisableYDB      bool   `mapstructure:"disable-ydb,omitempty"`
 	NoTLS           bool   `mapstructure:"no-tls,omitempty"`
+	CheatCode       string `mapstructure:"cheat-code,omitempty"`
 
 	TLS struct {
 		SkipVerify bool   `mapstructure:"skip-verify,omitempty"`
@@ -135,6 +136,9 @@ func loadConfig() (*configuration, error) {
 	}
 	if config.TLS.KeyFile != "" {
 		pflag.Set("server-key", config.TLS.KeyFile)
+	}
+	if config.CheatCode != "" {
+		pflag.Set("cheat-code", config.CheatCode)
 	}
 
 	syncReq := viper.Get("sync-required-path")

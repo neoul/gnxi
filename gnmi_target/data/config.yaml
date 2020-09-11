@@ -11,4 +11,5 @@ sync-required-path:
   - "/interfaces/interface/time-sensitive-networking/state/statistics"
   - "/interfaces/interface/radio-over-ethernet/state/statistics"
 disable-update-bundling: true
-disable-ydb: true
+disable-ydb: false
+cheat-code: admin

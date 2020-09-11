@@ -1,8 +1,25 @@
 # gNMI Target
 
-A simple shell binary that implements a gNMI Target with in-memory configuration and telemetry.
+gNMI (gRPC Network Management Interface) target (server) implementation.
+The gNMI target supports followings.
+
+- Capabilities
+- Subscribe
+- Get
+- Set (Under development)
 
 ## Install
+
+gNMI target requires [YAML DataBlock (https://github.com/neoul/libydb)](https://github.com/neoul/libydb) for data update.
+
+```bash
+git clone https://github.com/neoul/libydb.git
+cd libydb
+autoreconf -i -f
+./configure CFLAGS="-g -Wall"
+make
+make install
+```
 
 ```bash
 go get github.com/neoul/gnxi/gnmi_target
@@ -12,29 +29,5 @@ go install github.com/neoul/gnxi/gnmi_target
 ## Run
 
 ```bash
-ydb -r pub -a uss://gnmi -f ../gnmi/model/data/m6424.sample.yaml -d -v debug
-```
-
-```bash
-gnmi_target \
-  -bind_address :10161 \
-  -config openconfig-openflow.json \
-  -key server.key \
-  -cert server.crt \
-  -ca ca.crt \
-  -username foo \
-  -password bar \
-  -alsologtostderr
-```
-
-```bash
-go run gnmi_target.go \
-  -bind_address :10161 \
-  -config openconfig-openflow.json \
-  -key ../pki/server.key \
-  -cert ../pki/server.crt \
-  -ca ../pki/ca.crt \
-  -username foo \
-  -password bar \
-  -alsologtostderr
+./gnmi_target.demo.sh
 ```
