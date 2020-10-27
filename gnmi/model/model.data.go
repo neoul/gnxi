@@ -18,9 +18,7 @@ import (
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/value"
 	"github.com/openconfig/goyang/pkg/yang"
-	"github.com/openconfig/ygot/experimental/ygotutils"
 	"github.com/openconfig/ygot/ygot"
-	cpb "google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -113,10 +111,7 @@ func (mdata *ModelData) Close() {
 
 // NewGoStruct - creates a ValidatedGoStruct of this model from jsonData. If jsonData is nil, creates an empty GoStruct.
 func NewGoStruct(m *Model, jsonData []byte) (ygot.ValidatedGoStruct, error) {
-	rootNode, stat := ygotutils.NewNode(m.StructRootType, &gpb.Path{})
-	if stat.GetCode() != int32(cpb.Code_OK) {
-		return nil, fmt.Errorf("cannot create root node: %d: %s", stat.GetCode(), stat.GetMessage())
-	}
+	rootNode := reflect.New(m.StructRootType.Elem()).Interface()
 
 	root, ok := rootNode.(ygot.ValidatedGoStruct)
 	if !ok {
@@ -332,10 +327,7 @@ func (mdata *ModelData) SetDelete(jsonTree map[string]interface{}, prefix, path 
 func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op gpb.UpdateResult_Operation, prefix, path *gpb.Path, val *gpb.TypedValue) (*gpb.UpdateResult, error) {
 	// Validate the operation.
 	fullPath := xpath.GNMIFullPath(prefix, path)
-	emptyNode, stat := ygotutils.NewNode(mdata.model.StructRootType, fullPath)
-	if stat.GetCode() != int32(cpb.Code_OK) {
-		return nil, status.Errorf(codes.NotFound, "path %v is not found in the config structure: %d %s", fullPath, stat.GetCode(), stat.GetMessage())
-	}
+	emptyNode := reflect.New(mdata.model.StructRootType.Elem()).Interface()
 	var nodeVal interface{}
 	nodeStruct, ok := emptyNode.(ygot.ValidatedGoStruct)
 	if ok {
