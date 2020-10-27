@@ -149,7 +149,7 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallb
 
 	for _, p := range srpaths {
 		// glog.Infof("sync-required-path %s", p)
-		entry, err := m.FindSchemaByPath(p)
+		entry, err := m.FindSchemaByXPath(p)
 		if err != nil {
 			continue
 		}
@@ -222,7 +222,7 @@ func (mdata *ModelData) GetSyncUpdatePath(prefix *gpb.Path, paths []*gpb.Path) [
 	entry := m.SchemaTreeRoot
 	syncPaths := make([]string, 0, 8)
 	for _, path := range paths {
-		// glog.Info(":::SynUpdate:::", xpath.ToXPATH(utilities.GNMIFullPath(prefix, path)))
+		// glog.Info(":::SynUpdate:::", xpath.ToXPath(xpath.GNMIFullPath(prefix, path)))
 		var elems []*gpb.PathElem
 		if prefix != nil {
 			elems = append(prefix.GetElem(), path.GetElem()...)
@@ -275,7 +275,7 @@ func (mdata *ModelData) SetDelete(jsonTree map[string]interface{}, prefix, path 
 	// Update json tree of the device config
 	var curNode interface{} = jsonTree
 	pathDeleted := false
-	fullPath := utilities.GNMIFullPath(prefix, path)
+	fullPath := xpath.GNMIFullPath(prefix, path)
 	schema := mdata.model.SchemaTreeRoot
 	for i, elem := range fullPath.Elem { // Delete sub-tree or leaf node.
 		node, ok := curNode.(map[string]interface{})
@@ -331,7 +331,7 @@ func (mdata *ModelData) SetDelete(jsonTree map[string]interface{}, prefix, path 
 // callback function to apply the operation to the device hardware.
 func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op gpb.UpdateResult_Operation, prefix, path *gpb.Path, val *gpb.TypedValue) (*gpb.UpdateResult, error) {
 	// Validate the operation.
-	fullPath := utilities.GNMIFullPath(prefix, path)
+	fullPath := xpath.GNMIFullPath(prefix, path)
 	emptyNode, stat := ygotutils.NewNode(mdata.model.StructRootType, fullPath)
 	if stat.GetCode() != int32(cpb.Code_OK) {
 		return nil, status.Errorf(codes.NotFound, "path %v is not found in the config structure: %d %s", fullPath, stat.GetCode(), stat.GetMessage())

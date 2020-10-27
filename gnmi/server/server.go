@@ -33,7 +33,9 @@ import (
 	"github.com/neoul/gnxi/gnmi/model"
 	"github.com/neoul/gnxi/utilities"
 	"github.com/neoul/gnxi/utilities/xpath"
+	"github.com/neoul/gostruct-dump/dump"
 	"github.com/openconfig/ygot/ygot"
+	"github.com/openconfig/ygot/ytypes"
 
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
@@ -179,26 +181,26 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	defer s.ModelData.RUnlock()
 
 	// each prefix + path ==> one notification message
-	if err := utilities.ValidateGNMIPath(prefix); err != nil {
+	if err := xpath.ValidateGNMIPath(prefix); err != nil {
 		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
 	toplist, ok := s.Model.FindAllData(s.ModelData.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
 		if ok = s.Model.ValidatePathSchema(prefix); ok {
-			return nil, status.Errorf(codes.NotFound, "data-missing(%v)", xpath.ToXPATH(prefix))
+			return nil, status.Errorf(codes.NotFound, "data-missing(%v)", xpath.ToXPath(prefix))
 		}
-		return nil, status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPATH(prefix))
+		return nil, status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPath(prefix))
 	}
 	notifications := []*pb.Notification{}
 	for _, top := range toplist {
 		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
-		bprefix, err := ToGNMIPath(bpath)
+		bprefix, err := xpath.ToGNMIPath(bpath)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
 		}
 		for _, path := range paths {
-			if err := utilities.ValidateGNMIFullPath(prefix, path); err != nil {
+			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
 				return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
 			datalist, ok := s.Model.FindAllData(branch, path)
@@ -211,7 +213,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "encoding-error(%s)", err.Error())
 				}
-				datapath, err := ToGNMIPath(data.Path)
+				datapath, err := xpath.ToGNMIPath(data.Path)
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", data.Path)
 				}
@@ -231,13 +233,94 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	return &pb.GetResponse{Notification: notifications}, nil
 }
 
+// Operation [Merge,Replace,Delete]
+type Operation int
+
+const (
+	// OpMerge - Operation of SetPathData
+	OpMerge Operation = iota
+	// OpReplace - Operation of SetPathData
+	OpReplace
+	// OpDelete - Operation of SetPathData
+	OpDelete
+)
+
+func (op Operation) String() string {
+	switch op {
+	case OpMerge:
+		return "merge"
+	case OpReplace:
+		return "replace"
+	case OpDelete:
+		return "delete"
+	}
+	return "unknown"
+}
+
+type rollback struct {
+	op     Operation
+	base   *model.DataAndPath
+	target *model.DataAndPath
+}
+
 // Set implements the Set RPC in gNMI spec.
 func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, error) {
+	utilities.PrintProto(req)
+	root := s.ModelData.GetRoot()
+	prefix := req.GetPrefix()
+	branches, ok := s.Model.FindAllData(root, prefix)
+	if !ok || len(branches) <= 0 {
+		if ok = s.Model.ValidatePathSchema(prefix); ok {
+			return nil, status.Errorf(codes.NotFound, "data-missing(%v)", xpath.ToXPath(prefix))
+		}
+		return nil, status.Errorf(codes.InvalidArgument, "unknown-schema(%s)", xpath.ToXPath(prefix))
+	}
+
+	// s.ModelData.SetDelete(top, gnmipb.path)
+	// s.ModelData.SetReplaceUpdate(operation, top, gnmipb.path, data)
+	// s.ModelData.SetReplace(top, gnmipb.path, data)
+	// s.ModelData.SetUpdate(top, gnmipb.path, data)
+	// s.ModelData.Commit() // reset rollback data
+	// s.ModelData.Rollback() // revert commit data
+
+	for _, path := range req.GetDelete() {
+		for _, branch := range branches {
+			bpath := branch.Path
+			base := branch.Value.(ygot.GoStruct)
+			bprefix, err := xpath.ToGNMIPath(bpath)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
+			}
+			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "invalid-path(%s)", err.Error())
+			}
+			targets, ok := s.Model.FindAllData(base, path)
+			if !ok || len(targets) <= 0 {
+				continue
+			}
+
+			for _, target := range targets {
+				rpath, err := xpath.ToGNMIPath(target.Path)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "path-conversion-error(%s%s)", bprefix, target.Path)
+				}
+				rollback := rollback{op: OpDelete, base: branch, target: target}
+				err = ytypes.DeleteNode(s.Model.FindSchema(base), base, rpath)
+				fmt.Println(err)
+				dump.Print(rollback)
+			}
+		}
+
+		// res, grpcStatusError := s.ModelData.SetDelete(branches, path)
+		// if grpcStatusError != nil {
+		// 	return nil, grpcStatusError
+		// }
+		// results = append(results, res)
+	}
+
 	return nil, status.Error(codes.Unimplemented, "Set not implemented")
 	// s.ModelData.Lock()
 	// defer s.ModelData.Unlock()
-
-	// utilities.PrintProto(req)
 
 	// jsonTree, err := ygot.ConstructIETFJSON(s.ModelData.GetRoot(), &ygot.RFC7951JSONConfig{})
 	// if err != nil {

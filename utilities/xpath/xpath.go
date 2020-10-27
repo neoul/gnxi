@@ -142,36 +142,38 @@ func parseKeyValueString(str string) (map[string]string, error) {
 	begin := 0
 	// end marks the end of a key-value pair.
 	end := 0
-	// insideBrackets is true when at least one '[' has been found and no
-	// ']' has been found. It is false when a closing ']' has been found.
-	insideBrackets := false
+	// insideBrackets is true when at least one '[' has been found.
+	// It is false when a closing ']' has been found.
+	insideBrackets := 0
 
 	for end < len(str) {
 		switch str[end] {
 		case '[':
-			if (end == 0 || str[end-1] != '\\') && !insideBrackets {
-				insideBrackets = true
+			if end == 0 || str[end-1] != '\\' {
+				insideBrackets++
 			}
 			end++
 		case ']':
-			if (end == 0 || str[end-1] != '\\') && insideBrackets {
-				insideBrackets = false
-				keyValue := str[begin : end+1]
-				// Key-value pair string must have the
-				// following pattern: [k=v], where k is a valid
-				// YANG identifier, and v can be any non-empty
-				// string.
-				if !kvRe.MatchString(keyValue) {
-					return nil, fmt.Errorf("malformed List key-value pair string: %s, in: %s", keyValue, str)
+			if end == 0 || str[end-1] != '\\' {
+				insideBrackets--
+				if insideBrackets <= 0 {
+					keyValue := str[begin : end+1]
+					// Key-value pair string must have the
+					// following pattern: [k=v], where k is a valid
+					// YANG identifier, and v can be any non-empty
+					// string.
+					if !kvRe.MatchString(keyValue) {
+						return nil, fmt.Errorf("malformed List key-value pair string: %s, in: %s", keyValue, str)
+					}
+					keyValue = keyValue[1 : len(keyValue)-1]
+					i := strings.Index(keyValue, "=")
+					key, val := keyValue[:i], keyValue[i+1:]
+					// Recover escaped '[' and ']'.
+					val = strings.Replace(val, `\]`, `]`, -1)
+					val = strings.Replace(val, `\[`, `[`, -1)
+					keyValuePairs[key] = val
+					begin = end + 1
 				}
-				keyValue = keyValue[1 : len(keyValue)-1]
-				i := strings.Index(keyValue, "=")
-				key, val := keyValue[:i], keyValue[i+1:]
-				// Recover escaped '[' and ']'.
-				val = strings.Replace(val, `\]`, `]`, -1)
-				val = strings.Replace(val, `\[`, `[`, -1)
-				keyValuePairs[key] = val
-				begin = end + 1
 			}
 			end++
 		default:

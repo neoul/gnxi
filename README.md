@@ -63,3 +63,12 @@ go run ./gnmi_get.go
 
 *  This is not an official Google product.
 *  See [how to contribute](CONTRIBUTING.md).
+
+
+## download all dependencies
+
+```bash
+go get -u -v -f all
+# or
+go get -u ./...
+```

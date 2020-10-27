@@ -58,7 +58,7 @@ func (tcb *telemetryCtrl) registerTelemetry(m *model.Model, telesub *TelemetrySu
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
 	for _, path := range telesub.Paths {
-		fullpath := utilities.GNMIFullPath(telesub.Prefix, path)
+		fullpath := xpath.GNMIFullPath(telesub.Prefix, path)
 		allpaths, ok := m.FindAllPaths(fullpath)
 		if ok {
 			for _, p := range allpaths {
@@ -550,7 +550,7 @@ func getDeletes(telesub *TelemetrySubscription, path *string, deleteOnly bool) (
 	if !deleteOnly {
 		rpaths := telesub.replacedList.PrefixSearch(*path)
 		for _, rpath := range rpaths {
-			datapath, err := ToGNMIPath(rpath)
+			datapath, err := xpath.ToGNMIPath(rpath)
 			if err != nil {
 				return nil, fmt.Errorf("path-conversion-error(%s)", rpath)
 			}
@@ -559,7 +559,7 @@ func getDeletes(telesub *TelemetrySubscription, path *string, deleteOnly bool) (
 	}
 	dpaths := telesub.deletedList.PrefixSearch(*path)
 	for _, dpath := range dpaths {
-		datapath, err := ToGNMIPath(dpath)
+		datapath, err := xpath.ToGNMIPath(dpath)
 		if err != nil {
 			return nil, fmt.Errorf("path-conversion-error(%s)", dpath)
 		}
@@ -576,7 +576,7 @@ func getUpdate(telesub *TelemetrySubscription, data *model.DataAndPath, encoding
 	if typedValue == nil {
 		return nil, nil
 	}
-	datapath, err := ToGNMIPath(data.Path)
+	datapath, err := xpath.ToGNMIPath(data.Path)
 	if err != nil {
 		return nil, fmt.Errorf("update-path-conversion-error(%s)", data.Path)
 	}
@@ -634,7 +634,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 
 	s.ModelData.RLock()
 	defer s.ModelData.RUnlock()
-	if err := utilities.ValidateGNMIPath(prefix); err != nil {
+	if err := xpath.ValidateGNMIPath(prefix); err != nil {
 		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
 	toplist, ok := s.Model.FindAllData(s.ModelData.GetRoot(), prefix)
@@ -644,14 +644,14 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 			// doest send any of messages ahead of the sync response.
 			return teleses.sendTelemetryUpdate(buildSyncResponse())
 		}
-		return status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPATH(prefix))
+		return status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPath(prefix))
 	}
 
 	updates := []*pb.Update{}
 	for _, top := range toplist {
 		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
-		bprefix, err := ToGNMIPath(bpath)
+		bprefix, err := xpath.ToGNMIPath(bpath)
 		if err != nil {
 			return status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
 		}
@@ -660,7 +660,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 		}
 		for _, updateEntry := range subList {
 			path := updateEntry.Path
-			if err := utilities.ValidateGNMIFullPath(prefix, path); err != nil {
+			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
 				return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
 			datalist, ok := s.Model.FindAllData(branch, path)
@@ -729,7 +729,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 	if updatedroot == nil {
 		updatedroot = s.ModelData.GetRoot()
 	}
-	if err := utilities.ValidateGNMIPath(prefix); err != nil {
+	if err := xpath.ValidateGNMIPath(prefix); err != nil {
 		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
 	toplist, ok := s.Model.FindAllData(updatedroot, prefix)
@@ -739,7 +739,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 			// doest send any of messages.
 			return nil
 		}
-		return status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPATH(prefix))
+		return status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPath(prefix))
 	}
 
 	deletes := []*pb.Path{}
@@ -748,7 +748,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 	for _, top := range toplist {
 		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
-		bprefix, err := ToGNMIPath(bpath)
+		bprefix, err := xpath.ToGNMIPath(bpath)
 		if err != nil {
 			return status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
 		}
@@ -763,7 +763,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 		}
 
 		for _, path := range telesub.Paths {
-			if err := utilities.ValidateGNMIFullPath(prefix, path); err != nil {
+			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
 				return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
 			datalist, ok := s.Model.FindAllData(branch, path)
@@ -886,7 +886,7 @@ func (teleses *TelemetrySession) addStreamSubscription(
 	key := fmt.Sprintf("%d-%s-%s-%s-%s-%d-%d-%t-%t-%t",
 		telesub.SessionID,
 		telesub.StreamingMode, telesub.Encoding, telesub.SubscriptionMode,
-		xpath.ToXPATH(telesub.Prefix), telesub.SampleInterval, telesub.HeartbeatInterval,
+		xpath.ToXPath(telesub.Prefix), telesub.SampleInterval, telesub.HeartbeatInterval,
 		telesub.UseAliases, telesub.AllowAggregation, telesub.SuppressRedundant,
 	)
 	telesub.key = &key
@@ -897,7 +897,7 @@ func (teleses *TelemetrySession) addStreamSubscription(
 		// only updates the new path
 		t.Paths = append(t.Paths, telesub.Paths...)
 		telesub = t
-		glog.Infof("telemetry[%d][%s].add-path(%s)", teleses.ID, key, xpath.ToXPATH(telesub.Paths[len(telesub.Paths)-1]))
+		glog.Infof("telemetry[%d][%s].add-path(%s)", teleses.ID, key, xpath.ToXPath(telesub.Paths[len(telesub.Paths)-1]))
 		return nil, nil
 	}
 	subID++
@@ -906,7 +906,7 @@ func (teleses *TelemetrySession) addStreamSubscription(
 	telesub.session = teleses
 	teleses.Telesub[key] = telesub
 	glog.Infof("telemetry[%d][%d].new(%s)", teleses.ID, telesub.ID, *telesub.key)
-	glog.Infof("telemetry[%d][%d].add-path(%s)", teleses.ID, telesub.ID, xpath.ToXPATH(telesub.Paths[0]))
+	glog.Infof("telemetry[%d][%d].add-path(%s)", teleses.ID, telesub.ID, xpath.ToXPath(telesub.Paths[0]))
 	return telesub, nil
 }
 
@@ -1054,7 +1054,7 @@ func addDynamicTeleSubscriptionInfo(targetDataBlock *ydb.YDB, telesubs []*Teleme
 			telesub.Encoding,
 		)
 		for i := range telesub.Paths {
-			p := xpath.ToXPATH(telesub.Paths[i])
+			p := xpath.ToXPath(telesub.Paths[i])
 			s += fmt.Sprintf(dynamicTeleSubInfoPathFormat, p, p)
 		}
 	}
