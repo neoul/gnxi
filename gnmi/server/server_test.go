@@ -36,10 +36,8 @@ import (
 var (
 	// model is the model for test config server.
 	mo = model.NewCustomModel(
+		gostruct.Schema,
 		gostruct.ΓModelData,
-		reflect.TypeOf((*gostruct.Device)(nil)),
-		gostruct.SchemaTree,
-		gostruct.Unmarshal,
 	)
 )
 

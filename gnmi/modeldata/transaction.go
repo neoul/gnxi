@@ -46,7 +46,7 @@ type opInfo struct {
 }
 
 func (opinfo *opInfo) getKey() string {
-	return fmt.Sprintf("%s%s", opinfo.optype, opinfo.path)
+	return fmt.Sprintf("%s%s", opinfo.optype, *opinfo.path)
 }
 
 var setTranID int

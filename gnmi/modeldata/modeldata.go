@@ -2,7 +2,6 @@ package modeldata
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"reflect"
@@ -113,13 +112,9 @@ func (mdata *ModelData) Close() {
 
 // NewGoStruct - creates a ValidatedGoStruct of this model from jsonData. If jsonData is nil, creates an empty GoStruct.
 func NewGoStruct(m *model.Model, jsonData []byte) (ygot.ValidatedGoStruct, error) {
-	rootNode := reflect.New(m.StructRootType.Elem()).Interface()
-	root, ok := rootNode.(ygot.ValidatedGoStruct)
-	if !ok {
-		return nil, errors.New("root node is not a ygot.ValidatedGoStruct")
-	}
+	root := m.NewRoot()
 	if jsonData != nil {
-		if err := m.JSONUnmarshaler(jsonData, root); err != nil {
+		if err := m.Unmarshal(jsonData, root); err != nil {
 			return nil, err
 		}
 		if err := root.Validate(); err != nil {
@@ -328,7 +323,7 @@ func (mdata *ModelData) SetDelete(prefix, path *gnmipb.Path) error {
 	// var curNode interface{} = jsonTree
 	// pathDeleted := false
 	// fullPath := xpath.GNMIFullPath(prefix, path)
-	// schema := mdata.model.SchemaTreeRoot
+	// schema := mdata.model.RootSchema()
 	// for i, elem := range fullPath.Elem { // Delete sub-tree or leaf node.
 	// 	node, ok := curNode.(map[string]interface{})
 	// 	if !ok {
@@ -452,11 +447,11 @@ func (mdata *ModelData) SetUpdate(prefix, path *gnmipb.Path, typedvalue *gnmipb.
 func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op gnmipb.UpdateResult_Operation, prefix, path *gnmipb.Path, val *gnmipb.TypedValue) (*gnmipb.UpdateResult, error) {
 	// Validate the operation.
 	fullPath := xpath.GNMIFullPath(prefix, path)
-	emptyNode := reflect.New(mdata.model.StructRootType.Elem()).Interface()
+	emptyNode := reflect.New(mdata.model.GetRootType()).Interface()
 	var nodeVal interface{}
 	nodeStruct, ok := emptyNode.(ygot.ValidatedGoStruct)
 	if ok {
-		if err := mdata.model.JSONUnmarshaler(val.GetJsonIetfVal(), nodeStruct); err != nil {
+		if err := mdata.model.Unmarshal(val.GetJsonIetfVal(), nodeStruct); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "unmarshaling json data to config struct fails: %v", err)
 		}
 		if err := nodeStruct.Validate(); err != nil {
@@ -477,7 +472,7 @@ func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op g
 
 	// Update json tree of the device config.
 	var curNode interface{} = jsonTree
-	schema := mdata.model.SchemaTreeRoot
+	schema := mdata.model.RootSchema()
 	for i, elem := range fullPath.Elem {
 		switch node := curNode.(type) {
 		case map[string]interface{}:
