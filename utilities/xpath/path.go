@@ -25,16 +25,19 @@ import (
 )
 
 var (
-	// WildcardPathDot3 - Wildcard Path '...'
-	WildcardPathDot3 = &gnmipb.Path{
+	// RootGNMIPath - '/'
+	RootGNMIPath = &gnmipb.Path{}
+
+	// WildcardGNMIPathDot3 - Wildcard Path '...'
+	WildcardGNMIPathDot3 = &gnmipb.Path{
 		Elem: []*gnmipb.PathElem{
 			&gnmipb.PathElem{
 				Name: "...",
 			},
 		},
 	}
-	// WildcardPathAsterisk - Wildcard Path '*'
-	WildcardPathAsterisk = &gnmipb.Path{
+	// WildcardGNMIPathAsterisk - Wildcard Path '*'
+	WildcardGNMIPathAsterisk = &gnmipb.Path{
 		Elem: []*gnmipb.PathElem{
 			&gnmipb.PathElem{
 				Name: "*",
@@ -83,7 +86,7 @@ func GNMIFullPath(prefix, path *gnmipb.Path) *gnmipb.Path {
 		}
 		return path
 	}
-	fullPath := &gnmipb.Path{Origin: path.Origin}
+	fullPath := &gnmipb.Path{Origin: prefix.Origin}
 	if path.GetElement() != nil {
 		fullPath.Element = append(prefix.GetElement(), path.GetElement()...)
 	}

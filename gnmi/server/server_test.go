@@ -40,7 +40,6 @@ var (
 		reflect.TypeOf((*gostruct.Device)(nil)),
 		gostruct.SchemaTree,
 		gostruct.Unmarshal,
-		gostruct.ΛEnum,
 	)
 )
 

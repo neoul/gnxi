@@ -1,4 +1,4 @@
-package model
+package modeldata
 
 import (
 	"encoding/json"
@@ -11,19 +11,20 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/neoul/gnxi/gnmi/model"
 	"github.com/neoul/gnxi/utilities"
 	"github.com/neoul/gnxi/utilities/xpath"
+	"github.com/neoul/gostruct-dump/dump"
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/neoul/trie"
-	gpb "github.com/openconfig/gnmi/proto/gnmi"
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/value"
 	"github.com/openconfig/goyang/pkg/yang"
 	"github.com/openconfig/ygot/ygot"
+	"github.com/openconfig/ygot/ytypes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-var pbRootPath = &gpb.Path{}
 
 // var (
 // 	defaultSyncRequiredSchemaPath = []string{
@@ -60,7 +61,8 @@ type ModelData struct {
 	callback     DataCallback
 	block        *ydb.YDB
 	syncRequired *trie.Trie
-	model        *Model
+	model        *model.Model
+	transaction  *setTransaction
 }
 
 // GetYDB - Get YAML DataBlock
@@ -110,9 +112,8 @@ func (mdata *ModelData) Close() {
 }
 
 // NewGoStruct - creates a ValidatedGoStruct of this model from jsonData. If jsonData is nil, creates an empty GoStruct.
-func NewGoStruct(m *Model, jsonData []byte) (ygot.ValidatedGoStruct, error) {
+func NewGoStruct(m *model.Model, jsonData []byte) (ygot.ValidatedGoStruct, error) {
 	rootNode := reflect.New(m.StructRootType.Elem()).Interface()
-
 	root, ok := rootNode.(ygot.ValidatedGoStruct)
 	if !ok {
 		return nil, errors.New("root node is not a ygot.ValidatedGoStruct")
@@ -129,7 +130,7 @@ func NewGoStruct(m *Model, jsonData []byte) (ygot.ValidatedGoStruct, error) {
 }
 
 // NewModelData creates a ValidatedGoStruct of this model from jsonData. If jsonData is nil, creates an empty GoStruct.
-func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallback) (*ModelData, error) {
+func NewModelData(m *model.Model, jsonData []byte, yamlData []byte, callback DataCallback) (*ModelData, error) {
 	root, err := NewGoStruct(m, jsonData)
 	if err != nil {
 		return nil, err
@@ -168,9 +169,11 @@ func NewModelData(m *Model, jsonData []byte, yamlData []byte, callback DataCallb
 		if err := mdata.block.Parse(yamlData); err != nil {
 			return nil, err
 		}
-		if err := root.Validate(); err != nil {
-			return nil, err
-		}
+		// [FIXME] - error in creating gnmid: /device/interfaces: /device/interfaces/interface: list interface contains more than max allowed elements: 2 > 0
+		// if err := root.Validate(); err != nil {
+		// 	//???
+		// 	return nil, err
+		// }
 		if err := execConfigCallback(mdata.callback, root); err != nil {
 			return nil, err
 		}
@@ -199,12 +202,12 @@ func (mdata *ModelData) ChangeRoot(root ygot.ValidatedGoStruct) error {
 	return mdata.block.RelaceTargetStruct(root, false)
 }
 
-func buildSyncUpdatePath(entries []*yang.Entry, elems []*gpb.PathElem) string {
+func buildSyncUpdatePath(entries []*yang.Entry, elems []*gnmipb.PathElem) string {
 	entrieslen := len(entries)
 	elemslen := len(elems)
 	if entrieslen > elemslen {
 		for i := elemslen + 1; i < entrieslen; i++ {
-			elems = append(elems, &gpb.PathElem{Name: entries[i].Name})
+			elems = append(elems, &gnmipb.PathElem{Name: entries[i].Name})
 		}
 		return xpath.PathElemToXPATH(elems)
 	}
@@ -212,27 +215,24 @@ func buildSyncUpdatePath(entries []*yang.Entry, elems []*gpb.PathElem) string {
 }
 
 // GetSyncUpdatePath - synchronizes the data in the path
-func (mdata *ModelData) GetSyncUpdatePath(prefix *gpb.Path, paths []*gpb.Path) []string {
+func (mdata *ModelData) GetSyncUpdatePath(prefix *gnmipb.Path, paths []*gnmipb.Path) []string {
 	m := mdata.model
-	entry := m.SchemaTreeRoot
 	syncPaths := make([]string, 0, 8)
 	for _, path := range paths {
 		// glog.Info(":::SynUpdate:::", xpath.ToXPath(xpath.GNMIFullPath(prefix, path)))
-		var elems []*gpb.PathElem
-		if prefix != nil {
-			elems = append(prefix.GetElem(), path.GetElem()...)
-		} else {
-			elems = path.GetElem()
-		}
-		if len(elems) > 0 {
-			schemaPaths := m.findSchemaPath("", entry, elems)
+		fullpath := xpath.GNMIFullPath(prefix, path)
+		if len(fullpath.GetElem()) > 0 {
+			schemaPaths, ok := m.FindSchemaPaths(fullpath)
+			if !ok {
+				continue
+			}
 			for _, spath := range schemaPaths {
 				requiredPath := mdata.syncRequired.PrefixSearch(spath)
 				for _, rpath := range requiredPath {
 					if n, ok := mdata.syncRequired.Find(rpath); ok {
 						entires := n.Meta().([]*yang.Entry)
 						if entires != nil {
-							syncPaths = append(syncPaths, buildSyncUpdatePath(entires, elems))
+							syncPaths = append(syncPaths, buildSyncUpdatePath(entires, fullpath.GetElem()))
 						}
 					}
 				}
@@ -240,7 +240,7 @@ func (mdata *ModelData) GetSyncUpdatePath(prefix *gpb.Path, paths []*gpb.Path) [
 					if n, ok := mdata.syncRequired.Find(rpath); ok {
 						entires := n.Meta().([]*yang.Entry)
 						if entires != nil {
-							syncPaths = append(syncPaths, buildSyncUpdatePath(entires, elems))
+							syncPaths = append(syncPaths, buildSyncUpdatePath(entires, fullpath.GetElem()))
 						}
 					}
 				}
@@ -264,67 +264,192 @@ func (mdata *ModelData) RunSyncUpdate(syncIgnoreTime time.Duration, syncPaths []
 	mdata.block.SyncTo(syncIgnoreTime, true, syncPaths...)
 }
 
-// SetDelete deletes the path from the json tree if the path exists. If success,
-// it calls the callback function to apply the change to the device hardware.
-func (mdata *ModelData) SetDelete(jsonTree map[string]interface{}, prefix, path *gpb.Path) (*gpb.UpdateResult, error) {
-	// Update json tree of the device config
-	var curNode interface{} = jsonTree
-	pathDeleted := false
-	fullPath := xpath.GNMIFullPath(prefix, path)
-	schema := mdata.model.SchemaTreeRoot
-	for i, elem := range fullPath.Elem { // Delete sub-tree or leaf node.
-		node, ok := curNode.(map[string]interface{})
-		if !ok {
-			break
-		}
+// Find - Find all values and paths (XPath, Value) from the root
+func (mdata *ModelData) Find(path *gnmipb.Path) ([]*model.DataAndPath, bool) {
+	model := mdata.model
+	return model.FindAllData(mdata.GetRoot(), path)
+}
 
-		// Delete node
-		if i == len(fullPath.Elem)-1 {
-			if elem.GetKey() == nil {
-				delete(node, elem.Name)
-				pathDeleted = true
-				break
-			}
-			pathDeleted = deleteKeyedListEntry(node, elem)
-			break
-		}
-
-		if curNode, schema = getChildNode(node, schema, elem, false); curNode == nil {
-			break
-		}
+// FindSubsequence - Find all values and paths (XPath, Value) from the base
+func (mdata *ModelData) FindSubsequence(base *model.DataAndPath, path *gnmipb.Path) ([]*model.DataAndPath, bool) {
+	model := mdata.model
+	gs, ok := base.Value.(ygot.GoStruct)
+	if !ok {
+		return nil, false
 	}
+	return model.FindAllData(gs, path)
+}
 
-	if reflect.DeepEqual(fullPath, pbRootPath) { // Delete root
-		for k := range jsonTree {
-			delete(jsonTree, k)
-		}
+// SetInit initializes the Set transaction.
+func (mdata *ModelData) SetInit() error {
+	if mdata.transaction != nil {
+		return status.Errorf(codes.Unavailable, "Already running")
 	}
+	mdata.transaction = startTransaction()
+	return nil
+}
 
-	// Apply the validated operation to the config tree and device.
-	if pathDeleted {
-		newRoot, err := mdata.toGoStruct(jsonTree)
+// SetDone resets the Set transaction.
+func (mdata *ModelData) SetDone() {
+	mdata.transaction = nil
+}
+
+// SetRollback reverts the original configuration.
+func (mdata *ModelData) SetRollback() {
+
+}
+
+// SetCommit commit the changed configuration.
+func (mdata *ModelData) SetCommit() {
+
+}
+
+// SetDelete deletes the path from root if the path exists.
+func (mdata *ModelData) SetDelete(prefix, path *gnmipb.Path) error {
+	fullpath := xpath.GNMIFullPath(prefix, path)
+	targets, _ := mdata.Find(fullpath)
+	for _, target := range targets {
+		targetPath, err := xpath.ToGNMIPath(target.Path)
 		if err != nil {
-			return nil, status.Error(codes.Internal, err.Error())
+			return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
 		}
-		if mdata.callback != nil {
-			if applyErr := execConfigCallback(mdata.callback, newRoot); applyErr != nil {
-				if rollbackErr := execConfigCallback(mdata.callback, mdata.dataroot); rollbackErr != nil {
-					return nil, status.Errorf(codes.Internal, "error in rollback the failed operation (%v): %v", applyErr, rollbackErr)
-				}
-				return nil, status.Errorf(codes.Aborted, "error in applying operation to device: %v", applyErr)
-			}
+		err = ytypes.DeleteNode(mdata.model.GetSchema(), mdata.dataroot, targetPath)
+		if err != nil {
+			return err
 		}
 	}
-	return &gpb.UpdateResult{
-		Path: path,
-		Op:   gpb.UpdateResult_DELETE,
-	}, nil
+	for _, target := range targets {
+		mdata.transaction.add(opDelete, &target.Path, target.Value, nil)
+		dump.Print(mdata.transaction)
+	}
+	return nil
+
+	// // Update json tree of the device config
+	// var curNode interface{} = jsonTree
+	// pathDeleted := false
+	// fullPath := xpath.GNMIFullPath(prefix, path)
+	// schema := mdata.model.SchemaTreeRoot
+	// for i, elem := range fullPath.Elem { // Delete sub-tree or leaf node.
+	// 	node, ok := curNode.(map[string]interface{})
+	// 	if !ok {
+	// 		break
+	// 	}
+
+	// 	// Delete node
+	// 	if i == len(fullPath.Elem)-1 {
+	// 		if elem.GetKey() == nil {
+	// 			delete(node, elem.Name)
+	// 			pathDeleted = true
+	// 			break
+	// 		}
+	// 		pathDeleted = deleteKeyedListEntry(node, elem)
+	// 		break
+	// 	}
+
+	// 	if curNode, schema = getChildNode(node, schema, elem, false); curNode == nil {
+	// 		break
+	// 	}
+	// }
+
+	// if reflect.DeepEqual(fullPath, xpath.RootGNMIPath) { // Delete root
+	// 	for k := range jsonTree {
+	// 		delete(jsonTree, k)
+	// 	}
+	// }
+
+	// // Apply the validated operation to the config tree and device.
+	// if pathDeleted {
+	// 	newRoot, err := mdata.toGoStruct(jsonTree)
+	// 	if err != nil {
+	// 		return nil, status.Error(codes.Internal, err.Error())
+	// 	}
+	// 	if mdata.callback != nil {
+	// 		if applyErr := execConfigCallback(mdata.callback, newRoot); applyErr != nil {
+	// 			if rollbackErr := execConfigCallback(mdata.callback, mdata.dataroot); rollbackErr != nil {
+	// 				return nil, status.Errorf(codes.Internal, "error in rollback the failed operation (%v): %v", applyErr, rollbackErr)
+	// 			}
+	// 			return nil, status.Errorf(codes.Aborted, "error in applying operation to device: %v", applyErr)
+	// 		}
+	// 	}
+	// }
+	// return &gnmipb.UpdateResult{
+	// 	Path: path,
+	// 	Op:   gnmipb.UpdateResult_DELETE,
+	// }, nil
+}
+
+// SetReplace deletes the path from root if the path exists.
+func (mdata *ModelData) SetReplace(prefix, path *gnmipb.Path, typedvalue *gnmipb.TypedValue) error {
+	var err error
+	// var target interface{}
+	// var targetSchema *yang.Entry
+	fullpath := xpath.GNMIFullPath(prefix, path)
+	targets, ok := mdata.Find(fullpath)
+	if !ok {
+		_, _, err = ytypes.GetOrCreateNode(mdata.model.GetSchema(), mdata.dataroot, fullpath)
+		if err != nil {
+			return err
+		}
+		err := ytypes.SetNode(mdata.model.GetSchema(), mdata.dataroot, fullpath, typedvalue)
+		if err != nil {
+			return err
+		}
+		path := xpath.ToXPath(fullpath)
+		mdata.transaction.add(opDelete, &path, nil, typedvalue)
+		return nil
+	}
+
+	for _, target := range targets {
+		targetPath, err := xpath.ToGNMIPath(target.Path)
+		if err != nil {
+			return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
+		}
+		err = ytypes.SetNode(mdata.model.GetSchema(), mdata.dataroot, targetPath, typedvalue)
+		if err != nil {
+			return err
+		}
+	}
+	for _, target := range targets {
+		mdata.transaction.add(opDelete, &target.Path, target.Value, nil)
+		dump.Print(mdata.transaction)
+	}
+
+	return nil
+}
+
+// SetUpdate deletes the path from root if the path exists.
+func (mdata *ModelData) SetUpdate(prefix, path *gnmipb.Path, typedvalue *gnmipb.TypedValue) error {
+	var err error
+	// var target interface{}
+	// var targetSchema *yang.Entry
+	fullpath := xpath.GNMIFullPath(prefix, path)
+	targets, ok := mdata.Find(fullpath)
+	if ok {
+		for _, target := range targets {
+			mdata.transaction.add(opUpdate, &target.Path, target.Value, typedvalue)
+			// dump.Print(mdata.transaction)
+			err = ytypes.SetNode(mdata.model.GetSchema(), mdata.dataroot, fullpath, typedvalue)
+			if err != nil {
+				return err
+			}
+		}
+		return err
+	}
+	_, _, err = ytypes.GetOrCreateNode(mdata.model.GetSchema(), mdata.dataroot, fullpath)
+	if err != nil {
+		return err
+	}
+	err = ytypes.SetNode(mdata.model.GetSchema(), mdata.dataroot, fullpath, typedvalue)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // SetReplaceOrUpdate validates the replace or update operation to be applied to
 // the device, modifies the json tree of the config struct, then calls the
 // callback function to apply the operation to the device hardware.
-func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op gpb.UpdateResult_Operation, prefix, path *gpb.Path, val *gpb.TypedValue) (*gpb.UpdateResult, error) {
+func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op gnmipb.UpdateResult_Operation, prefix, path *gnmipb.Path, val *gnmipb.TypedValue) (*gnmipb.UpdateResult, error) {
 	// Validate the operation.
 	fullPath := xpath.GNMIFullPath(prefix, path)
 	emptyNode := reflect.New(mdata.model.StructRootType.Elem()).Interface()
@@ -379,8 +504,8 @@ func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op g
 			return nil, status.Errorf(codes.Internal, "wrong node type: %T", curNode)
 		}
 	}
-	if reflect.DeepEqual(fullPath, pbRootPath) { // Replace/Update root.
-		if op == gpb.UpdateResult_UPDATE {
+	if reflect.DeepEqual(fullPath, xpath.RootGNMIPath) { // Replace/Update root.
+		if op == gnmipb.UpdateResult_UPDATE {
 			return nil, status.Error(codes.Unimplemented, "update the root of config tree is unsupported")
 		}
 		nodeValAsTree, ok := nodeVal.(map[string]interface{})
@@ -408,7 +533,7 @@ func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op g
 			return nil, status.Errorf(codes.Aborted, "error in applying operation to device: %v", applyErr)
 		}
 	}
-	return &gpb.UpdateResult{
+	return &gnmipb.UpdateResult{
 		Path: path,
 		Op:   op,
 	}, nil
@@ -442,7 +567,7 @@ func isNil(i interface{}) bool {
 // setPathWithAttribute replaces or updates a child node of curNode in the IETF
 // JSON config tree, where the child node is indexed by pathElem with attribute.
 // The function returns grpc status error if unsuccessful.
-func setPathWithAttribute(op gpb.UpdateResult_Operation, curNode map[string]interface{}, pathElem *gpb.PathElem, nodeVal interface{}) error {
+func setPathWithAttribute(op gnmipb.UpdateResult_Operation, curNode map[string]interface{}, pathElem *gnmipb.PathElem, nodeVal interface{}) error {
 	nodeValAsTree, ok := nodeVal.(map[string]interface{})
 	if !ok {
 		return status.Errorf(codes.InvalidArgument, "expect nodeVal is a json node of map[string]interface{}, received %T", nodeVal)
@@ -451,7 +576,7 @@ func setPathWithAttribute(op gpb.UpdateResult_Operation, curNode map[string]inte
 	if m == nil {
 		return status.Errorf(codes.NotFound, "path elem not found: %v", pathElem)
 	}
-	if op == gpb.UpdateResult_REPLACE {
+	if op == gnmipb.UpdateResult_REPLACE {
 		for k := range m {
 			delete(m, k)
 		}
@@ -476,10 +601,10 @@ func setPathWithAttribute(op gpb.UpdateResult_Operation, curNode map[string]inte
 // setPathWithoutAttribute replaces or updates a child node of curNode in the
 // IETF config tree, where the child node is indexed by pathElem without
 // attribute. The function returns grpc status error if unsuccessful.
-func setPathWithoutAttribute(op gpb.UpdateResult_Operation, curNode map[string]interface{}, pathElem *gpb.PathElem, nodeVal interface{}) error {
+func setPathWithoutAttribute(op gnmipb.UpdateResult_Operation, curNode map[string]interface{}, pathElem *gnmipb.PathElem, nodeVal interface{}) error {
 	target, hasElem := curNode[pathElem.Name]
 	nodeValAsTree, nodeValIsTree := nodeVal.(map[string]interface{})
-	if op == gpb.UpdateResult_REPLACE || !hasElem || !nodeValIsTree {
+	if op == gnmipb.UpdateResult_REPLACE || !hasElem || !nodeValIsTree {
 		curNode[pathElem.Name] = nodeVal
 		return nil
 	}
@@ -497,7 +622,7 @@ func setPathWithoutAttribute(op gpb.UpdateResult_Operation, curNode map[string]i
 // path elem. If the entry is the only one in keyed list, deletes the entire
 // list. If the entry is found and deleted, the function returns true. If it is
 // not found, the function returns false.
-func deleteKeyedListEntry(node map[string]interface{}, elem *gpb.PathElem) bool {
+func deleteKeyedListEntry(node map[string]interface{}, elem *gnmipb.PathElem) bool {
 	curNode, ok := node[elem.Name]
 	if !ok {
 		return false
@@ -541,7 +666,7 @@ func deleteKeyedListEntry(node map[string]interface{}, elem *gpb.PathElem) bool 
 // getChildNode gets a node's child with corresponding schema specified by path
 // element. If not found and createIfNotExist is set as true, an empty node is
 // created and returned.
-func getChildNode(node map[string]interface{}, schema *yang.Entry, elem *gpb.PathElem, createIfNotExist bool) (interface{}, *yang.Entry) {
+func getChildNode(node map[string]interface{}, schema *yang.Entry, elem *gnmipb.PathElem, createIfNotExist bool) (interface{}, *yang.Entry) {
 	var nextSchema *yang.Entry
 	var ok bool
 
@@ -567,7 +692,7 @@ func getChildNode(node map[string]interface{}, schema *yang.Entry, elem *gpb.Pat
 // getKeyedListEntry finds the keyed list entry in node by the name and key of
 // path elem. If entry is not found and createIfNotExist is true, an empty entry
 // will be created (the list will be created if necessary).
-func getKeyedListEntry(node map[string]interface{}, elem *gpb.PathElem, createIfNotExist bool) map[string]interface{} {
+func getKeyedListEntry(node map[string]interface{}, elem *gnmipb.PathElem, createIfNotExist bool) map[string]interface{} {
 	curNode, ok := node[elem.Name]
 	if !ok {
 		if !createIfNotExist {

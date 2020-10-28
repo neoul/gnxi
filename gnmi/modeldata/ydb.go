@@ -1,6 +1,6 @@
 // YDB Go Interface for model data update
 
-package model
+package modeldata
 
 import (
 	"fmt"

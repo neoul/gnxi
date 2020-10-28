@@ -1,21 +1,22 @@
-package model
+package modeldata
 
 import (
 	"flag"
 	"testing"
 	"time"
 
-	gpb "github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/neoul/gnxi/gnmi/model"
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
 func TestModel_ValidatePathAndSync(t *testing.T) {
-	m := NewModel()
+	m := model.NewModel()
 	flag.Set("disable-ydb", "true")
 	mdata, _ := NewModelData(m, nil, nil, nil)
 
 	type args struct {
-		prefix *gpb.Path
-		paths  []*gpb.Path
+		prefix *gnmipb.Path
+		paths  []*gnmipb.Path
 	}
 	tests := []struct {
 		name    string
@@ -26,7 +27,7 @@ func TestModel_ValidatePathAndSync(t *testing.T) {
 			name: "FindSchemaPaths",
 			args: args{
 				prefix: nil,
-				paths:  []*gpb.Path{&gpb.Path{}},
+				paths:  []*gnmipb.Path{&gnmipb.Path{}},
 			},
 			wanterr: true,
 		},
@@ -34,22 +35,22 @@ func TestModel_ValidatePathAndSync(t *testing.T) {
 			name: "FindSchemaPaths",
 			args: args{
 				prefix: nil,
-				paths: []*gpb.Path{
-					&gpb.Path{
-						Elem: []*gpb.PathElem{
-							&gpb.PathElem{
+				paths: []*gnmipb.Path{
+					&gnmipb.Path{
+						Elem: []*gnmipb.PathElem{
+							&gnmipb.PathElem{
 								Name: "interfaces",
 							},
-							&gpb.PathElem{
+							&gnmipb.PathElem{
 								Name: "interface",
 							},
-							&gpb.PathElem{
+							&gnmipb.PathElem{
 								Name: "state",
 							},
-							&gpb.PathElem{
+							&gnmipb.PathElem{
 								Name: "counters",
 							},
-							&gpb.PathElem{
+							&gnmipb.PathElem{
 								Name: "in-discards",
 							},
 						},
@@ -62,10 +63,10 @@ func TestModel_ValidatePathAndSync(t *testing.T) {
 			name: "FindSchemaPaths",
 			args: args{
 				prefix: nil,
-				paths: []*gpb.Path{
-					&gpb.Path{
-						Elem: []*gpb.PathElem{
-							&gpb.PathElem{
+				paths: []*gnmipb.Path{
+					&gnmipb.Path{
+						Elem: []*gnmipb.PathElem{
+							&gnmipb.PathElem{
 								Name: "interfaces",
 							},
 						},

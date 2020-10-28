@@ -1,4 +1,4 @@
-package model
+package modeldata
 
 import (
 	"github.com/openconfig/ygot/ygot"

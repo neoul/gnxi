@@ -31,13 +31,13 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/neoul/gnxi/gnmi/model"
+	"github.com/neoul/gnxi/gnmi/modeldata"
 	"github.com/neoul/gnxi/utilities"
 	"github.com/neoul/gnxi/utilities/xpath"
-	"github.com/neoul/gostruct-dump/dump"
 	"github.com/openconfig/ygot/ygot"
-	"github.com/openconfig/ygot/ytypes"
 
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
@@ -69,7 +69,7 @@ var (
 type Server struct {
 	disableBundling bool
 	Model           *model.Model
-	ModelData       *model.ModelData
+	ModelData       *modeldata.ModelData
 	*telemetryCtrl
 	sessions   map[string]*Session
 	alias      map[string]*pb.Alias
@@ -91,9 +91,9 @@ func NewServer(m *model.Model, startup []byte, startupIsJSON, disableBundling bo
 		telemetryCtrl:   newTelemetryCB(),
 	}
 	if startupIsJSON {
-		s.ModelData, err = model.NewModelData(m, startup, nil, s)
+		s.ModelData, err = modeldata.NewModelData(m, startup, nil, s)
 	} else {
-		s.ModelData, err = model.NewModelData(m, nil, startup, s)
+		s.ModelData, err = modeldata.NewModelData(m, nil, startup, s)
 	}
 	return s, err
 }
@@ -233,92 +233,47 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	return &pb.GetResponse{Notification: notifications}, nil
 }
 
-// Operation [Merge,Replace,Delete]
-type Operation int
-
-const (
-	// OpMerge - Operation of SetPathData
-	OpMerge Operation = iota
-	// OpReplace - Operation of SetPathData
-	OpReplace
-	// OpDelete - Operation of SetPathData
-	OpDelete
-)
-
-func (op Operation) String() string {
-	switch op {
-	case OpMerge:
-		return "merge"
-	case OpReplace:
-		return "replace"
-	case OpDelete:
-		return "delete"
-	}
-	return "unknown"
-}
-
-type rollback struct {
-	op     Operation
-	base   *model.DataAndPath
-	target *model.DataAndPath
-}
-
 // Set implements the Set RPC in gNMI spec.
 func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, error) {
 	utilities.PrintProto(req)
-	root := s.ModelData.GetRoot()
 	prefix := req.GetPrefix()
-	branches, ok := s.Model.FindAllData(root, prefix)
-	if !ok || len(branches) <= 0 {
-		if ok = s.Model.ValidatePathSchema(prefix); ok {
-			return nil, status.Errorf(codes.NotFound, "data-missing(%v)", xpath.ToXPath(prefix))
-		}
-		return nil, status.Errorf(codes.InvalidArgument, "unknown-schema(%s)", xpath.ToXPath(prefix))
-	}
 
-	// s.ModelData.SetDelete(top, gnmipb.path)
-	// s.ModelData.SetReplaceUpdate(operation, top, gnmipb.path, data)
-	// s.ModelData.SetReplace(top, gnmipb.path, data)
-	// s.ModelData.SetUpdate(top, gnmipb.path, data)
+	var err error
+	result := make([]*gnmipb.UpdateResult, 0, 6)
+	s.ModelData.SetInit()
+	for _, path := range req.GetDelete() {
+		if err != nil {
+			result = append(result, buildUpdateResultAborted(gnmipb.UpdateResult_DELETE, path))
+			continue
+		}
+		err = s.ModelData.SetDelete(prefix, path)
+		result = append(result, buildUpdateResult(gnmipb.UpdateResult_DELETE, path, err))
+	}
+	for _, u := range req.GetReplace() {
+		path := u.GetPath()
+		typedvalue := u.GetVal()
+		if err != nil {
+			result = append(result, buildUpdateResultAborted(gnmipb.UpdateResult_REPLACE, path))
+			continue
+		}
+		err = s.ModelData.SetReplace(prefix, path, typedvalue)
+		result = append(result, buildUpdateResult(gnmipb.UpdateResult_REPLACE, path, err))
+	}
+	s.ModelData.SetDone()
+	resp := &pb.SetResponse{
+		Prefix:   req.GetPrefix(),
+		Response: result,
+	}
+	utilities.PrintProto(resp)
+	return resp, err
+
+	// s.ModelData.SetDelete(base, gnmipb.path)
+	// s.ModelData.SetReplaceUpdate(operation, base, gnmipb.path, data)
+	// s.ModelData.SetReplace(base, gnmipb.path, data)
+	// s.ModelData.SetUpdate(base, gnmipb.path, data)
 	// s.ModelData.Commit() // reset rollback data
 	// s.ModelData.Rollback() // revert commit data
 
-	for _, path := range req.GetDelete() {
-		for _, branch := range branches {
-			bpath := branch.Path
-			base := branch.Value.(ygot.GoStruct)
-			bprefix, err := xpath.ToGNMIPath(bpath)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
-			}
-			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "invalid-path(%s)", err.Error())
-			}
-			targets, ok := s.Model.FindAllData(base, path)
-			if !ok || len(targets) <= 0 {
-				continue
-			}
-
-			for _, target := range targets {
-				rpath, err := xpath.ToGNMIPath(target.Path)
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "path-conversion-error(%s%s)", bprefix, target.Path)
-				}
-				rollback := rollback{op: OpDelete, base: branch, target: target}
-				err = ytypes.DeleteNode(s.Model.FindSchema(base), base, rpath)
-				fmt.Println(err)
-				dump.Print(rollback)
-			}
-		}
-
-		// res, grpcStatusError := s.ModelData.SetDelete(branches, path)
-		// if grpcStatusError != nil {
-		// 	return nil, grpcStatusError
-		// }
-		// results = append(results, res)
-	}
-
-	return nil, status.Error(codes.Unimplemented, "Set not implemented")
 	// s.ModelData.Lock()
 	// defer s.ModelData.Unlock()
 

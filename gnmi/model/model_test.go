@@ -24,8 +24,7 @@ import (
 func TestModel_FindSchemaPaths(t *testing.T) {
 	m := NewModel()
 	type args struct {
-		prefix *gpb.Path
-		path   *gpb.Path
+		path *gpb.Path
 	}
 	tests := []struct {
 		name  string
@@ -36,8 +35,7 @@ func TestModel_FindSchemaPaths(t *testing.T) {
 		{
 			name: "FindSchemaPaths",
 			args: args{
-				prefix: nil,
-				path:   &gpb.Path{},
+				path: &gpb.Path{},
 			},
 			want:  []string{"/"},
 			want1: true,
@@ -45,7 +43,6 @@ func TestModel_FindSchemaPaths(t *testing.T) {
 		{
 			name: "FindSchemaPaths",
 			args: args{
-				prefix: nil,
 				path: &gpb.Path{
 					Elem: []*gpb.PathElem{
 						&gpb.PathElem{
@@ -76,7 +73,6 @@ func TestModel_FindSchemaPaths(t *testing.T) {
 		{
 			name: "FindSchemaPaths",
 			args: args{
-				prefix: nil,
 				path: &gpb.Path{
 					Elem: []*gpb.PathElem{
 						&gpb.PathElem{
@@ -91,7 +87,6 @@ func TestModel_FindSchemaPaths(t *testing.T) {
 		{
 			name: "FindSchemaPaths",
 			args: args{
-				prefix: nil,
 				path: &gpb.Path{
 					Elem: []*gpb.PathElem{
 						&gpb.PathElem{
@@ -121,7 +116,7 @@ func TestModel_FindSchemaPaths(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := m.FindSchemaPaths(tt.args.prefix, tt.args.path)
+			got, got1 := m.FindSchemaPaths(tt.args.path)
 			if !testIsEqualList(got, tt.want) {
 				t.Errorf("Model.FindSchemaPaths() got = %v, want %v", got, tt.want)
 			}
