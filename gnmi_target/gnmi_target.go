@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
@@ -160,23 +159,14 @@ func newServer() (*server, error) {
 	}
 
 	var startup []byte
-	var startupIsJSON bool = true
 	if s.config.Startup != "" {
 		startup, err = ioutil.ReadFile(s.config.Startup)
 		if err != nil {
 			glog.Exitf("error in reading startup file: %v", err)
 		}
-		if strings.HasSuffix(s.config.Startup, "yaml") ||
-			strings.HasSuffix(s.config.Startup, "yml") {
-			startupIsJSON = false
-		} else {
-			startupIsJSON = false
-		}
 	}
 
-	s.Server, err = gnmiserver.NewServer(
-		startup, startupIsJSON,
-		s.config.DisableBundling)
+	s.Server, err = gnmiserver.NewServer(startup, s.config.DisableBundling)
 	if err != nil {
 		return nil, err
 	}

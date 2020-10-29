@@ -32,7 +32,7 @@ import (
 
 func TestCapabilities(t *testing.T) {
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(nil, false, false)
+	s, err := NewServer(nil, false)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -121,7 +121,7 @@ interfaces:
       "enabled": true
 `
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer([]byte(yamlData), false, false)
+	s, err := NewServer([]byte(yamlData), false)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -360,7 +360,7 @@ func TestGetWithYdb(t *testing.T) {
 		glog.Exitf("error in reading config file: %v", err)
 	}
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(yamlData, false, false)
+	s, err := NewServer(yamlData, false)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}

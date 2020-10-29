@@ -10,7 +10,7 @@ import (
 
 func TestModel_ValidatePathAndSync(t *testing.T) {
 	flag.Set("disable-ydb", "true")
-	m, err := NewModel(nil, nil, nil)
+	m, err := NewModel(nil, nil)
 	if err != nil {
 		t.Errorf("%v", err)
 		return

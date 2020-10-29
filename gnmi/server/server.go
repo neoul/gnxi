@@ -31,7 +31,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/neoul/gnxi/gnmi/model"
-	"github.com/neoul/gnxi/gnmi/model/gostruct"
 	"github.com/neoul/gnxi/utilities"
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/openconfig/ygot/ygot"
@@ -76,7 +75,7 @@ type Server struct {
 }
 
 // NewServer creates an instance of Server with given json config.
-func NewServer(startup []byte, startupIsJSON, disableBundling bool) (*Server, error) {
+func NewServer(startup []byte, disableBundling bool) (*Server, error) {
 	var err error
 	var m *model.Model
 	s := &Server{
@@ -85,16 +84,12 @@ func NewServer(startup []byte, startupIsJSON, disableBundling bool) (*Server, er
 		sessions:        map[string]*Session{},
 		telemetryCtrl:   newTelemetryCB(),
 	}
-	if startupIsJSON {
-		m, err = model.NewCustomModel(gostruct.Schema, gostruct.ΓModelData, startup, nil, s)
-	} else {
-		m, err = model.NewCustomModel(gostruct.Schema, gostruct.ΓModelData, nil, startup, s)
-	}
+	m, err = model.NewModel(startup, s)
 	if err != nil {
 		return nil, err
 	}
 	s.Model = m
-	return s, err
+	return s, nil
 }
 
 // NewCustomServer creates an instance of Server with given json config.
@@ -107,16 +102,12 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 		sessions:        map[string]*Session{},
 		telemetryCtrl:   newTelemetryCB(),
 	}
-	if startupIsJSON {
-		m, err = model.NewCustomModel(schema, supportedModels, startup, nil, s)
-	} else {
-		m, err = model.NewCustomModel(schema, supportedModels, nil, startup, s)
-	}
+	m, err = model.NewCustomModel(schema, supportedModels, startup, s)
 	if err != nil {
 		return nil, err
 	}
 	s.Model = m
-	return s, err
+	return s, nil
 }
 
 // Close the connected YDB instance
