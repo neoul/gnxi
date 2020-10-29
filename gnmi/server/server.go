@@ -31,6 +31,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/neoul/gnxi/gnmi/model"
+	"github.com/neoul/gnxi/gnmi/model/gostruct"
 	"github.com/neoul/gnxi/utilities"
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/openconfig/ygot/ygot"
@@ -74,12 +75,30 @@ type Server struct {
 	useAliases      bool
 }
 
-// Config - the gNMI server configuration
-type Config struct {
+// NewServer creates an instance of Server with given json config.
+func NewServer(startup []byte, startupIsJSON, disableBundling bool) (*Server, error) {
+	var err error
+	var m *model.Model
+	s := &Server{
+		disableBundling: disableBundling,
+		alias:           map[string]*gnmipb.Alias{},
+		sessions:        map[string]*Session{},
+		telemetryCtrl:   newTelemetryCB(),
+	}
+	if startupIsJSON {
+		m, err = model.NewCustomModel(gostruct.Schema, gostruct.ΓModelData, startup, nil, s)
+	} else {
+		m, err = model.NewCustomModel(gostruct.Schema, gostruct.ΓModelData, nil, startup, s)
+	}
+	if err != nil {
+		return nil, err
+	}
+	s.Model = m
+	return s, err
 }
 
-// NewServer creates an instance of Server with given json config.
-func NewServer(schema func() (*ytypes.Schema, error), supportedModels []*gnmipb.ModelData, startup []byte, startupIsJSON, disableBundling bool) (*Server, error) {
+// NewCustomServer creates an instance of Server with given json config.
+func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*gnmipb.ModelData, startup []byte, startupIsJSON, disableBundling bool) (*Server, error) {
 	var err error
 	var m *model.Model
 	s := &Server{

@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/neoul/gnxi/gnmi/model/gostruct"
 	gnmiserver "github.com/neoul/gnxi/gnmi/server"
 
 	"github.com/neoul/gnxi/utilities/netsession"
@@ -175,7 +174,8 @@ func newServer() (*server, error) {
 		}
 	}
 
-	s.Server, err = gnmiserver.NewServer(gostruct.Schema, gostruct.ΓModelData, startup, startupIsJSON,
+	s.Server, err = gnmiserver.NewServer(
+		startup, startupIsJSON,
 		s.config.DisableBundling)
 	if err != nil {
 		return nil, err

@@ -28,13 +28,11 @@ import (
 	"github.com/openconfig/gnmi/value"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"github.com/neoul/gnxi/gnmi/model/gostruct"
 )
 
 func TestCapabilities(t *testing.T) {
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(gostruct.Schema, gostruct.ΓModelData, nil, false, false)
+	s, err := NewServer(nil, false, false)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -93,8 +91,37 @@ func TestGet(t *testing.T) {
 			]
 		}
 	}`
+	yamlData := `
+messages:
+  config:
+    severity: ERROR
+  state:
+    severity: ERROR
+    message:
+      msg: "Messages presents here."
+      priority: 10
+interfaces:
+  interface[name=p1]:
+   "name": "p1"
+   "config":
+      "name": "p1"
+      "type": "ethernetCsmacd"
+      "mtu": 1516
+      "loopback-mode": false
+      "description": "Interface#1"
+      "enabled": true
+  interface[name=p2]:
+    "name": "p2"
+    "config":
+      "name": "p2"
+      "type": "ethernetCsmacd"
+      "mtu": 1516
+      "loopback-mode": false
+      "description": "n/a"
+      "enabled": true
+`
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(gostruct.Schema, gostruct.ΓModelData, []byte(jsonConfigRoot), true, false)
+	s, err := NewServer([]byte(yamlData), false, false)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -333,7 +360,7 @@ func TestGetWithYdb(t *testing.T) {
 		glog.Exitf("error in reading config file: %v", err)
 	}
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(gostruct.Schema, gostruct.ΓModelData, yamlData, false, false)
+	s, err := NewServer(yamlData, false, false)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
