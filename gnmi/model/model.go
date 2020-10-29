@@ -22,11 +22,15 @@ import (
 	"strings"
 
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
+	"github.com/neoul/gnxi/utilities"
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
+	"github.com/neoul/trie"
 	"github.com/openconfig/goyang/pkg/yang"
 	"github.com/openconfig/ygot/ygot"
 	"github.com/openconfig/ygot/ytypes"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
 )
@@ -34,8 +38,13 @@ import (
 // Model contains the model data and GoStruct information for the device.
 type Model struct {
 	*ytypes.Schema
-	modelData []*gpb.ModelData
-	// SchemaTree      map[string]*yang.Entry
+	modelData   []*gpb.ModelData
+	dataroot    ygot.ValidatedGoStruct // the current data tree of the Model
+	updatedroot ygot.GoStruct          // a fake data tree to represent the changed data.
+	Callback
+	block        *ydb.YDB
+	syncRequired *trie.Trie
+	transaction  *setTransaction
 }
 
 // GetName returns the name of the model.
@@ -53,39 +62,107 @@ func (m *Model) GetRootType() reflect.Type {
 }
 
 // NewRoot returns new root (ygot.ValidatedGoStruct)
-func (m *Model) NewRoot() ygot.ValidatedGoStruct {
-	root := reflect.New(m.GetRootType()).Interface()
-	rootGoStruct, ok := root.(ygot.ValidatedGoStruct)
-	if ok {
-		return rootGoStruct
+func (m *Model) NewRoot(jsonData []byte) (ygot.ValidatedGoStruct, error) {
+	newRoot := reflect.New(m.GetRootType()).Interface()
+	root := newRoot.(ygot.ValidatedGoStruct)
+	if jsonData != nil {
+		if err := m.Unmarshal(jsonData, root); err != nil {
+			return nil, err
+		}
+		if err := root.Validate(); err != nil {
+			return nil, err
+		}
 	}
-	return nil
+	return root, nil
 }
 
 // NewModel returns an instance of Model struct.
-func NewModel() *Model {
+func NewModel(jsonData []byte, yamlData []byte, cb Callback) (*Model, error) {
 	Schema, err := gostruct.Schema()
 	if err != nil {
-		panic("schema error: " + err.Error())
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 	m := &Model{
 		Schema:    Schema,
 		modelData: gostruct.ΓModelData,
+		Callback:  cb,
 	}
-	return m
+	if err := initNewModel(m, jsonData, yamlData); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // NewCustomModel returns an instance of Model struct.
-func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gpb.ModelData) *Model {
+func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gpb.ModelData, jsonData []byte, yamlData []byte, cb Callback) (*Model, error) {
 	s, err := schema()
 	if err != nil {
-		panic("schema error: " + err.Error())
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 	m := &Model{
 		Schema:    s,
 		modelData: modelData,
+		Callback:  cb,
 	}
-	return m
+	if err := initNewModel(m, jsonData, yamlData); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// initNewModel creates a ValidatedGoStruct of this model from jsonData. If jsonData is nil, creates an empty GoStruct.
+func initNewModel(m *Model, jsonData []byte, yamlData []byte) error {
+	dataroot, err := m.NewRoot(jsonData)
+	if err != nil {
+		return err
+	}
+	m.dataroot = dataroot
+	m.syncRequired = trie.New()
+
+	for _, p := range srpaths {
+		// glog.Infof("sync-required-path %s", p)
+		entry, err := m.FindSchemaByXPath(p)
+		if err != nil {
+			continue
+		}
+		sentries := []*yang.Entry{}
+		for entry != nil {
+			sentries = append([]*yang.Entry{entry}, sentries...)
+			entry = entry.Parent
+		}
+		m.syncRequired.Add(p, sentries)
+	}
+
+	// if jsonData != nil {
+	// 	if err := execConfigCallback(m.callback, root); err != nil {
+	// 		return nil, err
+	// 	}
+	// }
+
+	m.block, _ = ydb.OpenWithTargetStruct("gnmi.target", m)
+	if yamlData != nil {
+		if err := m.block.Parse(yamlData); err != nil {
+			return err
+		}
+		// [FIXME] - error in creating gnmid: /device/interfaces: /device/interfaces/interface: list interface contains more than max allowed elements: 2 > 0
+		// if err := root.Validate(); err != nil {
+		// 	//???
+		// 	return nil, err
+		// }
+		// if err := execConfigCallback(m.callback, root); err != nil {
+		// 	return nil, err
+		// }
+		utilities.PrintStruct(dataroot)
+	}
+	if !*disableYdbChannel {
+		err := m.block.Connect("uss://gnmi", "pub")
+		if err != nil {
+			m.block.Close()
+			return err
+		}
+		m.block.Serve()
+	}
+	return nil
 }
 
 // SupportedModels returns a list of supported models.

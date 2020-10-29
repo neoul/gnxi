@@ -29,21 +29,12 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/neoul/gnxi/gnmi/model"
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
-)
-
-var (
-	// model is the model for test config server.
-	mo = model.NewCustomModel(
-		gostruct.Schema,
-		gostruct.ΓModelData,
-	)
 )
 
 func TestCapabilities(t *testing.T) {
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(mo, nil, false, false)
+	s, err := NewServer(gostruct.Schema, gostruct.ΓModelData, nil, false, false)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -53,8 +44,8 @@ func TestCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
-	if !reflect.DeepEqual(resp.GetSupportedModels(), mo.GetModelData()) {
-		t.Errorf("got supported models %v\nare not the same as\nmodel supported by the server %v", resp.GetSupportedModels(), mo.GetModelData())
+	if !reflect.DeepEqual(resp.GetSupportedModels(), s.Model.GetModelData()) {
+		t.Errorf("got supported models %v\nare not the same as\nmodel supported by the server %v", resp.GetSupportedModels(), s.Model.GetModelData())
 	}
 	if !reflect.DeepEqual(resp.GetSupportedEncodings(), supportedEncodings) {
 		t.Errorf("got supported encodings %v\nare not the same as\nencodings supported by the server %v", resp.GetSupportedEncodings(), supportedEncodings)
@@ -103,7 +94,7 @@ func TestGet(t *testing.T) {
 		}
 	}`
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(mo, []byte(jsonConfigRoot), true, false)
+	s, err := NewServer(gostruct.Schema, gostruct.ΓModelData, []byte(jsonConfigRoot), true, false)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -342,7 +333,7 @@ func TestGetWithYdb(t *testing.T) {
 		glog.Exitf("error in reading config file: %v", err)
 	}
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(mo, yamlData, false, false)
+	s, err := NewServer(gostruct.Schema, gostruct.ΓModelData, yamlData, false, false)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}

@@ -31,18 +31,17 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/neoul/gnxi/gnmi/model"
-	"github.com/neoul/gnxi/gnmi/modeldata"
 	"github.com/neoul/gnxi/utilities"
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/openconfig/ygot/ygot"
+	"github.com/openconfig/ygot/ytypes"
 
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
-	pb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
 var (
-	supportedEncodings = []pb.Encoding{pb.Encoding_JSON, pb.Encoding_JSON_IETF}
+	supportedEncodings = []gnmipb.Encoding{gnmipb.Encoding_JSON, gnmipb.Encoding_JSON_IETF}
 )
 
 // func init() {
@@ -53,7 +52,7 @@ var (
 // Typical usage:
 //	g := grpc.NewServer()
 //	s, err := Server.NewServer(model, config, callback)
-//	pb.NewServer(g, s)
+//	gnmipb.NewServer(g, s)
 //	reflection.Register(g)
 //	listen, err := net.Listen("tcp", ":8080")
 //	g.Serve(listen)
@@ -67,13 +66,12 @@ var (
 //		// Do something ...
 // }
 type Server struct {
-	disableBundling bool
-	Model           *model.Model
-	ModelData       *modeldata.ModelData
+	Model *model.Model
 	*telemetryCtrl
-	sessions   map[string]*Session
-	alias      map[string]*pb.Alias
-	useAliases bool
+	disableBundling bool
+	sessions        map[string]*Session
+	alias           map[string]*gnmipb.Alias
+	useAliases      bool
 }
 
 // Config - the gNMI server configuration
@@ -81,30 +79,34 @@ type Config struct {
 }
 
 // NewServer creates an instance of Server with given json config.
-func NewServer(m *model.Model, startup []byte, startupIsJSON, disableBundling bool) (*Server, error) {
+func NewServer(schema func() (*ytypes.Schema, error), supportedModels []*gnmipb.ModelData, startup []byte, startupIsJSON, disableBundling bool) (*Server, error) {
 	var err error
+	var m *model.Model
 	s := &Server{
 		disableBundling: disableBundling,
-		Model:           m,
-		alias:           map[string]*pb.Alias{},
+		alias:           map[string]*gnmipb.Alias{},
 		sessions:        map[string]*Session{},
 		telemetryCtrl:   newTelemetryCB(),
 	}
 	if startupIsJSON {
-		s.ModelData, err = modeldata.NewModelData(m, startup, nil, s)
+		m, err = model.NewCustomModel(schema, supportedModels, startup, nil, s)
 	} else {
-		s.ModelData, err = modeldata.NewModelData(m, nil, startup, s)
+		m, err = model.NewCustomModel(schema, supportedModels, nil, startup, s)
 	}
+	if err != nil {
+		return nil, err
+	}
+	s.Model = m
 	return s, err
 }
 
 // Close the connected YDB instance
 func (s *Server) Close() {
-	s.ModelData.Close()
+	s.Model.Close()
 }
 
 // checkEncoding checks whether encoding and models are supported by the server. Return error if anything is unsupported.
-func (s *Server) checkEncoding(encoding pb.Encoding) error {
+func (s *Server) checkEncoding(encoding gnmipb.Encoding) error {
 	hasSupportedEncoding := false
 	for _, supportedEncoding := range supportedEncodings {
 		if encoding == supportedEncoding {
@@ -113,7 +115,7 @@ func (s *Server) checkEncoding(encoding pb.Encoding) error {
 		}
 	}
 	if !hasSupportedEncoding {
-		err := fmt.Errorf("unsupported encoding: %s", pb.Encoding_name[int32(encoding)])
+		err := fmt.Errorf("unsupported encoding: %s", gnmipb.Encoding_name[int32(encoding)])
 		return status.Error(codes.Unimplemented, err.Error())
 	}
 	return nil
@@ -122,7 +124,7 @@ func (s *Server) checkEncoding(encoding pb.Encoding) error {
 // getGNMIServiceVersion returns a pointer to the gNMI service version string.
 // The method is non-trivial because of the way it is defined in the proto file.
 func getGNMIServiceVersion() (*string, error) {
-	gzB, _ := (&pb.Update{}).Descriptor()
+	gzB, _ := (&gnmipb.Update{}).Descriptor()
 	r, err := gzip.NewReader(bytes.NewReader(gzB))
 	if err != nil {
 		return nil, fmt.Errorf("error in initializing gzip reader: %v", err)
@@ -136,7 +138,7 @@ func getGNMIServiceVersion() (*string, error) {
 	if err := proto.Unmarshal(b, desc); err != nil {
 		return nil, fmt.Errorf("error in unmarshaling proto: %v", err)
 	}
-	ver, err := proto.GetExtension(desc.Options, pb.E_GnmiService)
+	ver, err := proto.GetExtension(desc.Options, gnmipb.E_GnmiService)
 	if err != nil {
 		return nil, fmt.Errorf("error in getting version from proto extension: %v", err)
 	}
@@ -144,12 +146,12 @@ func getGNMIServiceVersion() (*string, error) {
 }
 
 // Capabilities returns supported encodings and supported models.
-func (s *Server) Capabilities(ctx context.Context, req *pb.CapabilityRequest) (*pb.CapabilityResponse, error) {
+func (s *Server) Capabilities(ctx context.Context, req *gnmipb.CapabilityRequest) (*gnmipb.CapabilityResponse, error) {
 	ver, err := getGNMIServiceVersion()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "error in getting gnmi service version: %v", err)
 	}
-	return &pb.CapabilityResponse{
+	return &gnmipb.CapabilityResponse{
 		SupportedModels:    s.Model.GetModelData(),
 		SupportedEncodings: supportedEncodings,
 		GNMIVersion:        *ver,
@@ -157,11 +159,11 @@ func (s *Server) Capabilities(ctx context.Context, req *pb.CapabilityRequest) (*
 }
 
 // Get implements the Get RPC in gNMI spec.
-func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
+func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetResponse, error) {
 
-	if req.GetType() != pb.GetRequest_ALL {
+	if req.GetType() != gnmipb.GetRequest_ALL {
 		return nil, status.Errorf(codes.Unimplemented, "unsupported request type: %s",
-			pb.GetRequest_DataType_name[int32(req.GetType())])
+			gnmipb.GetRequest_DataType_name[int32(req.GetType())])
 	}
 	if err := s.Model.CheckModels(req.GetUseModels()); err != nil {
 		return nil, status.Errorf(codes.Unimplemented, err.Error())
@@ -174,24 +176,24 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 
 	prefix := req.GetPrefix()
 	paths := req.GetPath()
-	syncPaths := s.ModelData.GetSyncUpdatePath(prefix, paths)
-	s.ModelData.RunSyncUpdate(time.Second*3, syncPaths)
+	syncPaths := s.Model.GetSyncUpdatePath(prefix, paths)
+	s.Model.RunSyncUpdate(time.Second*3, syncPaths)
 
-	s.ModelData.RLock()
-	defer s.ModelData.RUnlock()
+	s.Model.RLock()
+	defer s.Model.RUnlock()
 
 	// each prefix + path ==> one notification message
 	if err := xpath.ValidateGNMIPath(prefix); err != nil {
 		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := s.Model.FindAllData(s.ModelData.GetRoot(), prefix)
+	toplist, ok := s.Model.FindAllData(s.Model.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
 		if ok = s.Model.ValidatePathSchema(prefix); ok {
 			return nil, status.Errorf(codes.NotFound, "data-missing(%v)", xpath.ToXPath(prefix))
 		}
 		return nil, status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPath(prefix))
 	}
-	notifications := []*pb.Notification{}
+	notifications := []*gnmipb.Notification{}
 	for _, top := range toplist {
 		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
@@ -207,7 +209,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 			if !ok || len(datalist) <= 0 {
 				continue
 			}
-			update := make([]*pb.Update, len(datalist))
+			update := make([]*gnmipb.Update, len(datalist))
 			for j, data := range datalist {
 				typedValue, err := ygot.EncodeTypedValue(data.Value, req.GetEncoding())
 				if err != nil {
@@ -217,9 +219,9 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", data.Path)
 				}
-				update[j] = &pb.Update{Path: datapath, Val: typedValue}
+				update[j] = &gnmipb.Update{Path: datapath, Val: typedValue}
 			}
-			notification := &pb.Notification{
+			notification := &gnmipb.Notification{
 				Timestamp: time.Now().UnixNano(),
 				Prefix:    bprefix,
 				Update:    update,
@@ -230,23 +232,23 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	if len(notifications) <= 0 {
 		return nil, status.Errorf(codes.NotFound, "data-missing")
 	}
-	return &pb.GetResponse{Notification: notifications}, nil
+	return &gnmipb.GetResponse{Notification: notifications}, nil
 }
 
 // Set implements the Set RPC in gNMI spec.
-func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, error) {
+func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetResponse, error) {
 	utilities.PrintProto(req)
 	prefix := req.GetPrefix()
 
 	var err error
 	result := make([]*gnmipb.UpdateResult, 0, 6)
-	s.ModelData.SetInit()
+	s.Model.SetInit()
 	for _, path := range req.GetDelete() {
 		if err != nil {
 			result = append(result, buildUpdateResultAborted(gnmipb.UpdateResult_DELETE, path))
 			continue
 		}
-		err = s.ModelData.SetDelete(prefix, path)
+		err = s.Model.SetDelete(prefix, path)
 		result = append(result, buildUpdateResult(gnmipb.UpdateResult_DELETE, path, err))
 	}
 	for _, u := range req.GetReplace() {
@@ -256,52 +258,52 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 			result = append(result, buildUpdateResultAborted(gnmipb.UpdateResult_REPLACE, path))
 			continue
 		}
-		err = s.ModelData.SetReplace(prefix, path, typedvalue)
+		err = s.Model.SetReplace(prefix, path, typedvalue)
 		result = append(result, buildUpdateResult(gnmipb.UpdateResult_REPLACE, path, err))
 	}
-	s.ModelData.SetDone()
-	resp := &pb.SetResponse{
+	s.Model.SetDone()
+	resp := &gnmipb.SetResponse{
 		Prefix:   req.GetPrefix(),
 		Response: result,
 	}
 	utilities.PrintProto(resp)
 	return resp, err
 
-	// s.ModelData.SetDelete(base, gnmipb.path)
-	// s.ModelData.SetReplaceUpdate(operation, base, gnmipb.path, data)
-	// s.ModelData.SetReplace(base, gnmipb.path, data)
-	// s.ModelData.SetUpdate(base, gnmipb.path, data)
-	// s.ModelData.Commit() // reset rollback data
-	// s.ModelData.Rollback() // revert commit data
+	// s.Model.SetDelete(base, gnmipb.path)
+	// s.Model.SetReplaceUpdate(operation, base, gnmipb.path, data)
+	// s.Model.SetReplace(base, gnmipb.path, data)
+	// s.Model.SetUpdate(base, gnmipb.path, data)
+	// s.Model.Commit() // reset rollback data
+	// s.Model.Rollback() // revert commit data
 
-	// s.ModelData.Lock()
-	// defer s.ModelData.Unlock()
+	// s.Model.Lock()
+	// defer s.Model.Unlock()
 
-	// jsonTree, err := ygot.ConstructIETFJSON(s.ModelData.GetRoot(), &ygot.RFC7951JSONConfig{})
+	// jsonTree, err := ygot.ConstructIETFJSON(s.Model.GetRoot(), &ygot.RFC7951JSONConfig{})
 	// if err != nil {
 	// 	msg := fmt.Sprintf("error in constructing IETF JSON tree from config struct: %v", err)
 	// 	return nil, status.Error(codes.Internal, msg)
 	// }
 
 	// prefix := req.GetPrefix()
-	// var results []*pb.UpdateResult
+	// var results []*gnmipb.UpdateResult
 
 	// for _, path := range req.GetDelete() {
-	// 	res, grpcStatusError := s.ModelData.SetDelete(jsonTree, prefix, path)
+	// 	res, grpcStatusError := s.Model.SetDelete(jsonTree, prefix, path)
 	// 	if grpcStatusError != nil {
 	// 		return nil, grpcStatusError
 	// 	}
 	// 	results = append(results, res)
 	// }
 	// for _, upd := range req.GetReplace() {
-	// 	res, grpcStatusError := s.ModelData.SetReplaceOrUpdate(jsonTree, pb.UpdateResult_REPLACE, prefix, upd.GetPath(), upd.GetVal())
+	// 	res, grpcStatusError := s.Model.SetReplaceOrUpdate(jsonTree, gnmipb.UpdateResult_REPLACE, prefix, upd.GetPath(), upd.GetVal())
 	// 	if grpcStatusError != nil {
 	// 		return nil, grpcStatusError
 	// 	}
 	// 	results = append(results, res)
 	// }
 	// for _, upd := range req.GetUpdate() {
-	// 	res, grpcStatusError := s.ModelData.SetReplaceOrUpdate(jsonTree, pb.UpdateResult_UPDATE, prefix, upd.GetPath(), upd.GetVal())
+	// 	res, grpcStatusError := s.Model.SetReplaceOrUpdate(jsonTree, gnmipb.UpdateResult_UPDATE, prefix, upd.GetPath(), upd.GetVal())
 	// 	if grpcStatusError != nil {
 	// 		return nil, grpcStatusError
 	// 	}
@@ -313,27 +315,27 @@ func (s *Server) Set(ctx context.Context, req *pb.SetRequest) (*pb.SetResponse, 
 	// 	msg := fmt.Sprintf("error in marshaling IETF JSON tree to bytes: %v", err)
 	// 	return nil, status.Error(codes.Internal, msg)
 	// }
-	// newRoot, err := model.NewGoStruct(s.Model, jsonDump)
+	// newRoot, err := model.NewRoot(jsonDump)
 	// if err != nil {
 	// 	msg := fmt.Sprintf("error in creating config struct from IETF JSON data: %v", err)
 	// 	return nil, status.Error(codes.Internal, msg)
 	// }
-	// s.ModelData.ChangeRoot(newRoot)
-	// return &pb.SetResponse{
+	// s.Model.ChangeRoot(newRoot)
+	// return &gnmipb.SetResponse{
 	// 	Prefix:   req.GetPrefix(),
 	// 	Response: results,
 	// }, nil
 }
 
 // Subscribe implements the Subscribe RPC in gNMI spec.
-func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
+func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 	teleses := newTelemetrySession(stream.Context(), s)
 	// utilities.PrintStruct(teleses)
 	// run stream responsor
 	teleses.waitgroup.Add(1)
 	go func(
-		stream pb.GNMI_SubscribeServer,
-		telemetrychannel chan *pb.SubscribeResponse,
+		stream gnmipb.GNMI_SubscribeServer,
+		telemetrychannel chan *gnmipb.SubscribeResponse,
 		shutdown chan struct{},
 		waitgroup *sync.WaitGroup,
 	) {
@@ -374,8 +376,8 @@ func (s *Server) Subscribe(stream pb.GNMI_SubscribeServer) error {
 
 // InternalUpdate is an experimental feature to let the server update its
 // internal states. Use it with your own risk.
-func (s *Server) InternalUpdate(funcPtr func(ModelData ygot.ValidatedGoStruct) error) error {
-	s.ModelData.Lock()
-	defer s.ModelData.Unlock()
-	return funcPtr(s.ModelData.GetRoot())
+func (s *Server) InternalUpdate(funcPtr func(Model ygot.ValidatedGoStruct) error) error {
+	s.Model.Lock()
+	defer s.Model.Unlock()
+	return funcPtr(s.Model.GetRoot())
 }

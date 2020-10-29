@@ -85,8 +85,8 @@ func (tcb *telemetryCtrl) unregisterTelemetry(telesub *TelemetrySubscription) {
 	}
 }
 
-// OnChangeStarted - callback for Telemetry subscription on data changes
-func (tcb *telemetryCtrl) OnChangeStarted(changes ygot.GoStruct) {
+// ChangeStarted - callback for Telemetry subscription on data changes
+func (tcb *telemetryCtrl) ChangeStarted(changes ygot.GoStruct) {
 	tcb.mutex.RLock()
 	defer tcb.mutex.RUnlock()
 	tcb.readyToUpdate = map[TelemetryID]*TelemetrySubscription{}
@@ -95,8 +95,8 @@ func (tcb *telemetryCtrl) OnChangeStarted(changes ygot.GoStruct) {
 	tcb.deletedList = map[TelemetryID]pathSet{}
 }
 
-// OnChangeCreated - callback for Telemetry subscription on data changes
-func (tcb *telemetryCtrl) OnChangeCreated(slicepath []string, changes ygot.GoStruct) {
+// ChangeCreated - callback for Telemetry subscription on data changes
+func (tcb *telemetryCtrl) ChangeCreated(slicepath []string, changes ygot.GoStruct) {
 	tcb.mutex.RLock()
 	defer tcb.mutex.RUnlock()
 	datapath := "/" + strings.Join(slicepath, "/")
@@ -152,8 +152,8 @@ func (tcb *telemetryCtrl) OnChangeCreated(slicepath []string, changes ygot.GoStr
 	}
 }
 
-// OnChangeReplaced - callback for Telemetry subscription on data changes
-func (tcb *telemetryCtrl) OnChangeReplaced(slicepath []string, changes ygot.GoStruct) {
+// ChangeReplaced - callback for Telemetry subscription on data changes
+func (tcb *telemetryCtrl) ChangeReplaced(slicepath []string, changes ygot.GoStruct) {
 	tcb.mutex.RLock()
 	defer tcb.mutex.RUnlock()
 	datapath := "/" + strings.Join(slicepath, "/")
@@ -210,8 +210,8 @@ func (tcb *telemetryCtrl) OnChangeReplaced(slicepath []string, changes ygot.GoSt
 	}
 }
 
-// OnChangeDeleted - callback for Telemetry subscription on data changes
-func (tcb *telemetryCtrl) OnChangeDeleted(slicepath []string) {
+// ChangeDeleted - callback for Telemetry subscription on data changes
+func (tcb *telemetryCtrl) ChangeDeleted(slicepath []string) {
 	tcb.mutex.RLock()
 	defer tcb.mutex.RUnlock()
 	datapath := "/" + strings.Join(slicepath, "/")
@@ -268,7 +268,7 @@ func (tcb *telemetryCtrl) OnChangeDeleted(slicepath []string) {
 }
 
 // OnStarted - callback for Telemetry subscription on data changes
-func (tcb *telemetryCtrl) OnChangeFinished(changes ygot.GoStruct) {
+func (tcb *telemetryCtrl) ChangeFinished(changes ygot.GoStruct) {
 	tcb.mutex.RLock()
 	defer tcb.mutex.RUnlock()
 	for telesubid, telesub := range tcb.readyToUpdate {
@@ -347,7 +347,7 @@ func newTelemetrySession(ctx context.Context, s *Server) *TelemetrySession {
 }
 
 func (teleses *TelemetrySession) stopTelemetrySession() {
-	block := teleses.server.ModelData.GetYDB()
+	block := teleses.server.Model.GetYDB()
 	delDynamicTeleSubscriptionInfo(block, teleses)
 	teleses.lock()
 	defer teleses.unlock()
@@ -629,15 +629,15 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 	for _, updateEntry := range subList {
 		paths = append(paths, updateEntry.Path)
 	}
-	syncPaths := s.ModelData.GetSyncUpdatePath(prefix, paths)
-	s.ModelData.RunSyncUpdate(time.Second*3, syncPaths)
+	syncPaths := s.Model.GetSyncUpdatePath(prefix, paths)
+	s.Model.RunSyncUpdate(time.Second*3, syncPaths)
 
-	s.ModelData.RLock()
-	defer s.ModelData.RUnlock()
+	s.Model.RLock()
+	defer s.Model.RUnlock()
 	if err := xpath.ValidateGNMIPath(prefix); err != nil {
 		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := s.Model.FindAllData(s.ModelData.GetRoot(), prefix)
+	toplist, ok := s.Model.FindAllData(s.Model.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
 		if ok = s.Model.ValidatePathSchema(prefix); ok {
 			// data-missing is not an error in SubscribeRPC
@@ -720,14 +720,14 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 		// alias = xxx
 	}
 	if telesub.Configured.SubscriptionMode != pb.SubscriptionMode_ON_CHANGE {
-		syncPaths := s.ModelData.GetSyncUpdatePath(prefix, telesub.Paths)
-		s.ModelData.RunSyncUpdate(time.Second*3, syncPaths)
+		syncPaths := s.Model.GetSyncUpdatePath(prefix, telesub.Paths)
+		s.Model.RunSyncUpdate(time.Second*3, syncPaths)
 	}
 
-	s.ModelData.RLock()
-	defer s.ModelData.RUnlock()
+	s.Model.RLock()
+	defer s.Model.RUnlock()
 	if updatedroot == nil {
-		updatedroot = s.ModelData.GetRoot()
+		updatedroot = s.Model.GetRoot()
 	}
 	if err := xpath.ValidateGNMIPath(prefix); err != nil {
 		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
@@ -1007,7 +1007,7 @@ func processSR(teleses *TelemetrySession, req *pb.SubscribeRequest) error {
 			startingList = append(startingList, telesub)
 		}
 	}
-	block := teleses.server.ModelData.GetYDB()
+	block := teleses.server.Model.GetYDB()
 	addDynamicTeleSubscriptionInfo(block, startingList)
 	for _, telesub := range startingList {
 		err = teleses.StartTelmetryUpdate(telesub)

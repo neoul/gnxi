@@ -1,4 +1,4 @@
-package modeldata
+package model
 
 import (
 	"encoding/json"
@@ -6,16 +6,12 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/neoul/gnxi/gnmi/model"
-	"github.com/neoul/gnxi/utilities"
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/gostruct-dump/dump"
 	"github.com/neoul/libydb/go/ydb"
-	"github.com/neoul/trie"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/value"
 	"github.com/openconfig/goyang/pkg/yang"
@@ -52,149 +48,45 @@ func init() {
 	// flag.Set("sync-required-path", "/interfaces/interface/state/counters")
 }
 
-// ModelData - the data instance for the model
-type ModelData struct {
-	mutex        *sync.RWMutex
-	dataroot     ygot.ValidatedGoStruct // the current data tree of the Model
-	updatedroot  ygot.GoStruct          // a fake data tree to represent the changed data.
-	callback     DataCallback
-	block        *ydb.YDB
-	syncRequired *trie.Trie
-	model        *model.Model
-	transaction  *setTransaction
-}
-
 // GetYDB - Get YAML DataBlock
-func (mdata *ModelData) GetYDB() *ydb.YDB {
-	return mdata.block
-}
-
-// GetLock - Get the mutex of the ModelData
-func (mdata *ModelData) GetLock() *sync.RWMutex {
-	return mdata.mutex
-}
-
-// SetLock - Set the mutex of the ModelData
-func (mdata *ModelData) SetLock(m *sync.RWMutex) error {
-	if m == nil {
-		return fmt.Errorf("nil RWMutex")
-	}
-	mdata.mutex.Lock()
-	defer mdata.mutex.Unlock()
-	mdata.mutex = m
-	return nil
+func (m *Model) GetYDB() *ydb.YDB {
+	return m.block
 }
 
 // Lock - Lock the YDB instance for use.
-func (mdata *ModelData) Lock() {
-	mdata.mutex.Lock()
+func (m *Model) Lock() {
+	m.block.Lock()
 }
 
 // Unlock - Unlock of the YDB instance.
-func (mdata *ModelData) Unlock() {
-	mdata.mutex.Unlock()
+func (m *Model) Unlock() {
+	m.block.Unlock()
 }
 
 // RLock - Lock the YDB instance for read.
-func (mdata *ModelData) RLock() {
-	mdata.mutex.RLock()
+func (m *Model) RLock() {
+	m.block.RLock()
 }
 
 // RUnlock - Unlock of the YDB instance for read.
-func (mdata *ModelData) RUnlock() {
-	mdata.mutex.RUnlock()
+func (m *Model) RUnlock() {
+	m.block.RUnlock()
 }
 
 // Close the connected YDB instance
-func (mdata *ModelData) Close() {
-	mdata.block.Close()
-}
-
-// NewGoStruct - creates a ValidatedGoStruct of this model from jsonData. If jsonData is nil, creates an empty GoStruct.
-func NewGoStruct(m *model.Model, jsonData []byte) (ygot.ValidatedGoStruct, error) {
-	root := m.NewRoot()
-	if jsonData != nil {
-		if err := m.Unmarshal(jsonData, root); err != nil {
-			return nil, err
-		}
-		if err := root.Validate(); err != nil {
-			return nil, err
-		}
-	}
-	return root, nil
-}
-
-// NewModelData creates a ValidatedGoStruct of this model from jsonData. If jsonData is nil, creates an empty GoStruct.
-func NewModelData(m *model.Model, jsonData []byte, yamlData []byte, callback DataCallback) (*ModelData, error) {
-	root, err := NewGoStruct(m, jsonData)
-	if err != nil {
-		return nil, err
-	}
-
-	mdata := &ModelData{
-		dataroot:     root,
-		callback:     callback,
-		model:        m,
-		syncRequired: trie.New(),
-	}
-
-	for _, p := range srpaths {
-		// glog.Infof("sync-required-path %s", p)
-		entry, err := m.FindSchemaByXPath(p)
-		if err != nil {
-			continue
-		}
-		sentries := []*yang.Entry{}
-		for entry != nil {
-			sentries = append([]*yang.Entry{entry}, sentries...)
-			entry = entry.Parent
-		}
-		mdata.syncRequired.Add(p, sentries)
-	}
-
-	if jsonData != nil {
-		if err := execConfigCallback(mdata.callback, root); err != nil {
-			return nil, err
-		}
-	}
-
-	mdata.block, _ = ydb.OpenWithTargetStruct("gnmi.target", mdata)
-	mdata.mutex = mdata.block.Mutex
-	if yamlData != nil {
-		if err := mdata.block.Parse(yamlData); err != nil {
-			return nil, err
-		}
-		// [FIXME] - error in creating gnmid: /device/interfaces: /device/interfaces/interface: list interface contains more than max allowed elements: 2 > 0
-		// if err := root.Validate(); err != nil {
-		// 	//???
-		// 	return nil, err
-		// }
-		if err := execConfigCallback(mdata.callback, root); err != nil {
-			return nil, err
-		}
-		utilities.PrintStruct(root)
-	}
-	if !*disableYdbChannel {
-		err := mdata.block.Connect("uss://gnmi", "pub")
-		if err != nil {
-			mdata.block.Close()
-			return nil, err
-		}
-		mdata.block.Serve()
-	}
-
-	return mdata, nil
+func (m *Model) Close() {
+	m.block.Close()
 }
 
 // GetRoot - replaces the root of the Model Data
-func (mdata *ModelData) GetRoot() ygot.ValidatedGoStruct {
-	return mdata.dataroot
+func (m *Model) GetRoot() ygot.ValidatedGoStruct {
+	return m.dataroot
 }
 
 // ChangeRoot - replaces the root of the Model Data
-func (mdata *ModelData) ChangeRoot(root ygot.ValidatedGoStruct) error {
-	mdata.dataroot = root
-	return mdata.block.RelaceTargetStruct(root, false)
+func (m *Model) ChangeRoot(root ygot.ValidatedGoStruct) error {
+	m.dataroot = root
+	return m.block.RelaceTargetStruct(root, false)
 }
 
 func buildSyncUpdatePath(entries []*yang.Entry, elems []*gnmipb.PathElem) string {
@@ -210,8 +102,7 @@ func buildSyncUpdatePath(entries []*yang.Entry, elems []*gnmipb.PathElem) string
 }
 
 // GetSyncUpdatePath - synchronizes the data in the path
-func (mdata *ModelData) GetSyncUpdatePath(prefix *gnmipb.Path, paths []*gnmipb.Path) []string {
-	m := mdata.model
+func (m *Model) GetSyncUpdatePath(prefix *gnmipb.Path, paths []*gnmipb.Path) []string {
 	syncPaths := make([]string, 0, 8)
 	for _, path := range paths {
 		// glog.Info(":::SynUpdate:::", xpath.ToXPath(xpath.GNMIFullPath(prefix, path)))
@@ -222,17 +113,17 @@ func (mdata *ModelData) GetSyncUpdatePath(prefix *gnmipb.Path, paths []*gnmipb.P
 				continue
 			}
 			for _, spath := range schemaPaths {
-				requiredPath := mdata.syncRequired.PrefixSearch(spath)
+				requiredPath := m.syncRequired.PrefixSearch(spath)
 				for _, rpath := range requiredPath {
-					if n, ok := mdata.syncRequired.Find(rpath); ok {
+					if n, ok := m.syncRequired.Find(rpath); ok {
 						entires := n.Meta().([]*yang.Entry)
 						if entires != nil {
 							syncPaths = append(syncPaths, buildSyncUpdatePath(entires, fullpath.GetElem()))
 						}
 					}
 				}
-				if rpath, ok := mdata.syncRequired.FindLongestMatch(spath); ok {
-					if n, ok := mdata.syncRequired.Find(rpath); ok {
+				if rpath, ok := m.syncRequired.FindLongestMatch(spath); ok {
+					if n, ok := m.syncRequired.Find(rpath); ok {
 						entires := n.Meta().([]*yang.Entry)
 						if entires != nil {
 							syncPaths = append(syncPaths, buildSyncUpdatePath(entires, fullpath.GetElem()))
@@ -241,7 +132,7 @@ func (mdata *ModelData) GetSyncUpdatePath(prefix *gnmipb.Path, paths []*gnmipb.P
 				}
 			}
 		} else {
-			requiredPath := mdata.syncRequired.PrefixSearch("/")
+			requiredPath := m.syncRequired.PrefixSearch("/")
 			syncPaths = append(syncPaths, requiredPath...)
 		}
 	}
@@ -249,73 +140,71 @@ func (mdata *ModelData) GetSyncUpdatePath(prefix *gnmipb.Path, paths []*gnmipb.P
 }
 
 // RunSyncUpdate - synchronizes & update the data in the path. It locks model data.
-func (mdata *ModelData) RunSyncUpdate(syncIgnoreTime time.Duration, syncPaths []string) {
+func (m *Model) RunSyncUpdate(syncIgnoreTime time.Duration, syncPaths []string) {
 	if syncPaths == nil || len(syncPaths) == 0 {
 		return
 	}
 	for _, sp := range syncPaths {
 		glog.Infof("sync-update %s", sp)
 	}
-	mdata.block.SyncTo(syncIgnoreTime, true, syncPaths...)
+	m.block.SyncTo(syncIgnoreTime, true, syncPaths...)
 }
 
 // Find - Find all values and paths (XPath, Value) from the root
-func (mdata *ModelData) Find(path *gnmipb.Path) ([]*model.DataAndPath, bool) {
-	model := mdata.model
-	return model.FindAllData(mdata.GetRoot(), path)
+func (m *Model) Find(path *gnmipb.Path) ([]*DataAndPath, bool) {
+	return FindAllData(m.GetRoot(), path)
 }
 
 // FindSubsequence - Find all values and paths (XPath, Value) from the base
-func (mdata *ModelData) FindSubsequence(base *model.DataAndPath, path *gnmipb.Path) ([]*model.DataAndPath, bool) {
-	model := mdata.model
+func (m *Model) FindSubsequence(base *DataAndPath, path *gnmipb.Path) ([]*DataAndPath, bool) {
 	gs, ok := base.Value.(ygot.GoStruct)
 	if !ok {
 		return nil, false
 	}
-	return model.FindAllData(gs, path)
+	return FindAllData(gs, path)
 }
 
 // SetInit initializes the Set transaction.
-func (mdata *ModelData) SetInit() error {
-	if mdata.transaction != nil {
+func (m *Model) SetInit() error {
+	if m.transaction != nil {
 		return status.Errorf(codes.Unavailable, "Already running")
 	}
-	mdata.transaction = startTransaction()
+	m.transaction = startTransaction()
 	return nil
 }
 
 // SetDone resets the Set transaction.
-func (mdata *ModelData) SetDone() {
-	mdata.transaction = nil
+func (m *Model) SetDone() {
+	m.transaction = nil
 }
 
 // SetRollback reverts the original configuration.
-func (mdata *ModelData) SetRollback() {
+func (m *Model) SetRollback() {
 
 }
 
 // SetCommit commit the changed configuration.
-func (mdata *ModelData) SetCommit() {
+func (m *Model) SetCommit() {
 
 }
 
 // SetDelete deletes the path from root if the path exists.
-func (mdata *ModelData) SetDelete(prefix, path *gnmipb.Path) error {
+func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 	fullpath := xpath.GNMIFullPath(prefix, path)
-	targets, _ := mdata.Find(fullpath)
+	targets, _ := m.Find(fullpath)
 	for _, target := range targets {
 		targetPath, err := xpath.ToGNMIPath(target.Path)
 		if err != nil {
 			return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
 		}
-		err = ytypes.DeleteNode(mdata.model.GetSchema(), mdata.dataroot, targetPath)
+		err = ytypes.DeleteNode(m.GetSchema(), m.dataroot, targetPath)
 		if err != nil {
 			return err
 		}
 	}
 	for _, target := range targets {
-		mdata.transaction.add(opDelete, &target.Path, target.Value, nil)
-		dump.Print(mdata.transaction)
+		m.transaction.add(opDelete, &target.Path, target.Value, nil)
+		dump.Print(m.transaction)
 	}
 	return nil
 
@@ -323,7 +212,7 @@ func (mdata *ModelData) SetDelete(prefix, path *gnmipb.Path) error {
 	// var curNode interface{} = jsonTree
 	// pathDeleted := false
 	// fullPath := xpath.GNMIFullPath(prefix, path)
-	// schema := mdata.model.RootSchema()
+	// schema := m.RootSchema()
 	// for i, elem := range fullPath.Elem { // Delete sub-tree or leaf node.
 	// 	node, ok := curNode.(map[string]interface{})
 	// 	if !ok {
@@ -354,13 +243,13 @@ func (mdata *ModelData) SetDelete(prefix, path *gnmipb.Path) error {
 
 	// // Apply the validated operation to the config tree and device.
 	// if pathDeleted {
-	// 	newRoot, err := mdata.toGoStruct(jsonTree)
+	// 	newRoot, err := m.toGoStruct(jsonTree)
 	// 	if err != nil {
 	// 		return nil, status.Error(codes.Internal, err.Error())
 	// 	}
-	// 	if mdata.callback != nil {
-	// 		if applyErr := execConfigCallback(mdata.callback, newRoot); applyErr != nil {
-	// 			if rollbackErr := execConfigCallback(mdata.callback, mdata.dataroot); rollbackErr != nil {
+	// 	if m.callback != nil {
+	// 		if applyErr := execConfigCallback(m.callback, newRoot); applyErr != nil {
+	// 			if rollbackErr := execConfigCallback(m.callback, m.dataroot); rollbackErr != nil {
 	// 				return nil, status.Errorf(codes.Internal, "error in rollback the failed operation (%v): %v", applyErr, rollbackErr)
 	// 			}
 	// 			return nil, status.Errorf(codes.Aborted, "error in applying operation to device: %v", applyErr)
@@ -374,23 +263,23 @@ func (mdata *ModelData) SetDelete(prefix, path *gnmipb.Path) error {
 }
 
 // SetReplace deletes the path from root if the path exists.
-func (mdata *ModelData) SetReplace(prefix, path *gnmipb.Path, typedvalue *gnmipb.TypedValue) error {
+func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedvalue *gnmipb.TypedValue) error {
 	var err error
 	// var target interface{}
 	// var targetSchema *yang.Entry
 	fullpath := xpath.GNMIFullPath(prefix, path)
-	targets, ok := mdata.Find(fullpath)
+	targets, ok := m.Find(fullpath)
 	if !ok {
-		_, _, err = ytypes.GetOrCreateNode(mdata.model.GetSchema(), mdata.dataroot, fullpath)
+		_, _, err = ytypes.GetOrCreateNode(m.GetSchema(), m.dataroot, fullpath)
 		if err != nil {
 			return err
 		}
-		err := ytypes.SetNode(mdata.model.GetSchema(), mdata.dataroot, fullpath, typedvalue)
+		err := ytypes.SetNode(m.GetSchema(), m.dataroot, fullpath, typedvalue)
 		if err != nil {
 			return err
 		}
 		path := xpath.ToXPath(fullpath)
-		mdata.transaction.add(opDelete, &path, nil, typedvalue)
+		m.transaction.add(opDelete, &path, nil, typedvalue)
 		return nil
 	}
 
@@ -399,42 +288,42 @@ func (mdata *ModelData) SetReplace(prefix, path *gnmipb.Path, typedvalue *gnmipb
 		if err != nil {
 			return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
 		}
-		err = ytypes.SetNode(mdata.model.GetSchema(), mdata.dataroot, targetPath, typedvalue)
+		err = ytypes.SetNode(m.GetSchema(), m.dataroot, targetPath, typedvalue)
 		if err != nil {
 			return err
 		}
 	}
 	for _, target := range targets {
-		mdata.transaction.add(opDelete, &target.Path, target.Value, nil)
-		dump.Print(mdata.transaction)
+		m.transaction.add(opDelete, &target.Path, target.Value, nil)
+		dump.Print(m.transaction)
 	}
 
 	return nil
 }
 
 // SetUpdate deletes the path from root if the path exists.
-func (mdata *ModelData) SetUpdate(prefix, path *gnmipb.Path, typedvalue *gnmipb.TypedValue) error {
+func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedvalue *gnmipb.TypedValue) error {
 	var err error
 	// var target interface{}
 	// var targetSchema *yang.Entry
 	fullpath := xpath.GNMIFullPath(prefix, path)
-	targets, ok := mdata.Find(fullpath)
+	targets, ok := m.Find(fullpath)
 	if ok {
 		for _, target := range targets {
-			mdata.transaction.add(opUpdate, &target.Path, target.Value, typedvalue)
-			// dump.Print(mdata.transaction)
-			err = ytypes.SetNode(mdata.model.GetSchema(), mdata.dataroot, fullpath, typedvalue)
+			m.transaction.add(opUpdate, &target.Path, target.Value, typedvalue)
+			// dump.Print(m.transaction)
+			err = ytypes.SetNode(m.GetSchema(), m.dataroot, fullpath, typedvalue)
 			if err != nil {
 				return err
 			}
 		}
 		return err
 	}
-	_, _, err = ytypes.GetOrCreateNode(mdata.model.GetSchema(), mdata.dataroot, fullpath)
+	_, _, err = ytypes.GetOrCreateNode(m.GetSchema(), m.dataroot, fullpath)
 	if err != nil {
 		return err
 	}
-	err = ytypes.SetNode(mdata.model.GetSchema(), mdata.dataroot, fullpath, typedvalue)
+	err = ytypes.SetNode(m.GetSchema(), m.dataroot, fullpath, typedvalue)
 	if err != nil {
 		return err
 	}
@@ -444,14 +333,14 @@ func (mdata *ModelData) SetUpdate(prefix, path *gnmipb.Path, typedvalue *gnmipb.
 // SetReplaceOrUpdate validates the replace or update operation to be applied to
 // the device, modifies the json tree of the config struct, then calls the
 // callback function to apply the operation to the device hardware.
-func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op gnmipb.UpdateResult_Operation, prefix, path *gnmipb.Path, val *gnmipb.TypedValue) (*gnmipb.UpdateResult, error) {
+func (m *Model) SetReplaceOrUpdate(jsonTree map[string]interface{}, op gnmipb.UpdateResult_Operation, prefix, path *gnmipb.Path, val *gnmipb.TypedValue) (*gnmipb.UpdateResult, error) {
 	// Validate the operation.
 	fullPath := xpath.GNMIFullPath(prefix, path)
-	emptyNode := reflect.New(mdata.model.GetRootType()).Interface()
+	emptyNode := reflect.New(m.GetRootType()).Interface()
 	var nodeVal interface{}
 	nodeStruct, ok := emptyNode.(ygot.ValidatedGoStruct)
 	if ok {
-		if err := mdata.model.Unmarshal(val.GetJsonIetfVal(), nodeStruct); err != nil {
+		if err := m.Unmarshal(val.GetJsonIetfVal(), nodeStruct); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "unmarshaling json data to config struct fails: %v", err)
 		}
 		if err := nodeStruct.Validate(); err != nil {
@@ -472,7 +361,7 @@ func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op g
 
 	// Update json tree of the device config.
 	var curNode interface{} = jsonTree
-	schema := mdata.model.RootSchema()
+	schema := m.RootSchema()
 	for i, elem := range fullPath.Elem {
 		switch node := curNode.(type) {
 		case map[string]interface{}:
@@ -514,32 +403,32 @@ func (mdata *ModelData) SetReplaceOrUpdate(jsonTree map[string]interface{}, op g
 			jsonTree[k] = v
 		}
 	}
-	newRoot, err := mdata.toGoStruct(jsonTree)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
+	// newRoot, err := m.toGoStruct(jsonTree)
+	// if err != nil {
+	// 	return nil, status.Error(codes.Internal, err.Error())
+	// }
 
 	// Apply the validated operation to the device.
-	if mdata.callback != nil {
-		if applyErr := execConfigCallback(mdata.callback, newRoot); applyErr != nil {
-			if rollbackErr := execConfigCallback(mdata.callback, mdata.dataroot); rollbackErr != nil {
-				return nil, status.Errorf(codes.Internal, "error in rollback the failed operation (%v): %v", applyErr, rollbackErr)
-			}
-			return nil, status.Errorf(codes.Aborted, "error in applying operation to device: %v", applyErr)
-		}
-	}
+	// if m.callback != nil {
+	// 	if applyErr := execConfigCallback(m.callback, newRoot); applyErr != nil {
+	// 		if rollbackErr := execConfigCallback(m.callback, m.dataroot); rollbackErr != nil {
+	// 			return nil, status.Errorf(codes.Internal, "error in rollback the failed operation (%v): %v", applyErr, rollbackErr)
+	// 		}
+	// 		return nil, status.Errorf(codes.Aborted, "error in applying operation to device: %v", applyErr)
+	// 	}
+	// }
 	return &gnmipb.UpdateResult{
 		Path: path,
 		Op:   op,
 	}, nil
 }
 
-func (mdata *ModelData) toGoStruct(jsonTree map[string]interface{}) (ygot.ValidatedGoStruct, error) {
+func (m *Model) toGoStruct(jsonTree map[string]interface{}) (ygot.ValidatedGoStruct, error) {
 	jsonDump, err := json.Marshal(jsonTree)
 	if err != nil {
 		return nil, fmt.Errorf("error in marshaling IETF JSON tree to bytes: %v", err)
 	}
-	root, err := NewGoStruct(mdata.model, jsonDump)
+	root, err := m.NewRoot(jsonDump)
 	if err != nil {
 		return nil, fmt.Errorf("error in creating config struct from IETF JSON data: %v", err)
 	}

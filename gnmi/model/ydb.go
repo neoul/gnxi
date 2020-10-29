@@ -1,6 +1,6 @@
 // YDB Go Interface for model data update
 
-package modeldata
+package model
 
 import (
 	"fmt"
@@ -48,16 +48,16 @@ func dataDelete(root ygot.GoStruct, keys []string, key string) error {
 }
 
 // Create - constructs ModelData
-func (mdata *ModelData) Create(keys []string, key string, tag string, value string) error {
+func (m *Model) Create(keys []string, key string, tag string, value string) error {
 	// fmt.Printf("ModelData.Create %v %v %v %v {\n", keys, key, tag, value)
-	err := dataMerge(mdata.dataroot, keys, key, tag, value)
+	err := dataMerge(m.dataroot, keys, key, tag, value)
 	if err == nil {
-		dataMerge(mdata.updatedroot, keys, key, tag, value)
-		if mdata.callback != nil {
+		dataMerge(m.updatedroot, keys, key, tag, value)
+		if m.Callback != nil {
 			path := append(keys, key)
-			onchangecb, ok := mdata.callback.(OnChangeCallback)
+			onchangecb, ok := m.Callback.(ChangeNotification)
 			if ok {
-				onchangecb.OnChangeCreated(path, mdata.updatedroot)
+				onchangecb.ChangeCreated(path, m.updatedroot)
 			}
 		}
 	}
@@ -66,17 +66,14 @@ func (mdata *ModelData) Create(keys []string, key string, tag string, value stri
 }
 
 // Replace - constructs ModelData
-func (mdata *ModelData) Replace(keys []string, key string, tag string, value string) error {
+func (m *Model) Replace(keys []string, key string, tag string, value string) error {
 	// fmt.Printf("ModelData.Replace %v %v %v %v {\n", keys, key, tag, value)
-	err := dataMerge(mdata.dataroot, keys, key, tag, value)
+	err := dataMerge(m.dataroot, keys, key, tag, value)
 	if err == nil {
-		dataMerge(mdata.updatedroot, keys, key, tag, value)
-		if mdata.callback != nil {
+		dataMerge(m.updatedroot, keys, key, tag, value)
+		if onchangecb, ok := m.Callback.(ChangeNotification); ok {
 			path := append(keys, key)
-			onchangecb, ok := mdata.callback.(OnChangeCallback)
-			if ok {
-				onchangecb.OnChangeReplaced(path, mdata.updatedroot)
-			}
+			onchangecb.ChangeReplaced(path, m.updatedroot)
 		}
 	}
 	// fmt.Println("}", err)
@@ -84,16 +81,13 @@ func (mdata *ModelData) Replace(keys []string, key string, tag string, value str
 }
 
 // Delete - constructs ModelData
-func (mdata *ModelData) Delete(keys []string, key string) error {
+func (m *Model) Delete(keys []string, key string) error {
 	// fmt.Printf("ModelData.Delete %v %v {\n", keys, key)
-	err := dataDelete(mdata.dataroot, keys, key)
+	err := dataDelete(m.dataroot, keys, key)
 	if err == nil {
-		if mdata.callback != nil {
+		if onchangecb, ok := m.Callback.(ChangeNotification); ok {
 			path := append(keys, key)
-			onchangecb, ok := mdata.callback.(OnChangeCallback)
-			if ok {
-				onchangecb.OnChangeDeleted(path)
-			}
+			onchangecb.ChangeDeleted(path)
 		}
 	}
 	// fmt.Println("}", err)
@@ -101,28 +95,22 @@ func (mdata *ModelData) Delete(keys []string, key string) error {
 }
 
 // UpdateStart - indicates the start of ModelData construction
-func (mdata *ModelData) UpdateStart() {
+func (m *Model) UpdateStart() {
 	// updatedroot is used to save the changes of the model data.
-	updatedroot, err := NewGoStruct(mdata.model, nil)
+	updatedroot, err := m.NewRoot(nil)
 	if err != nil {
 		return
 	}
-	mdata.updatedroot = updatedroot
-	if mdata.callback != nil {
-		onchangecb, ok := mdata.callback.(OnChangeCallback)
-		if ok {
-			onchangecb.OnChangeStarted(mdata.updatedroot)
-		}
+	m.updatedroot = updatedroot
+	if onchangecb, ok := m.Callback.(ChangeNotification); ok {
+		onchangecb.ChangeStarted(m.updatedroot)
 	}
 }
 
 // UpdateEnd - indicates the end of ModelData construction
-func (mdata *ModelData) UpdateEnd() {
-	if mdata.callback != nil {
-		onchangecb, ok := mdata.callback.(OnChangeCallback)
-		if ok {
-			onchangecb.OnChangeFinished(mdata.updatedroot)
-		}
+func (m *Model) UpdateEnd() {
+	if onchangecb, ok := m.Callback.(ChangeNotification); ok {
+		onchangecb.ChangeFinished(m.updatedroot)
 	}
-	mdata.updatedroot = nil
+	m.updatedroot = nil
 }

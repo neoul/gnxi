@@ -1,9 +1,8 @@
-package modeldata
+package model
 
 import (
 	"fmt"
 
-	"github.com/neoul/gnxi/gnmi/model"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
@@ -33,8 +32,8 @@ func (op opType) String() string {
 
 type rollback struct {
 	op     opType
-	base   *model.DataAndPath
-	target *model.DataAndPath
+	base   *DataAndPath
+	target *DataAndPath
 }
 
 type opInfo struct {

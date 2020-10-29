@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/neoul/gnxi/gnmi/model"
+	"github.com/neoul/gnxi/gnmi/model/gostruct"
 	gnmiserver "github.com/neoul/gnxi/gnmi/server"
 
 	"github.com/neoul/gnxi/utilities/netsession"
@@ -152,7 +152,7 @@ func loadConfig() (*configuration, error) {
 	return &config, nil
 }
 
-func newServer(model *model.Model) (*server, error) {
+func newServer() (*server, error) {
 	var err error
 	s := server{}
 	s.config, err = loadConfig()
@@ -175,7 +175,7 @@ func newServer(model *model.Model) (*server, error) {
 		}
 	}
 
-	s.Server, err = gnmiserver.NewServer(model, startup, startupIsJSON,
+	s.Server, err = gnmiserver.NewServer(gostruct.Schema, gostruct.ΓModelData, startup, startupIsJSON,
 		s.config.DisableBundling)
 	if err != nil {
 		return nil, err
@@ -185,20 +185,19 @@ func newServer(model *model.Model) (*server, error) {
 }
 
 func main() {
-	model := model.NewModel()
+
+	s, err := newServer()
+	if err != nil {
+		glog.Exitf("error in creating gnmid: %v", err)
+	}
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Supported models:\n")
-		for _, m := range model.SupportedModels() {
+		for _, m := range s.Model.SupportedModels() {
 			fmt.Fprintf(os.Stderr, "  %s\n", m)
 		}
 		fmt.Fprintf(os.Stderr, "\n")
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults()
-	}
-
-	s, err := newServer(model)
-	if err != nil {
-		glog.Exitf("error in creating gnmid: %v", err)
 	}
 	defer s.Close()
 	opts := credentials.ServerCredentials(s.config.TLS.CAFile,

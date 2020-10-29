@@ -1,18 +1,20 @@
-package modeldata
+package model
 
 import (
 	"flag"
 	"testing"
 	"time"
 
-	"github.com/neoul/gnxi/gnmi/model"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
 func TestModel_ValidatePathAndSync(t *testing.T) {
-	m := model.NewModel()
 	flag.Set("disable-ydb", "true")
-	mdata, _ := NewModelData(m, nil, nil, nil)
+	m, err := NewModel(nil, nil, nil)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
 
 	type args struct {
 		prefix *gnmipb.Path
@@ -78,8 +80,8 @@ func TestModel_ValidatePathAndSync(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			syncPaths := mdata.GetSyncUpdatePath(tt.args.prefix, tt.args.paths)
-			mdata.RunSyncUpdate(time.Second*10, syncPaths)
+			syncPaths := m.GetSyncUpdatePath(tt.args.prefix, tt.args.paths)
+			m.RunSyncUpdate(time.Second*10, syncPaths)
 		})
 	}
 }
