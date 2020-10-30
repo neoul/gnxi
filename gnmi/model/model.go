@@ -126,8 +126,8 @@ func initModel(m *Model, startupYAML []byte) error {
 
 	for _, p := range srpaths {
 		// glog.Infof("sync-required-path %s", p)
-		entry, err := m.FindSchemaByXPath(p)
-		if err != nil {
+		entry := m.FindSchemaByXPath(p)
+		if entry == nil {
 			continue
 		}
 		sentries := []*yang.Entry{}
@@ -212,69 +212,43 @@ func (m *Model) FindSchemaByType(t reflect.Type) *yang.Entry {
 	return m.SchemaTree[t.Name()]
 }
 
-// FindSchema - find the yang.Entry by value(ygot.GoStruct) for schema info.
+// FindSchema finds the *yang.Entry by value(ygot.GoStruct) for schema info.
 func (m *Model) FindSchema(value interface{}) *yang.Entry {
 	return m.FindSchemaByType(reflect.TypeOf(value))
 }
 
-// findSchemaByName - find the yang.Entry for schema info.
-func findSchemaByName(parent *yang.Entry, name string) *yang.Entry {
-	return parent.Dir[name]
+// FindSchemaByXPath finds *yang.Entry by XPath string from root model
+func (m *Model) FindSchemaByXPath(path string) *yang.Entry {
+	return m.FindSchemaByRelativeXPath(m.Root, path)
 }
 
-// findSchemaByXPath - find *yang.Entry by xpath
-func findSchemaByXPath(entry *yang.Entry, p string) (*yang.Entry, error) {
-	if entry == nil {
-		return nil, fmt.Errorf("no base schema entry found")
+// FindSchemaByRelativeXPath finds *yang.Entry by XPath string from base(ygot.GoStruct)
+func (m *Model) FindSchemaByRelativeXPath(base interface{}, path string) *yang.Entry {
+	bSchema := m.FindSchema(base)
+	if bSchema == nil {
+		return nil
 	}
-	slicedPath, err := xpath.ParseStringPath(p)
-	if err != nil {
-		return nil, err
-	}
-	for _, elem := range slicedPath {
-		switch v := elem.(type) {
-		case string:
-			entry = entry.Dir[v]
-			if entry == nil {
-				return nil, fmt.Errorf("no schema entry found for '%s'", v)
+	findSchemaByXPath := func(entry *yang.Entry, path string) *yang.Entry {
+		slicedPath, err := xpath.ParseStringPath(path)
+		if err != nil {
+			return nil
+		}
+		for _, elem := range slicedPath {
+			switch v := elem.(type) {
+			case string:
+				entry = entry.Dir[v]
+				if entry == nil {
+					return nil
+				}
+			case map[string]string:
+				// skip keys
+			default:
+				return nil
 			}
-		case map[string]string:
-			// skip keys
-		default:
-			return nil, fmt.Errorf("wrong data type: %v(%T)", v, v)
 		}
+		return entry
 	}
-	if entry == nil {
-		return nil, fmt.Errorf("no schema entry found")
-	}
-	return entry, nil
-}
-
-// FindSchemaByXPath - find *yang.Entry by XPath from root model
-func (m *Model) FindSchemaByXPath(p string) (*yang.Entry, error) {
-	return findSchemaByXPath(m.RootSchema(), p)
-}
-
-// FindSchemaByRelativeXPath - find *yang.Entry by XPath from baseValue
-func (m *Model) FindSchemaByRelativeXPath(baseValue interface{}, p string) (*yang.Entry, error) {
-	return findSchemaByXPath(m.FindSchema(baseValue), p)
-}
-
-// findSchemaByGNMIPath - find *yang.Entry by gNMI Path
-func findSchemaByGNMIPath(entry *yang.Entry, path *gnmipb.Path) (*yang.Entry, error) {
-	if path == nil {
-		return nil, fmt.Errorf("no path")
-	}
-	if entry == nil {
-		return nil, fmt.Errorf("no base value")
-	}
-	for _, e := range path.GetElem() {
-		entry = findSchemaByName(entry, e.GetName())
-		if entry == nil {
-			return nil, fmt.Errorf("schema not found for %s", e.GetName())
-		}
-	}
-	return entry, nil
+	return findSchemaByXPath(bSchema, path)
 }
 
 // FindSchemaByGNMIPath finds the schema(*yang.Entry) using the gNMI Path
@@ -283,8 +257,8 @@ func (m *Model) FindSchemaByGNMIPath(path *gnmipb.Path) *yang.Entry {
 }
 
 // FindSchemaByRelativeGNMIPath finds the schema(*yang.Entry) using the relative path
-func (m *Model) FindSchemaByRelativeGNMIPath(baseValue interface{}, path *gnmipb.Path) *yang.Entry {
-	bSchema := m.FindSchema(baseValue)
+func (m *Model) FindSchemaByRelativeGNMIPath(base interface{}, path *gnmipb.Path) *yang.Entry {
+	bSchema := m.FindSchema(base)
 	if bSchema == nil || path == nil {
 		return nil
 	}
@@ -423,7 +397,7 @@ func (m *Model) FindAllData(gs ygot.GoStruct, path *gnmipb.Path) ([]*DataAndPath
 		if e.Name == "*" || e.Name == "..." {
 			break
 		}
-		entry = findSchemaByName(entry, e.Name)
+		entry = entry.Dir[e.Name]
 		if entry == nil {
 			return []*DataAndPath{}, false
 		}
@@ -474,7 +448,7 @@ func (m *Model) ValidatePathSchema(path *gnmipb.Path) bool {
 		return true
 	}
 	for _, e := range elems {
-		entry = findSchemaByName(entry, e.Name)
+		entry = entry.Dir[e.Name]
 		if entry == nil {
 			return false
 		}
@@ -533,7 +507,7 @@ func (m *Model) findSchemaPath(prefix string, parent *yang.Entry, elems []*gnmip
 		}
 		return founds
 	}
-	entry := findSchemaByName(parent, e.Name)
+	entry := parent.Dir[e.Name]
 	if entry == nil {
 		return nil
 	}
@@ -573,7 +547,7 @@ func (m *Model) findDataPath(prefix string, parent *yang.Entry, elems []*gnmipb.
 		return founds
 	}
 	name := e.Name
-	entry := findSchemaByName(parent, e.Name)
+	entry := parent.Dir[e.Name]
 	if entry == nil {
 		return nil
 	}
@@ -637,7 +611,7 @@ func (m *Model) findSchemaAndDataPath(path dataAndSchemaPath, parent *yang.Entry
 		return founds
 	}
 	name := e.Name
-	entry := findSchemaByName(parent, e.Name)
+	entry := parent.Dir[e.Name]
 	if entry == nil {
 		return nil
 	}
