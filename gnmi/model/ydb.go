@@ -31,6 +31,7 @@ func (m *Model) ValWrite(base ygot.GoStruct, keys []string, value string) error 
 	}
 	if !tSchema.IsDir() {
 		// v := reflect.ValueOf(target)
+		// fmt.Println(strings.Join(keys, "/"))
 		vt := reflect.TypeOf(target)
 		if vt.Kind() == reflect.Ptr {
 			vt = vt.Elem()

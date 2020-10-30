@@ -1,11 +1,13 @@
 package model
 
 import (
+	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
 
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
+	"github.com/neoul/gostruct-dump/dump"
 	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
@@ -300,17 +302,18 @@ func TestFindAllData(t *testing.T) {
 }
 
 func TestFindAllNodes(t *testing.T) {
-	root := gostruct.Device{}
-	datablock, _ := ydb.OpenWithTargetStruct("gnmi_target", &root)
-	defer datablock.Close()
-
 	r, err := os.Open("data/sample.yaml")
 	defer r.Close()
 	if err != nil {
 		t.Fatalf("test data load failed: %v", err)
 	}
-	dec := datablock.NewDecoder(r)
-	dec.Decode()
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		t.Fatalf("test data load failed: %v", err)
+	}
+
+	model, err := NewModel(b, nil)
+	root := model.GetRoot().(*gostruct.Device)
 
 	type args struct {
 		vgs  ygot.GoStruct
@@ -325,16 +328,16 @@ func TestFindAllNodes(t *testing.T) {
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs:  &root,
+				vgs:  root,
 				path: &gnmipb.Path{},
 			},
-			want:  []interface{}{&root},
+			want:  []interface{}{root},
 			want1: true,
 		},
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs: &root,
+				vgs: root,
 				path: &gnmipb.Path{
 					Elem: []*gnmipb.PathElem{
 						&gnmipb.PathElem{
@@ -355,7 +358,7 @@ func TestFindAllNodes(t *testing.T) {
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs: &root,
+				vgs: root,
 				path: &gnmipb.Path{
 					Elem: []*gnmipb.PathElem{
 						&gnmipb.PathElem{
@@ -376,7 +379,7 @@ func TestFindAllNodes(t *testing.T) {
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs: &root,
+				vgs: root,
 				path: &gnmipb.Path{
 					Elem: []*gnmipb.PathElem{
 						&gnmipb.PathElem{
@@ -403,7 +406,7 @@ func TestFindAllNodes(t *testing.T) {
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs: &root,
+				vgs: root,
 				path: &gnmipb.Path{
 					Elem: []*gnmipb.PathElem{
 						&gnmipb.PathElem{
@@ -437,7 +440,7 @@ func TestFindAllNodes(t *testing.T) {
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs: &root,
+				vgs: root,
 				path: &gnmipb.Path{
 					Elem: []*gnmipb.PathElem{
 						&gnmipb.PathElem{
@@ -474,7 +477,7 @@ func TestFindAllNodes(t *testing.T) {
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs: &root,
+				vgs: root,
 				path: &gnmipb.Path{
 					Elem: []*gnmipb.PathElem{
 						&gnmipb.PathElem{
@@ -501,7 +504,7 @@ func TestFindAllNodes(t *testing.T) {
 		{
 			name: "FindAllDataNodes",
 			args: args{
-				vgs: &root,
+				vgs: root,
 				path: &gnmipb.Path{
 					Elem: []*gnmipb.PathElem{
 						&gnmipb.PathElem{
@@ -532,6 +535,8 @@ func TestFindAllNodes(t *testing.T) {
 
 			if !testIsEqualList(got, tt.want) {
 				t.Errorf("FindAllDataNodes() got = %v, want %v", got, tt.want)
+				dump.Print(got)
+				dump.Print(tt.want)
 			}
 			if got1 != tt.want1 {
 				t.Errorf("FindAllDataNodes() got1 = %v, want %v", got1, tt.want1)
