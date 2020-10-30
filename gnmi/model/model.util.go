@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/neoul/libydb/go/ydb"
-	gpb "github.com/openconfig/gnmi/proto/gnmi"
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
 )
 
@@ -17,7 +17,7 @@ type DataAndPath struct {
 }
 
 // FindAllData - finds all nodes matched to the gNMI Path.
-func FindAllData(gs ygot.GoStruct, path *gpb.Path) ([]*DataAndPath, bool) {
+func FindAllData(gs ygot.GoStruct, path *gnmipb.Path) ([]*DataAndPath, bool) {
 	elems := path.GetElem()
 	if len(elems) <= 0 {
 		dataAndGNMIPath := &DataAndPath{
@@ -177,7 +177,7 @@ func (dpath *dataAndPath) findChildren(key string) ([]*dataAndPath, bool) {
 }
 
 // findAllData - finds all nodes matched to the gNMI Path.
-func findAllData(dpath *dataAndPath, elems []*gpb.PathElem) []*dataAndPath {
+func findAllData(dpath *dataAndPath, elems []*gnmipb.PathElem) []*dataAndPath {
 	if len(elems) <= 0 {
 		return []*dataAndPath{dpath}
 	}
@@ -236,7 +236,7 @@ func findAllData(dpath *dataAndPath, elems []*gpb.PathElem) []*dataAndPath {
 }
 
 // FindAllDataNodes - finds all nodes matched to the gNMI Path.
-func FindAllDataNodes(gs ygot.GoStruct, path *gpb.Path) ([]interface{}, bool) {
+func FindAllDataNodes(gs ygot.GoStruct, path *gnmipb.Path) ([]interface{}, bool) {
 	elems := path.GetElem()
 	if len(elems) <= 0 {
 		return []interface{}{gs}, true
@@ -261,7 +261,7 @@ func FindAllDataNodes(gs ygot.GoStruct, path *gpb.Path) ([]interface{}, bool) {
 }
 
 // findAllDataNodes - finds all nodes matched to the gNMI Path.
-func findAllDataNodes(v reflect.Value, elems []*gpb.PathElem) []reflect.Value {
+func findAllDataNodes(v reflect.Value, elems []*gnmipb.PathElem) []reflect.Value {
 	// select all child nodes if the current node is a list.
 	if v.Kind() == reflect.Map {
 		rv := []reflect.Value{}
@@ -325,7 +325,7 @@ func findAllDataNodes(v reflect.Value, elems []*gpb.PathElem) []reflect.Value {
 }
 
 // FindAllSchemaTypes - finds all schema nodes matched to the gNMI Path.
-func FindAllSchemaTypes(gs ygot.GoStruct, path *gpb.Path) ([]reflect.Type, bool) {
+func FindAllSchemaTypes(gs ygot.GoStruct, path *gnmipb.Path) ([]reflect.Type, bool) {
 	elems := path.GetElem()
 	t := reflect.TypeOf(gs)
 	if len(elems) <= 0 {
@@ -341,7 +341,7 @@ func FindAllSchemaTypes(gs ygot.GoStruct, path *gpb.Path) ([]reflect.Type, bool)
 }
 
 // findAllSchemaTypes - finds all schema nodes matched to the gNMI Path.
-func findAllSchemaTypes(t reflect.Type, elems []*gpb.PathElem) []reflect.Type {
+func findAllSchemaTypes(t reflect.Type, elems []*gnmipb.PathElem) []reflect.Type {
 	// select all child nodes if the current node is a list.
 	fmt.Println(t)
 	if t.Kind() == reflect.Map {
@@ -398,7 +398,7 @@ func findAllSchemaTypes(t reflect.Type, elems []*gpb.PathElem) []reflect.Type {
 }
 
 // FindAllSchemaPaths - finds all schema nodes matched to the gNMI Path.
-func FindAllSchemaPaths(gs ygot.GoStruct, path *gpb.Path) ([]string, bool) {
+func FindAllSchemaPaths(gs ygot.GoStruct, path *gnmipb.Path) ([]string, bool) {
 	elems := path.GetElem()
 	if len(elems) <= 0 {
 		return []string{"/"}, true
@@ -428,7 +428,7 @@ type pathFinder struct {
 
 // findAllSchemaPaths - finds all schema nodes' path matched to the gNMI Path.
 // It is used to find all schema nodes matched to a wildcard path.
-func findAllSchemaPaths(sp pathFinder, elems []*gpb.PathElem) []pathFinder {
+func findAllSchemaPaths(sp pathFinder, elems []*gnmipb.PathElem) []pathFinder {
 	// select all child nodes if the current node is a list.
 	if sp.t.Kind() == reflect.Map {
 		rv := []pathFinder{}

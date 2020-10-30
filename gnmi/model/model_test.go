@@ -18,7 +18,7 @@ package model
 import (
 	"testing"
 
-	gpb "github.com/openconfig/gnmi/proto/gnmi"
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
 func TestModel_FindSchemaPaths(t *testing.T) {
@@ -28,7 +28,7 @@ func TestModel_FindSchemaPaths(t *testing.T) {
 		return
 	}
 	type args struct {
-		path *gpb.Path
+		path *gnmipb.Path
 	}
 	tests := []struct {
 		name  string
@@ -39,7 +39,7 @@ func TestModel_FindSchemaPaths(t *testing.T) {
 		{
 			name: "FindSchemaPaths",
 			args: args{
-				path: &gpb.Path{},
+				path: &gnmipb.Path{},
 			},
 			want:  []string{"/"},
 			want1: true,
@@ -47,18 +47,18 @@ func TestModel_FindSchemaPaths(t *testing.T) {
 		{
 			name: "FindSchemaPaths",
 			args: args{
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "*",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "*",
 						},
 					},
@@ -77,9 +77,9 @@ func TestModel_FindSchemaPaths(t *testing.T) {
 		{
 			name: "FindSchemaPaths",
 			args: args{
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
 					},
@@ -91,24 +91,24 @@ func TestModel_FindSchemaPaths(t *testing.T) {
 		{
 			name: "FindSchemaPaths",
 			args: args{
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interface",
 							Key: map[string]string{
 								"name": "eth0",
 							},
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "state",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "counters",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "in-discards",
 						},
 					},

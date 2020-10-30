@@ -13,7 +13,7 @@ import (
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/neoul/trie"
-	pb "github.com/openconfig/gnmi/proto/gnmi"
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -293,10 +293,10 @@ type TelemetrySession struct {
 	Address   string
 	Port      uint16
 	Telesub   map[string]*TelemetrySubscription
-	respchan  chan *pb.SubscribeResponse
+	respchan  chan *gnmipb.SubscribeResponse
 	shutdown  chan struct{}
 	waitgroup *sync.WaitGroup
-	alias     map[string]*pb.Alias
+	alias     map[string]*gnmipb.Alias
 	mutex     sync.RWMutex
 	server    *Server
 }
@@ -338,10 +338,10 @@ func newTelemetrySession(ctx context.Context, s *Server) *TelemetrySession {
 		Address:   address,
 		Port:      uint16(port),
 		Telesub:   map[string]*TelemetrySubscription{},
-		respchan:  make(chan *pb.SubscribeResponse, 256),
+		respchan:  make(chan *gnmipb.SubscribeResponse, 256),
 		shutdown:  make(chan struct{}),
 		waitgroup: new(sync.WaitGroup),
-		alias:     map[string]*pb.Alias{},
+		alias:     map[string]*gnmipb.Alias{},
 		server:    s,
 	}
 }
@@ -363,21 +363,21 @@ type TelemetrySubscription struct {
 	ID                TelemetryID
 	SessionID         TelemetryID
 	key               *string
-	Prefix            *pb.Path                 `json:"prefix,omitempty"`
-	UseAliases        bool                     `json:"use_aliases,omitempty"`
-	StreamingMode     pb.SubscriptionList_Mode `json:"stream_mode,omitempty"`
-	AllowAggregation  bool                     `json:"allow_aggregation,omitempty"`
-	Encoding          pb.Encoding              `json:"encoding,omitempty"`
-	Paths             []*pb.Path               `json:"path,omitempty"`              // The data tree path.
-	SubscriptionMode  pb.SubscriptionMode      `json:"subscription_mode,omitempty"` // Subscription mode to be used.
-	SampleInterval    uint64                   `json:"sample_interval,omitempty"`   // ns between samples in SAMPLE mode.
-	SuppressRedundant bool                     `json:"suppress_redundant,omitempty"`
-	HeartbeatInterval uint64                   `json:"heartbeat_interval,omitempty"`
-	Duplicates        map[string]uint32        `json:"duplicates,omitempty"` // Number of coalesced duplicates.
+	Prefix            *gnmipb.Path                 `json:"prefix,omitempty"`
+	UseAliases        bool                         `json:"use_aliases,omitempty"`
+	StreamingMode     gnmipb.SubscriptionList_Mode `json:"stream_mode,omitempty"`
+	AllowAggregation  bool                         `json:"allow_aggregation,omitempty"`
+	Encoding          gnmipb.Encoding              `json:"encoding,omitempty"`
+	Paths             []*gnmipb.Path               `json:"path,omitempty"`              // The data tree path.
+	SubscriptionMode  gnmipb.SubscriptionMode      `json:"subscription_mode,omitempty"` // Subscription mode to be used.
+	SampleInterval    uint64                       `json:"sample_interval,omitempty"`   // ns between samples in SAMPLE mode.
+	SuppressRedundant bool                         `json:"suppress_redundant,omitempty"`
+	HeartbeatInterval uint64                       `json:"heartbeat_interval,omitempty"`
+	Duplicates        map[string]uint32            `json:"duplicates,omitempty"` // Number of coalesced duplicates.
 	// internal data
 	session    *TelemetrySession
 	Configured struct {
-		SubscriptionMode  pb.SubscriptionMode
+		SubscriptionMode  gnmipb.SubscriptionMode
 		SampleInterval    uint64
 		SuppressRedundant bool
 		HeartbeatInterval uint64
@@ -392,9 +392,9 @@ type TelemetrySubscription struct {
 	stop         chan struct{}
 
 	// // https://github.com/openconfig/gnmi/issues/45 - QoSMarking seems to be deprecated
-	// Qos              *pb.QOSMarking           `json:"qos,omitempty"`          // DSCP marking to be used.
-	// UseModels        []*pb.ModelData          `json:"use_models,omitempty"`   // (Check validate only in Request)
-	// Alias            []*pb.Alias              `json:"alias,omitempty"`
+	// Qos              *gnmipb.QOSMarking           `json:"qos,omitempty"`          // DSCP marking to be used.
+	// UseModels        []*gnmipb.ModelData          `json:"use_models,omitempty"`   // (Check validate only in Request)
+	// Alias            []*gnmipb.Alias              `json:"alias,omitempty"`
 	// UpdatesOnly       bool                     `json:"updates_only,omitempty"` // not required to store
 	// [FIXME]
 	// 1. Ticker (Timer)
@@ -439,7 +439,7 @@ func (telesub *TelemetrySubscription) run(teleses *TelemetrySession) {
 			}
 			glog.Infof("telemetry[%d][%d].event-received", telesub.SessionID, telesub.ID)
 			switch telesub.Configured.SubscriptionMode {
-			case pb.SubscriptionMode_ON_CHANGE, pb.SubscriptionMode_SAMPLE:
+			case gnmipb.SubscriptionMode_ON_CHANGE, gnmipb.SubscriptionMode_SAMPLE:
 				// glog.Info("replaced,deleted ", event.replacedList, event.deletedList)
 				for p, d := range event.createdList {
 					if f, ok := telesub.createdList.Find(p); ok {
@@ -465,7 +465,7 @@ func (telesub *TelemetrySubscription) run(teleses *TelemetrySession) {
 						telesub.deletedList.Add(p, d)
 					}
 				}
-				if telesub.Configured.SubscriptionMode == pb.SubscriptionMode_ON_CHANGE {
+				if telesub.Configured.SubscriptionMode == gnmipb.SubscriptionMode_ON_CHANGE {
 					// utilities.PrintStruct(event.updatedroot)
 					err := teleses.telemetryUpdate(telesub, event.updatedroot)
 					if err != nil {
@@ -537,16 +537,16 @@ func (teleses *TelemetrySession) StopTelemetryUpdate(telesub *TelemetrySubscript
 	return nil
 }
 
-func (teleses *TelemetrySession) sendTelemetryUpdate(responses []*pb.SubscribeResponse) error {
+func (teleses *TelemetrySession) sendTelemetryUpdate(responses []*gnmipb.SubscribeResponse) error {
 	for _, response := range responses {
 		teleses.respchan <- response
 	}
 	return nil
 }
 
-func getDeletes(telesub *TelemetrySubscription, path *string, deleteOnly bool) ([]*pb.Path, error) {
+func getDeletes(telesub *TelemetrySubscription, path *string, deleteOnly bool) ([]*gnmipb.Path, error) {
 	deletesNum := telesub.replacedList.Size() + telesub.deletedList.Size()
-	deletes := make([]*pb.Path, 0, deletesNum)
+	deletes := make([]*gnmipb.Path, 0, deletesNum)
 	if !deleteOnly {
 		rpaths := telesub.replacedList.PrefixSearch(*path)
 		for _, rpath := range rpaths {
@@ -568,7 +568,7 @@ func getDeletes(telesub *TelemetrySubscription, path *string, deleteOnly bool) (
 	return deletes, nil
 }
 
-func getUpdate(telesub *TelemetrySubscription, data *model.DataAndPath, encoding pb.Encoding) (*pb.Update, error) {
+func getUpdate(telesub *TelemetrySubscription, data *model.DataAndPath, encoding gnmipb.Encoding) (*gnmipb.Update, error) {
 	typedValue, err := ygot.EncodeTypedValue(data.Value, encoding)
 	if err != nil {
 		return nil, fmt.Errorf("encoding-error(%s)", err.Error())
@@ -595,11 +595,11 @@ func getUpdate(telesub *TelemetrySubscription, data *model.DataAndPath, encoding
 			}
 		}
 	}
-	return &pb.Update{Path: datapath, Val: typedValue, Duplicates: duplicates}, nil
+	return &gnmipb.Update{Path: datapath, Val: typedValue, Duplicates: duplicates}, nil
 }
 
 // initTelemetryUpdate - Process and generate responses for a init update.
-func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) error {
+func (teleses *TelemetrySession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) error {
 	s := teleses.server
 	bundling := !s.disableBundling
 	subscriptionList := req.GetSubscribe()
@@ -615,9 +615,9 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 	alias := ""
 	// [FIXME] Are they different?
 	switch mode {
-	case pb.SubscriptionList_POLL:
-	case pb.SubscriptionList_ONCE:
-	case pb.SubscriptionList_STREAM:
+	case gnmipb.SubscriptionList_POLL:
+	case gnmipb.SubscriptionList_ONCE:
+	case gnmipb.SubscriptionList_STREAM:
 	}
 	if useAliases {
 		// 1. lookup the prefix in the session.alias for client.alias.
@@ -625,7 +625,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 		// prefix = nil
 		// alias = xxx
 	}
-	paths := make([]*pb.Path, 0, len(subList))
+	paths := make([]*gnmipb.Path, 0, len(subList))
 	for _, updateEntry := range subList {
 		paths = append(paths, updateEntry.Path)
 	}
@@ -647,7 +647,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 		return status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPath(prefix))
 	}
 
-	updates := []*pb.Update{}
+	updates := []*gnmipb.Update{}
 	for _, top := range toplist {
 		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
@@ -656,7 +656,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 			return status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
 		}
 		if bundling {
-			updates = make([]*pb.Update, 0, 16)
+			updates = make([]*gnmipb.Update, 0, 16)
 		}
 		for _, updateEntry := range subList {
 			path := updateEntry.Path
@@ -677,7 +677,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *pb.SubscribeRequest) e
 						updates = append(updates, u)
 					} else {
 						err = teleses.sendTelemetryUpdate(
-							buildSubscribeResponse(prefix, alias, []*pb.Update{u}, nil))
+							buildSubscribeResponse(prefix, alias, []*gnmipb.Update{u}, nil))
 						if err != nil {
 							return err
 						}
@@ -709,9 +709,9 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 	alias := ""
 	// [FIXME] Are they different?
 	switch mode {
-	case pb.SubscriptionList_POLL:
-	case pb.SubscriptionList_ONCE:
-	case pb.SubscriptionList_STREAM:
+	case gnmipb.SubscriptionList_POLL:
+	case gnmipb.SubscriptionList_ONCE:
+	case gnmipb.SubscriptionList_STREAM:
 	}
 	if useAliases {
 		// 1. lookup the prefix in the session.alias for client.alias.
@@ -719,7 +719,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 		// prefix = nil
 		// alias = xxx
 	}
-	if telesub.Configured.SubscriptionMode != pb.SubscriptionMode_ON_CHANGE {
+	if telesub.Configured.SubscriptionMode != gnmipb.SubscriptionMode_ON_CHANGE {
 		syncPaths := s.Model.GetSyncUpdatePath(prefix, telesub.Paths)
 		s.Model.RunSyncUpdate(time.Second*3, syncPaths)
 	}
@@ -742,8 +742,8 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 		return status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPath(prefix))
 	}
 
-	deletes := []*pb.Path{}
-	updates := []*pb.Update{}
+	deletes := []*gnmipb.Path{}
+	updates := []*gnmipb.Update{}
 
 	for _, top := range toplist {
 		bpath := top.Path
@@ -754,7 +754,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 		}
 
 		if bundling {
-			updates = make([]*pb.Update, 0, 16)
+			updates = make([]*gnmipb.Update, 0, 16)
 			// get all replaced, deleted paths relative to the prefix
 			deletes, err = getDeletes(telesub, &bpath, false)
 			if err != nil {
@@ -785,7 +785,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 							return status.Error(codes.Internal, err.Error())
 						}
 						err = teleses.sendTelemetryUpdate(
-							buildSubscribeResponse(prefix, alias, []*pb.Update{u}, nil))
+							buildSubscribeResponse(prefix, alias, []*gnmipb.Update{u}, nil))
 						if err != nil {
 							return err
 						}
@@ -806,7 +806,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 			}
 			for _, d := range deletes {
 				err = teleses.sendTelemetryUpdate(
-					buildSubscribeResponse(prefix, alias, nil, []*pb.Path{d}))
+					buildSubscribeResponse(prefix, alias, nil, []*gnmipb.Path{d}))
 				if err != nil {
 					return err
 				}
@@ -822,8 +822,8 @@ const (
 )
 
 func (teleses *TelemetrySession) addStreamSubscription(
-	prefix *pb.Path, useAliases bool, streamingMode pb.SubscriptionList_Mode, allowAggregation bool,
-	encoding pb.Encoding, paths []*pb.Path, subscriptionMode pb.SubscriptionMode,
+	prefix *gnmipb.Path, useAliases bool, streamingMode gnmipb.SubscriptionList_Mode, allowAggregation bool,
+	encoding gnmipb.Encoding, paths []*gnmipb.Path, subscriptionMode gnmipb.SubscriptionMode,
 	sampleInterval uint64, suppressRedundant bool, heartbeatInterval uint64,
 ) (*TelemetrySubscription, error) {
 
@@ -844,28 +844,28 @@ func (teleses *TelemetrySession) addStreamSubscription(
 		replacedList:      trie.New(),
 		deletedList:       trie.New(),
 	}
-	if streamingMode == pb.SubscriptionList_POLL {
+	if streamingMode == gnmipb.SubscriptionList_POLL {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"poll subscription configured as streaming subscription")
 	}
 	// 3.5.1.5.2 STREAM Subscriptions Must be satisfied for telemetry update starting.
 	switch telesub.SubscriptionMode {
-	case pb.SubscriptionMode_TARGET_DEFINED:
+	case gnmipb.SubscriptionMode_TARGET_DEFINED:
 		// vendor specific mode
-		telesub.Configured.SubscriptionMode = pb.SubscriptionMode_SAMPLE
+		telesub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_SAMPLE
 		telesub.Configured.SampleInterval = defaultInterval / 10
 		telesub.Configured.SuppressRedundant = true
 		telesub.Configured.HeartbeatInterval = 0
-	case pb.SubscriptionMode_ON_CHANGE:
+	case gnmipb.SubscriptionMode_ON_CHANGE:
 		if telesub.HeartbeatInterval < minimumInterval && telesub.HeartbeatInterval != 0 {
 			return nil, status.Errorf(codes.InvalidArgument,
 				"heartbeat_interval(< 1sec) is not supported")
 		}
-		telesub.Configured.SubscriptionMode = pb.SubscriptionMode_ON_CHANGE
+		telesub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_ON_CHANGE
 		telesub.Configured.SampleInterval = 0
 		telesub.Configured.SuppressRedundant = false
 		telesub.Configured.HeartbeatInterval = telesub.HeartbeatInterval
-	case pb.SubscriptionMode_SAMPLE:
+	case gnmipb.SubscriptionMode_SAMPLE:
 		if telesub.SampleInterval < minimumInterval && telesub.SampleInterval != 0 {
 			return nil, status.Errorf(codes.InvalidArgument,
 				"sample_interval(< 1sec) is not supported")
@@ -874,7 +874,7 @@ func (teleses *TelemetrySession) addStreamSubscription(
 			return nil, status.Errorf(codes.InvalidArgument,
 				"heartbeat_interval(< 1sec) is not supported")
 		}
-		telesub.Configured.SubscriptionMode = pb.SubscriptionMode_SAMPLE
+		telesub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_SAMPLE
 		telesub.Configured.SampleInterval = telesub.SampleInterval
 		if telesub.SampleInterval == 0 {
 			// Set minimal sampling interval (1sec)
@@ -913,8 +913,8 @@ func (teleses *TelemetrySession) addStreamSubscription(
 // addPollSubscription - Create new TelemetrySubscription
 func (teleses *TelemetrySession) addPollSubscription() error {
 	telesub := TelemetrySubscription{
-		StreamingMode: pb.SubscriptionList_POLL,
-		Paths:         []*pb.Path{},
+		StreamingMode: gnmipb.SubscriptionList_POLL,
+		Paths:         []*gnmipb.Path{},
 		IsPolling:     true,
 		session:       teleses,
 	}
@@ -930,7 +930,7 @@ func (teleses *TelemetrySession) addPollSubscription() error {
 	return nil
 }
 
-func (teleses *TelemetrySession) updateAliases(aliaslist []*pb.Alias) error {
+func (teleses *TelemetrySession) updateAliases(aliaslist []*gnmipb.Alias) error {
 	teleses.lock()
 	defer teleses.unlock()
 	for _, alias := range aliaslist {
@@ -944,7 +944,7 @@ func (teleses *TelemetrySession) updateAliases(aliaslist []*pb.Alias) error {
 	return nil
 }
 
-func processSR(teleses *TelemetrySession, req *pb.SubscribeRequest) error {
+func processSR(teleses *TelemetrySession, req *gnmipb.SubscribeRequest) error {
 	// SubscribeRequest for poll Subscription indication
 	pollMode := req.GetPoll()
 	if pollMode != nil {
@@ -980,8 +980,8 @@ func processSR(teleses *TelemetrySession, req *pb.SubscribeRequest) error {
 
 	err := teleses.initTelemetryUpdate(req)
 	mode := subscriptionList.GetMode()
-	if mode == pb.SubscriptionList_ONCE ||
-		mode == pb.SubscriptionList_POLL ||
+	if mode == gnmipb.SubscriptionList_ONCE ||
+		mode == gnmipb.SubscriptionList_POLL ||
 		err != nil {
 		return err
 	}
@@ -997,8 +997,8 @@ func processSR(teleses *TelemetrySession, req *pb.SubscribeRequest) error {
 		supressRedundant := updateEntry.GetSuppressRedundant()
 		heartBeatInterval := updateEntry.GetHeartbeatInterval()
 		telesub, err := teleses.addStreamSubscription(
-			prefix, useAliases, pb.SubscriptionList_STREAM,
-			allowAggregation, encoding, []*pb.Path{path}, submod,
+			prefix, useAliases, gnmipb.SubscriptionList_STREAM,
+			allowAggregation, encoding, []*gnmipb.Path{path}, submod,
 			SampleInterval, supressRedundant, heartBeatInterval)
 		if err != nil {
 			return err

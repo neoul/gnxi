@@ -34,7 +34,7 @@ import (
 	"github.com/neoul/gnxi/utilities/server/credentials"
 	"github.com/neoul/gnxi/utilities/server/login"
 
-	pb "github.com/openconfig/gnmi/proto/gnmi"
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
 var (
@@ -196,7 +196,7 @@ func main() {
 	opts = append(opts, grpc.UnaryInterceptor(login.UnaryInterceptor))
 	opts = append(opts, grpc.StreamInterceptor(login.StreamInterceptor))
 	g := grpc.NewServer(opts...)
-	pb.RegisterGNMIServer(g, s)
+	gnmipb.RegisterGNMIServer(g, s)
 	reflection.Register(g)
 
 	glog.Infof("starting to listen on %s", s.config.BindAddress)

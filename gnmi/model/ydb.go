@@ -3,98 +3,129 @@
 package model
 
 import (
-	"fmt"
 	"reflect"
+	"strings"
 
-	"github.com/neoul/libydb/go/ydb"
+	"github.com/golang/glog"
+	"github.com/neoul/gnxi/utilities/xpath"
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
 	"github.com/openconfig/ygot/ytypes"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-// dataMerge - constructs ModelData
-func dataMerge(root ygot.GoStruct, keys []string, key string, tag string, value string) error {
-	v := reflect.ValueOf(root)
-	for _, k := range keys {
-		cv, ok := ydb.ValFindOrInit(v, k, ydb.SearchByContent)
-		if !ok || !cv.IsValid() {
-			return fmt.Errorf("key %s not found", k)
-		}
-		v = cv
+// ValWrite - Write the value to the model instance
+func (m *Model) ValWrite(base ygot.GoStruct, keys []string, value string) error {
+	schema := m.FindSchema(base)
+	if schema == nil {
+		return status.Errorf(codes.Internal, "schema (%T) not found", base)
 	}
-	ct, ok := ydb.TypeFind(v.Type(), key)
-	if ok && value != "" {
-		cv, err := ytypes.StringToType(ct, value)
-		if err == nil {
-			_, err = ydb.ValChildDirectSet(v, key, cv)
+	path, err := xpath.SlicePathToGNMIPath(keys)
+	if err != nil {
+		return err
+	}
+	target, tSchema, err := ytypes.GetOrCreateNode(schema, base, path)
+	if err != nil {
+		return err
+	}
+	if !tSchema.IsDir() {
+		// v := reflect.ValueOf(target)
+		vt := reflect.TypeOf(target)
+		if vt.Kind() == reflect.Ptr {
+			vt = vt.Elem()
+		}
+		vv, err := ytypes.StringToType(vt, value)
+		if err != nil {
+			return err
+		}
+		typedValue, err := ygot.EncodeTypedValue(vv.Interface(), gnmipb.Encoding_JSON_IETF)
+		if err != nil {
+			return status.Errorf(codes.Internal, "encoding error(%s)", err.Error())
+		}
+		err = ytypes.SetNode(schema, base, path, typedValue, &ytypes.InitMissingElements{})
+		if err != nil {
 			return err
 		}
 	}
-	_, err := ydb.ValChildSet(v, key, value, ydb.SearchByContent)
 	return err
 }
 
-// dataDelete - constructs ModelData
-func dataDelete(root ygot.GoStruct, keys []string, key string) error {
-	v := reflect.ValueOf(root)
-	for _, k := range keys {
-		cv, ok := ydb.ValFind(v, k, ydb.SearchByContent)
-		if !ok || !cv.IsValid() {
-			return fmt.Errorf("key %s not found", k)
-		}
-		v = cv
+// ValDelete - Delete the value from the model instance
+func (m *Model) ValDelete(base ygot.GoStruct, keys []string) error {
+	schema := m.FindSchema(base)
+	if schema == nil {
+		return status.Errorf(codes.Internal, "schema (%T) not found", base)
 	}
-	_, err := ydb.ValChildUnset(v, key, ydb.SearchByContent)
-	return err
+	path, err := xpath.SlicePathToGNMIPath(keys)
+	if err != nil {
+		return err
+	}
+	tSchema := m.FindSchemaByGNMIPath(path)
+	if tSchema == nil {
+		return status.Errorf(codes.Internal, "schema (%s) not found", xpath.ToXPath(path))
+	}
+	// The key field deletion is not allowed.
+	if pSchema := tSchema.Parent; pSchema != nil {
+		if strings.Contains(pSchema.Key, keys[len(keys)-1]) {
+			return nil
+		}
+	}
+	return ytypes.DeleteNode(schema, base, path)
 }
 
-// Create - constructs ModelData
+// Create - constructs the model instance
 func (m *Model) Create(keys []string, key string, tag string, value string) error {
-	// fmt.Printf("ModelData.Create %v %v %v %v {\n", keys, key, tag, value)
-	err := dataMerge(m.dataroot, keys, key, tag, value)
+	// fmt.Printf("m.Create %v %v %v %v {\n", keys, key, tag, value)
+	keys = append(keys, key)
+	err := m.ValWrite(m.dataroot, keys, value)
 	if err == nil {
-		dataMerge(m.updatedroot, keys, key, tag, value)
-		if m.Callback != nil {
-			path := append(keys, key)
-			onchangecb, ok := m.Callback.(ChangeNotification)
-			if ok {
-				onchangecb.ChangeCreated(path, m.updatedroot)
-			}
+		m.ValWrite(m.updatedroot, keys, value)
+		if onchangecb, ok := m.Callback.(ChangeNotification); ok {
+			onchangecb.ChangeCreated(keys, m.updatedroot)
 		}
+	} else {
+		glog.Errorf("%v", err)
 	}
-	// fmt.Println("}", err)
+	// fmt.Println("}")
 	return err
 }
 
-// Replace - constructs ModelData
+// Replace - constructs the model instance
 func (m *Model) Replace(keys []string, key string, tag string, value string) error {
-	// fmt.Printf("ModelData.Replace %v %v %v %v {\n", keys, key, tag, value)
-	err := dataMerge(m.dataroot, keys, key, tag, value)
+	// fmt.Printf("m.Replace %v %v %v %v {\n", keys, key, tag, value)
+	keys = append(keys, key)
+	err := m.ValWrite(m.dataroot, keys, value)
 	if err == nil {
-		dataMerge(m.updatedroot, keys, key, tag, value)
+		m.ValWrite(m.updatedroot, keys, value)
 		if onchangecb, ok := m.Callback.(ChangeNotification); ok {
-			path := append(keys, key)
-			onchangecb.ChangeReplaced(path, m.updatedroot)
+			onchangecb.ChangeReplaced(keys, m.updatedroot)
 		}
+	} else {
+		glog.Errorf("%v", err)
 	}
-	// fmt.Println("}", err)
+	// fmt.Println("}")
 	return err
 }
 
-// Delete - constructs ModelData
+// Delete - constructs the model instance
 func (m *Model) Delete(keys []string, key string) error {
-	// fmt.Printf("ModelData.Delete %v %v {\n", keys, key)
-	err := dataDelete(m.dataroot, keys, key)
+	// fmt.Printf("m.Delete %v %v {\n", keys, key)
+	keys = append(keys, key)
+	err := m.ValDelete(m.dataroot, keys)
 	if err == nil {
 		if onchangecb, ok := m.Callback.(ChangeNotification); ok {
-			path := append(keys, key)
-			onchangecb.ChangeDeleted(path)
+			onchangecb.ChangeDeleted(keys)
 		}
+	} else {
+		glog.Errorf("%v", err)
 	}
-	// fmt.Println("}", err)
+	// dump.Print(m.dataroot)
+	// fmt.Println("}")
 	return err
 }
 
-// UpdateStart - indicates the start of ModelData construction
+// UpdateStart - indicates the start of the model instance update
 func (m *Model) UpdateStart() {
 	// updatedroot is used to save the changes of the model data.
 	updatedroot, err := m.NewRoot(nil)
@@ -107,7 +138,7 @@ func (m *Model) UpdateStart() {
 	}
 }
 
-// UpdateEnd - indicates the end of ModelData construction
+// UpdateEnd - indicates the end of the model instance update
 func (m *Model) UpdateEnd() {
 	if onchangecb, ok := m.Callback.(ChangeNotification); ok {
 		onchangecb.ChangeFinished(m.updatedroot)

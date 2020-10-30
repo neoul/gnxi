@@ -24,7 +24,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
-	pb "github.com/openconfig/gnmi/proto/gnmi"
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/value"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -37,7 +37,7 @@ func TestCapabilities(t *testing.T) {
 		t.Fatalf("error in creating server: %v", err)
 	}
 	defer s.Close()
-	resp, err := s.Capabilities(nil, &pb.CapabilityRequest{})
+	resp, err := s.Capabilities(nil, &gnmipb.CapabilityRequest{})
 	t.Log(resp)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -130,7 +130,7 @@ interfaces:
 	tds := []struct {
 		desc        string
 		textPbPath  string
-		modelData   []*pb.ModelData
+		modelData   []*gnmipb.ModelData
 		wantRetCode codes.Code
 		wantRespVal interface{}
 	}{
@@ -281,7 +281,7 @@ interfaces:
 		},
 		{
 			desc:        "use of model data not supported",
-			modelData:   []*pb.ModelData{&pb.ModelData{}},
+			modelData:   []*gnmipb.ModelData{&gnmipb.ModelData{}},
 			wantRetCode: codes.Unimplemented,
 		},
 	}
@@ -295,15 +295,15 @@ interfaces:
 
 // runTestGet requests a path from the server by Get grpc call, and compares if
 // the return code and response value are expected.
-func runTestGet(t *testing.T, s *Server, textPbPath string, wantRetCode codes.Code, wantRespVal interface{}, useModels []*pb.ModelData) {
+func runTestGet(t *testing.T, s *Server, textPbPath string, wantRetCode codes.Code, wantRespVal interface{}, useModels []*gnmipb.ModelData) {
 	// Send request
-	var pbPath pb.Path
+	var pbPath gnmipb.Path
 	if err := proto.UnmarshalText(textPbPath, &pbPath); err != nil {
 		t.Fatalf("error in unmarshaling path: %v", err)
 	}
-	req := &pb.GetRequest{
-		Path:      []*pb.Path{&pbPath},
-		Encoding:  pb.Encoding_JSON_IETF,
+	req := &gnmipb.GetRequest{
+		Path:      []*gnmipb.Path{&pbPath},
+		Encoding:  gnmipb.Encoding_JSON_IETF,
 		UseModels: useModels,
 	}
 	t.Log("req:", req)
@@ -369,7 +369,7 @@ func TestGetWithYdb(t *testing.T) {
 	tds := []struct {
 		desc        string
 		textPbPath  string
-		modelData   []*pb.ModelData
+		modelData   []*gnmipb.ModelData
 		wantRetCode codes.Code
 		wantRespVal interface{}
 	}{{
@@ -453,7 +453,7 @@ func TestGetWithYdb(t *testing.T) {
 		wantRetCode: codes.NotFound,
 	}, {
 		desc:        "use of model data not supported",
-		modelData:   []*pb.ModelData{&pb.ModelData{}},
+		modelData:   []*gnmipb.ModelData{&gnmipb.ModelData{}},
 		wantRetCode: codes.Unimplemented,
 	}}
 
@@ -467,9 +467,9 @@ func TestGetWithYdb(t *testing.T) {
 // type gnmiSetTestCase struct {
 // 	desc        string                    // description of test case.
 // 	initConfig  string                    // config before the operation.
-// 	op          pb.UpdateResult_Operation // operation type.
+// 	op          gnmipb.UpdateResult_Operation // operation type.
 // 	textPbPath  string                    // text format of gnmi Path proto.
-// 	val         *pb.TypedValue            // value for UPDATE/REPLACE operations. always nil for DELETE.
+// 	val         *gnmipb.TypedValue            // value for UPDATE/REPLACE operations. always nil for DELETE.
 // 	wantRetCode codes.Code                // grpc return code.
 // 	wantConfig  string                    // config after the operation.
 // }
@@ -485,7 +485,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				}
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_DELETE,
+// 		op: gnmipb.UpdateResult_DELETE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "config" >
@@ -513,7 +513,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				}
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_DELETE,
+// 		op: gnmipb.UpdateResult_DELETE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "clock" >
@@ -540,7 +540,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				}
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_DELETE,
+// 		op: gnmipb.UpdateResult_DELETE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "clock" >
@@ -568,7 +568,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				}
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_DELETE,
+// 		op: gnmipb.UpdateResult_DELETE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "clock" >
@@ -592,7 +592,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				}
 // 			}
 // 		}`,
-// 		op:          pb.UpdateResult_DELETE,
+// 		op:          gnmipb.UpdateResult_DELETE,
 // 		wantRetCode: codes.OK,
 // 		wantConfig:  `{}`,
 // 	}, {
@@ -606,7 +606,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				}
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_DELETE,
+// 		op: gnmipb.UpdateResult_DELETE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "clock" >
@@ -634,7 +634,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				}
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_DELETE,
+// 		op: gnmipb.UpdateResult_DELETE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "clock" >
@@ -662,7 +662,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				}
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_DELETE,
+// 		op: gnmipb.UpdateResult_DELETE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "clock" >
@@ -692,7 +692,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				}
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_DELETE,
+// 		op: gnmipb.UpdateResult_DELETE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "clock" >
@@ -730,7 +730,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				]
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_DELETE,
+// 		op: gnmipb.UpdateResult_DELETE,
 // 		textPbPath: `
 // 			elem: <name: "components" >
 // 			elem: <
@@ -773,7 +773,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				]
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_DELETE,
+// 		op: gnmipb.UpdateResult_DELETE,
 // 		textPbPath: `
 // 			elem: <name: "components" >
 // 			elem: <
@@ -814,7 +814,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				]
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_DELETE,
+// 		op: gnmipb.UpdateResult_DELETE,
 // 		textPbPath: `
 // 			elem: <name: "components" >
 // 			elem: <
@@ -863,7 +863,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				}
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_DELETE,
+// 		op: gnmipb.UpdateResult_DELETE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "openflow" >
@@ -909,7 +909,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				]
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_DELETE,
+// 		op: gnmipb.UpdateResult_DELETE,
 // 		textPbPath: `
 // 			elem: <name: "components" >
 // 			elem: <
@@ -947,7 +947,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				]
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_DELETE,
+// 		op: gnmipb.UpdateResult_DELETE,
 // 		textPbPath: `
 // 			elem: <name: "components" >
 // 			elem: <
@@ -1001,9 +1001,9 @@ func TestGetWithYdb(t *testing.T) {
 // 	tests := []gnmiSetTestCase{{
 // 		desc:       "replace root",
 // 		initConfig: `{}`,
-// 		op:         pb.UpdateResult_REPLACE,
-// 		val: &pb.TypedValue{
-// 			Value: &pb.TypedValue_JsonIetfVal{
+// 		op:         gnmipb.UpdateResult_REPLACE,
+// 		val: &gnmipb.TypedValue{
+// 			Value: &gnmipb.TypedValue_JsonIetfVal{
 // 				JsonIetfVal: []byte(systemConfig),
 // 			}},
 // 		wantRetCode: codes.OK,
@@ -1011,13 +1011,13 @@ func TestGetWithYdb(t *testing.T) {
 // 	}, {
 // 		desc:       "replace a subtree",
 // 		initConfig: `{}`,
-// 		op:         pb.UpdateResult_REPLACE,
+// 		op:         gnmipb.UpdateResult_REPLACE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "clock" >
 // 		`,
-// 		val: &pb.TypedValue{
-// 			Value: &pb.TypedValue_JsonIetfVal{
+// 		val: &gnmipb.TypedValue{
+// 			Value: &gnmipb.TypedValue_JsonIetfVal{
 // 				JsonIetfVal: []byte(`{"config": {"timezone-name": "US/New York"}}`),
 // 			},
 // 		},
@@ -1034,15 +1034,15 @@ func TestGetWithYdb(t *testing.T) {
 // 	}, {
 // 		desc:       "replace a keyed list subtree",
 // 		initConfig: `{}`,
-// 		op:         pb.UpdateResult_REPLACE,
+// 		op:         gnmipb.UpdateResult_REPLACE,
 // 		textPbPath: `
 // 			elem: <name: "components" >
 // 			elem: <
 // 				name: "component"
 // 				key: <key: "name" value: "swpri1-1-1" >
 // 			>`,
-// 		val: &pb.TypedValue{
-// 			Value: &pb.TypedValue_JsonIetfVal{
+// 		val: &gnmipb.TypedValue{
+// 			Value: &gnmipb.TypedValue_JsonIetfVal{
 // 				JsonIetfVal: []byte(`{"config": {"name": "swpri1-1-1"}}`),
 // 			},
 // 		},
@@ -1077,7 +1077,7 @@ func TestGetWithYdb(t *testing.T) {
 // 				}
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_REPLACE,
+// 		op: gnmipb.UpdateResult_REPLACE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "openflow" >
@@ -1093,8 +1093,8 @@ func TestGetWithYdb(t *testing.T) {
 // 			>
 // 			elem: <name: "config" >
 // 		`,
-// 		val: &pb.TypedValue{
-// 			Value: &pb.TypedValue_JsonIetfVal{
+// 		val: &gnmipb.TypedValue{
+// 			Value: &gnmipb.TypedValue_JsonIetfVal{
 // 				JsonIetfVal: []byte(`{"address": "192.0.2.10", "aux-id": 0}`),
 // 			},
 // 		},
@@ -1129,7 +1129,7 @@ func TestGetWithYdb(t *testing.T) {
 // 	}, {
 // 		desc:       "replace a leaf node of int type",
 // 		initConfig: `{}`,
-// 		op:         pb.UpdateResult_REPLACE,
+// 		op:         gnmipb.UpdateResult_REPLACE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "openflow" >
@@ -1137,8 +1137,8 @@ func TestGetWithYdb(t *testing.T) {
 // 			elem: <name: "config" >
 // 			elem: <name: "backoff-interval" >
 // 		`,
-// 		val: &pb.TypedValue{
-// 			Value: &pb.TypedValue_IntVal{IntVal: 5},
+// 		val: &gnmipb.TypedValue{
+// 			Value: &gnmipb.TypedValue_IntVal{IntVal: 5},
 // 		},
 // 		wantRetCode: codes.OK,
 // 		wantConfig: `{
@@ -1155,7 +1155,7 @@ func TestGetWithYdb(t *testing.T) {
 // 	}, {
 // 		desc:       "replace a leaf node of string type",
 // 		initConfig: `{}`,
-// 		op:         pb.UpdateResult_REPLACE,
+// 		op:         gnmipb.UpdateResult_REPLACE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "openflow" >
@@ -1163,8 +1163,8 @@ func TestGetWithYdb(t *testing.T) {
 // 			elem: <name: "config" >
 // 			elem: <name: "datapath-id" >
 // 		`,
-// 		val: &pb.TypedValue{
-// 			Value: &pb.TypedValue_StringVal{StringVal: "00:16:3e:00:00:00:00:00"},
+// 		val: &gnmipb.TypedValue{
+// 			Value: &gnmipb.TypedValue_StringVal{StringVal: "00:16:3e:00:00:00:00:00"},
 // 		},
 // 		wantRetCode: codes.OK,
 // 		wantConfig: `{
@@ -1181,7 +1181,7 @@ func TestGetWithYdb(t *testing.T) {
 // 	}, {
 // 		desc:       "replace a leaf node of enum type",
 // 		initConfig: `{}`,
-// 		op:         pb.UpdateResult_REPLACE,
+// 		op:         gnmipb.UpdateResult_REPLACE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "openflow" >
@@ -1189,8 +1189,8 @@ func TestGetWithYdb(t *testing.T) {
 // 			elem: <name: "config" >
 // 			elem: <name: "failure-mode" >
 // 		`,
-// 		val: &pb.TypedValue{
-// 			Value: &pb.TypedValue_StringVal{StringVal: "SECURE"},
+// 		val: &gnmipb.TypedValue{
+// 			Value: &gnmipb.TypedValue_StringVal{StringVal: "SECURE"},
 // 		},
 // 		wantRetCode: codes.OK,
 // 		wantConfig: `{
@@ -1207,7 +1207,7 @@ func TestGetWithYdb(t *testing.T) {
 // 	}, {
 // 		desc:       "replace an non-existing leaf node",
 // 		initConfig: `{}`,
-// 		op:         pb.UpdateResult_REPLACE,
+// 		op:         gnmipb.UpdateResult_REPLACE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "openflow" >
@@ -1215,8 +1215,8 @@ func TestGetWithYdb(t *testing.T) {
 // 			elem: <name: "config" >
 // 			elem: <name: "foo-bar" >
 // 		`,
-// 		val: &pb.TypedValue{
-// 			Value: &pb.TypedValue_StringVal{StringVal: "SECURE"},
+// 		val: &gnmipb.TypedValue{
+// 			Value: &gnmipb.TypedValue_StringVal{StringVal: "SECURE"},
 // 		},
 // 		wantRetCode: codes.NotFound,
 // 		wantConfig:  `{}`,
@@ -1239,14 +1239,14 @@ func TestGetWithYdb(t *testing.T) {
 // 				}
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_UPDATE,
+// 		op: gnmipb.UpdateResult_UPDATE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "config" >
 // 			elem: <name: "domain-name" >
 // 		`,
-// 		val: &pb.TypedValue{
-// 			Value: &pb.TypedValue_StringVal{StringVal: "foo.bar.com"},
+// 		val: &gnmipb.TypedValue{
+// 			Value: &gnmipb.TypedValue_StringVal{StringVal: "foo.bar.com"},
 // 		},
 // 		wantRetCode: codes.OK,
 // 		wantConfig: `{
@@ -1266,13 +1266,13 @@ func TestGetWithYdb(t *testing.T) {
 // 				}
 // 			}
 // 		}`,
-// 		op: pb.UpdateResult_UPDATE,
+// 		op: gnmipb.UpdateResult_UPDATE,
 // 		textPbPath: `
 // 			elem: <name: "system" >
 // 			elem: <name: "config" >
 // 		`,
-// 		val: &pb.TypedValue{
-// 			Value: &pb.TypedValue_JsonIetfVal{
+// 		val: &gnmipb.TypedValue{
+// 			Value: &gnmipb.TypedValue_JsonIetfVal{
 // 				JsonIetfVal: []byte(`{"domain-name": "foo.bar.com", "hostname": "switch_a"}`),
 // 			},
 // 		},
@@ -1302,18 +1302,18 @@ func TestGetWithYdb(t *testing.T) {
 // 	}
 
 // 	// Send request
-// 	var pbPath pb.Path
+// 	var pbPath gnmipb.Path
 // 	if err := proto.UnmarshalText(tc.textPbPath, &pbPath); err != nil {
 // 		t.Fatalf("error in unmarshaling path: %v", err)
 // 	}
-// 	var req *pb.SetRequest
+// 	var req *gnmipb.SetRequest
 // 	switch tc.op {
-// 	case pb.UpdateResult_DELETE:
-// 		req = &pb.SetRequest{Delete: []*pb.Path{&pbPath}}
-// 	case pb.UpdateResult_REPLACE:
-// 		req = &pb.SetRequest{Replace: []*pb.Update{{Path: &pbPath, Val: tc.val}}}
-// 	case pb.UpdateResult_UPDATE:
-// 		req = &pb.SetRequest{Update: []*pb.Update{{Path: &pbPath, Val: tc.val}}}
+// 	case gnmipb.UpdateResult_DELETE:
+// 		req = &gnmipb.SetRequest{Delete: []*gnmipb.Path{&pbPath}}
+// 	case gnmipb.UpdateResult_REPLACE:
+// 		req = &gnmipb.SetRequest{Replace: []*gnmipb.Update{{Path: &pbPath, Val: tc.val}}}
+// 	case gnmipb.UpdateResult_UPDATE:
+// 		req = &gnmipb.SetRequest{Update: []*gnmipb.Update{{Path: &pbPath, Val: tc.val}}}
 // 	default:
 // 		t.Fatalf("invalid op type: %v", tc.op)
 // 	}

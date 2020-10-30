@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/neoul/gnxi/utilities"
-	pb "github.com/openconfig/gnmi/proto/gnmi"
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -55,9 +55,9 @@ type Session struct {
 	DestinationPort    uint16         `json:"destination-port,omitempty"`
 	Protocol           StreamProtocol `json:"protocol,omitempty"`
 
-	// telechan chan *pb.SubscribeResponse // The channel to send telemetry updates
+	// telechan chan *gnmipb.SubscribeResponse // The channel to send telemetry updates
 	// teledone chan bool                  // The channel to signal telemetry updates complete
-	alias  map[string]*pb.Alias
+	alias  map[string]*gnmipb.Alias
 	server *Server
 	valid  bool
 }
@@ -85,7 +85,7 @@ func (s *Server) Started(local, remote net.Addr) {
 		DestinationAddress: destinationAddress,
 		DestinationPort:    uint16(destinationPort),
 		Protocol:           StreamGRPC,
-		alias:              map[string]*pb.Alias{},
+		alias:              map[string]*gnmipb.Alias{},
 		server:             s, SID: remoteaddr,
 	}
 	s.sessions[remoteaddr] = session

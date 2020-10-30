@@ -7,7 +7,7 @@ import (
 
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
 	"github.com/neoul/libydb/go/ydb"
-	gpb "github.com/openconfig/gnmi/proto/gnmi"
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
 )
 
@@ -68,7 +68,7 @@ func TestFindAllData(t *testing.T) {
 
 	type args struct {
 		gs   ygot.GoStruct
-		path *gpb.Path
+		path *gnmipb.Path
 	}
 	tests := []struct {
 		name  string
@@ -80,7 +80,7 @@ func TestFindAllData(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				gs:   &root,
-				path: &gpb.Path{},
+				path: &gnmipb.Path{},
 			},
 			want: []*DataAndPath{
 				testSetDataAndPath("/", &root),
@@ -91,12 +91,12 @@ func TestFindAllData(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				gs: &root,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interface",
 						},
 					},
@@ -112,12 +112,12 @@ func TestFindAllData(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				gs: &root,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interface",
 							Key: map[string]string{
 								"name": "eth1",
@@ -133,21 +133,21 @@ func TestFindAllData(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				gs: &root,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interface",
 							Key: map[string]string{
 								"name": "eth1",
 							},
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "name",
 						},
 					},
@@ -161,21 +161,21 @@ func TestFindAllData(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				gs: &root,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interface",
 							Key: map[string]string{
 								"name": "eth1",
 							},
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "*",
 						},
 					},
@@ -195,18 +195,18 @@ func TestFindAllData(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				gs: &root,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interface",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "*",
 						},
 					},
@@ -232,18 +232,18 @@ func TestFindAllData(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				gs: &root,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "*",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "name",
 						},
 					},
@@ -259,15 +259,15 @@ func TestFindAllData(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				gs: &root,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "...",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
 					},
@@ -314,7 +314,7 @@ func TestFindAllNodes(t *testing.T) {
 
 	type args struct {
 		vgs  ygot.GoStruct
-		path *gpb.Path
+		path *gnmipb.Path
 	}
 	tests := []struct {
 		name  string
@@ -326,7 +326,7 @@ func TestFindAllNodes(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				vgs:  &root,
-				path: &gpb.Path{},
+				path: &gnmipb.Path{},
 			},
 			want:  []interface{}{&root},
 			want1: true,
@@ -335,12 +335,12 @@ func TestFindAllNodes(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				vgs: &root,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interface",
 						},
 					},
@@ -356,12 +356,12 @@ func TestFindAllNodes(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				vgs: &root,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interface",
 							Key: map[string]string{
 								"name": "eth1",
@@ -377,21 +377,21 @@ func TestFindAllNodes(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				vgs: &root,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interface",
 							Key: map[string]string{
 								"name": "eth1",
 							},
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "name",
 						},
 					},
@@ -404,21 +404,21 @@ func TestFindAllNodes(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				vgs: &root,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interface",
 							Key: map[string]string{
 								"name": "eth1",
 							},
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "*",
 						},
 					},
@@ -438,18 +438,18 @@ func TestFindAllNodes(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				vgs: &root,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interface",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "*",
 						},
 					},
@@ -475,18 +475,18 @@ func TestFindAllNodes(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				vgs: &root,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "*",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "name",
 						},
 					},
@@ -502,15 +502,15 @@ func TestFindAllNodes(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				vgs: &root,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "...",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
 					},
@@ -545,7 +545,7 @@ func TestFindAllSchemaTypes(t *testing.T) {
 
 	type args struct {
 		gs   ygot.GoStruct
-		path *gpb.Path
+		path *gnmipb.Path
 	}
 	tests := []struct {
 		name  string
@@ -557,18 +557,18 @@ func TestFindAllSchemaTypes(t *testing.T) {
 			name: "TestFindAllSchemaNodes",
 			args: args{
 				gs: &gd,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "*",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "*",
 						},
 					},
@@ -602,7 +602,7 @@ func TestFindAllSchemaPaths(t *testing.T) {
 	gd := gostruct.Device{}
 	type args struct {
 		gs   ygot.GoStruct
-		path *gpb.Path
+		path *gnmipb.Path
 	}
 	tests := []struct {
 		name  string
@@ -614,18 +614,18 @@ func TestFindAllSchemaPaths(t *testing.T) {
 			name: "TestFindAllSchemaPaths",
 			args: args{
 				gs: &gd,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "*",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "*",
 						},
 					},
@@ -645,15 +645,15 @@ func TestFindAllSchemaPaths(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				gs: &gd,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "...",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
 					},
@@ -670,21 +670,21 @@ func TestFindAllSchemaPaths(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				gs: &gd,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interface",
 							Key: map[string]string{
 								"name": "eth1",
 							},
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "config",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "*",
 						},
 					},
@@ -704,12 +704,12 @@ func TestFindAllSchemaPaths(t *testing.T) {
 			name: "FindAllDataNodes",
 			args: args{
 				gs: &gd,
-				path: &gpb.Path{
-					Elem: []*gpb.PathElem{
-						&gpb.PathElem{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interfaces",
 						},
-						&gpb.PathElem{
+						&gnmipb.PathElem{
 							Name: "interface",
 						},
 					},

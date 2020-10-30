@@ -27,6 +27,8 @@ import (
 var (
 	// RootGNMIPath - '/'
 	RootGNMIPath = &gnmipb.Path{}
+	// EmptyGNMIPath - ./
+	EmptyGNMIPath = RootGNMIPath
 
 	// WildcardGNMIPathDot3 - Wildcard Path '...'
 	WildcardGNMIPathDot3 = &gnmipb.Path{
@@ -253,4 +255,33 @@ func PathElemToXPATH(elem []*gnmipb.PathElem) string {
 		}
 	}
 	return strings.Join(pe, "/")
+}
+
+// SlicePathToGNMIPath returns the gNMI Path from a string slice.
+func SlicePathToGNMIPath(path []string) (*gnmipb.Path, error) {
+	var pathElem []*gnmipb.PathElem
+	for _, pelem := range path {
+		xpathElements, err := ParseStringPath(pelem)
+		if err != nil {
+			return nil, err
+		}
+		for _, elem := range xpathElements {
+			switch v := elem.(type) {
+			case string:
+				pathElem = append(pathElem, &gnmipb.PathElem{Name: v})
+			case map[string]string:
+				n := len(pathElem)
+				if n == 0 {
+					return nil, fmt.Errorf("missing name before key-value list")
+				}
+				if pathElem[n-1].Key != nil {
+					return nil, fmt.Errorf("two subsequent key-value lists")
+				}
+				pathElem[n-1].Key = v
+			default:
+				return nil, fmt.Errorf("wrong data type: %T", v)
+			}
+		}
+	}
+	return &gnmipb.Path{Elem: pathElem}, nil
 }
