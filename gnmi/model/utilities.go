@@ -63,7 +63,7 @@ func appendCopy(curkey []string, addkey string) []string {
 	return dest
 }
 
-func (dpath *dataAndPath) getAllChildren(prefix string) ([]*dataAndPath, bool) {
+func (dpath *dataAndPath) getAllChildren(prefix string, opt ...FindOption) ([]*dataAndPath, bool) {
 	if !dpath.Value.IsValid() {
 		return []*dataAndPath{}, false
 	}
@@ -71,7 +71,7 @@ func (dpath *dataAndPath) getAllChildren(prefix string) ([]*dataAndPath, bool) {
 	case reflect.Ptr, reflect.Interface:
 		// child := &dataAndPath{Value: dpath.Value.Elem(), Key: dpath.Key}
 		dpath.Value = dpath.Value.Elem()
-		return dpath.getAllChildren(prefix)
+		return dpath.getAllChildren(prefix, opt...)
 	case reflect.Struct:
 		length := dpath.Value.NumField()
 		more := []*dataAndPath{}
@@ -93,7 +93,7 @@ func (dpath *dataAndPath) getAllChildren(prefix string) ([]*dataAndPath, bool) {
 			}
 			if ydb.IsValMap(fv) { // find more values
 				child := &dataAndPath{Value: fv, Key: dpath.Key}
-				_rval, _ok := child.getAllChildren(prefix + key)
+				_rval, _ok := child.getAllChildren(prefix+key, opt...)
 				if _ok {
 					more = append(more, _rval...)
 				}
@@ -161,7 +161,7 @@ func (dpath *dataAndPath) getAllChildren(prefix string) ([]*dataAndPath, bool) {
 	}
 }
 
-func (dpath *dataAndPath) findChildren(key string) ([]*dataAndPath, bool) {
+func (dpath *dataAndPath) findChildren(key string, opt ...FindOption) ([]*dataAndPath, bool) {
 	cv, ok := ydb.ValFind(dpath.Value, key, ydb.SearchByContent)
 	if !ok || !cv.IsValid() {
 		return []*dataAndPath{}, false
@@ -169,7 +169,7 @@ func (dpath *dataAndPath) findChildren(key string) ([]*dataAndPath, bool) {
 	if ydb.IsValMap(cv) {
 		dpath.Value = cv
 		// fmt.Println("findChild MAP:", dpath.Key)
-		return dpath.getAllChildren(key)
+		return dpath.getAllChildren(key, opt...)
 	}
 	child := &dataAndPath{Value: cv, Key: appendCopy(dpath.Key, key)}
 	// fmt.Println("findChild :", child.Key)
@@ -177,13 +177,14 @@ func (dpath *dataAndPath) findChildren(key string) ([]*dataAndPath, bool) {
 }
 
 // findAllData - finds all nodes matched to the gNMI Path.
-func findAllData(dpath *dataAndPath, elems []*gnmipb.PathElem) []*dataAndPath {
+func findAllData(dpath *dataAndPath, elems []*gnmipb.PathElem, opt ...FindOption) []*dataAndPath {
 	if len(elems) <= 0 {
 		return []*dataAndPath{dpath}
 	}
 	if ydb.IsValScalar(dpath.Value) {
 		return []*dataAndPath{}
 	}
+
 	elem := elems[0]
 	// fmt.Println("** Search", elem.GetName(), "from", ydb.DebugValueStringInline(dpath.Value.Interface(), 0, nil))
 	if elem.GetName() == "*" {
@@ -192,21 +193,20 @@ func findAllData(dpath *dataAndPath, elems []*gnmipb.PathElem) []*dataAndPath {
 		if ok {
 			celems := elems[1:]
 			for _, child := range childlist {
-				rpath = append(rpath, findAllData(child, celems)...)
+				rpath = append(rpath, findAllData(child, celems, opt...)...)
 			}
 		}
 		return rpath
 	} else if elem.GetName() == "..." {
 		rpath := []*dataAndPath{}
 		childlist, ok := dpath.getAllChildren("")
-
 		if ok {
 			celems := elems[1:]
 			for _, child := range childlist {
-				rpath = append(rpath, findAllData(child, celems)...)
+				rpath = append(rpath, findAllData(child, celems, opt...)...)
 			}
 			for _, child := range childlist {
-				rpath = append(rpath, findAllData(child, elems)...)
+				rpath = append(rpath, findAllData(child, elems, opt...)...)
 			}
 		}
 		// for _, r := range rpath {
@@ -225,11 +225,11 @@ func findAllData(dpath *dataAndPath, elems []*gnmipb.PathElem) []*dataAndPath {
 	}
 	key := strings.Join(ke, "")
 	rpath := []*dataAndPath{}
-	childlist, ok := dpath.findChildren(key)
+	childlist, ok := dpath.findChildren(key, opt...)
 	if ok {
 		celems := elems[1:]
 		for _, child := range childlist {
-			rpath = append(rpath, findAllData(child, celems)...)
+			rpath = append(rpath, findAllData(child, celems, opt...)...)
 		}
 	}
 	return rpath

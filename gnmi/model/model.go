@@ -389,16 +389,26 @@ type FindOption interface {
 	IsFindOpt()
 }
 
-// FindBySchema is used to find data and paths with schema info.
-type FindBySchema struct {
-	*ytypes.Schema
+// FindByModel is used to find data and paths with schema info.
+type FindByModel struct {
+	*Model
 }
 
-// IsFindOpt - FindBySchema is a FindOption.
-func (f FindBySchema) IsFindOpt() {}
+// IsFindOpt - FindByModel is a FindOption.
+func (f *FindByModel) IsFindOpt() {}
+
+func hasFindByModel(opts []FindOption) *Model {
+	for _, o := range opts {
+		switch v := o.(type) {
+		case *FindByModel:
+			return v.Model
+		}
+	}
+	return nil
+}
 
 // Find - Find all values and paths (XPath, Value) from the base ygot.GoStruct
-func (m *Model) Find(gs ygot.GoStruct, path *gnmipb.Path) ([]*DataAndPath, bool) {
+func (m *Model) Find(gs ygot.GoStruct, path *gnmipb.Path, opt ...FindOption) ([]*DataAndPath, bool) {
 	t := reflect.TypeOf(gs)
 	entry := m.FindSchemaByType(t)
 	if entry == nil {
@@ -430,7 +440,7 @@ func (m *Model) Find(gs ygot.GoStruct, path *gnmipb.Path) ([]*DataAndPath, bool)
 	}
 	v := reflect.ValueOf(gs)
 	datapath := &dataAndPath{Value: v, Key: []string{""}}
-	founds := findAllData(datapath, elems)
+	founds := findAllData(datapath, elems, opt...)
 	// fmt.Println(founds)
 	num := len(founds)
 	if num <= 0 {
