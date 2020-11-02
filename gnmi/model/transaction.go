@@ -38,14 +38,15 @@ type rollback struct {
 
 type opInfo struct {
 	optype  opType
-	path    *string
+	xpath   *string
+	gpath   *gnmipb.Path
 	cvalue  interface{}
 	nvalue  *gnmipb.TypedValue
 	created bool
 }
 
 func (opinfo *opInfo) getKey() string {
-	return fmt.Sprintf("%s%s", opinfo.optype, *opinfo.path)
+	return fmt.Sprintf("%s%s", opinfo.optype, *opinfo.xpath)
 }
 
 var setTranID int
@@ -68,10 +69,11 @@ func startTransaction() *setTransaction {
 	return t
 }
 
-func (t *setTransaction) add(optype opType, path *string, cvalue interface{}, nvalue *gnmipb.TypedValue) {
+func (t *setTransaction) add(optype opType, xpath *string, gpath *gnmipb.Path, cvalue interface{}, nvalue *gnmipb.TypedValue) {
 	opinfo := &opInfo{
 		optype: optype,
-		path:   path,
+		xpath:  xpath,
+		gpath:  gpath,
 		cvalue: cvalue,
 		nvalue: nvalue,
 	}
@@ -83,4 +85,8 @@ func (t *setTransaction) add(optype opType, path *string, cvalue interface{}, nv
 	case opUpdate:
 		t.update[opinfo.getKey()] = opinfo
 	}
+}
+
+func (t *setTransaction) commit() {
+
 }

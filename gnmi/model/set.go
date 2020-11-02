@@ -164,6 +164,21 @@ func (m *Model) FindSubsequence(base *DataAndPath, path *gnmipb.Path) ([]*DataAn
 	return FindAllData(gs, path)
 }
 
+// WriteTypedValue - Write the TypedValue to the model instance
+func (m *Model) WriteTypedValue(path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
+	schema := m.GetSchema()
+	base := m.dataroot
+	_, _, err := ytypes.GetOrCreateNode(schema, base, path)
+	if err != nil {
+		return err
+	}
+	err = ytypes.SetNode(schema, base, path, typedValue, &ytypes.InitMissingElements{})
+	if err != nil {
+		return err
+	}
+	return err
+}
+
 // SetInit initializes the Set transaction.
 func (m *Model) SetInit() error {
 	if m.transaction != nil {
@@ -184,8 +199,17 @@ func (m *Model) SetRollback() {
 }
 
 // SetCommit commit the changed configuration.
-func (m *Model) SetCommit() {
-
+func (m *Model) SetCommit() error {
+	dump.Print(m.transaction)
+	for _, opinfo := range m.transaction.delete {
+		gs := opinfo.cvalue.(ygot.GoStruct)
+		dataAndPaths, _ := m.FindAllData(gs, xpath.WildcardGNMIPathDot3)
+		for i, dataAndPath := range dataAndPaths {
+			fmt.Println("D", i, *opinfo.xpath, dataAndPath.Path)
+		}
+	}
+	m.transaction = nil
+	return nil
 }
 
 // SetDelete deletes the path from root if the path exists.
@@ -197,133 +221,69 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 		if err != nil {
 			return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
 		}
+		m.transaction.add(opDelete, &target.Path, targetPath, target.Value, nil)
 		err = ytypes.DeleteNode(m.GetSchema(), m.dataroot, targetPath)
 		if err != nil {
 			return err
 		}
 	}
-	for _, target := range targets {
-		m.transaction.add(opDelete, &target.Path, target.Value, nil)
-		dump.Print(m.transaction)
-	}
 	return nil
-
-	// // Update json tree of the device config
-	// var curNode interface{} = jsonTree
-	// pathDeleted := false
-	// fullPath := xpath.GNMIFullPath(prefix, path)
-	// schema := m.RootSchema()
-	// for i, elem := range fullPath.Elem { // Delete sub-tree or leaf node.
-	// 	node, ok := curNode.(map[string]interface{})
-	// 	if !ok {
-	// 		break
-	// 	}
-
-	// 	// Delete node
-	// 	if i == len(fullPath.Elem)-1 {
-	// 		if elem.GetKey() == nil {
-	// 			delete(node, elem.Name)
-	// 			pathDeleted = true
-	// 			break
-	// 		}
-	// 		pathDeleted = deleteKeyedListEntry(node, elem)
-	// 		break
-	// 	}
-
-	// 	if curNode, schema = getChildNode(node, schema, elem, false); curNode == nil {
-	// 		break
-	// 	}
-	// }
-
-	// if reflect.DeepEqual(fullPath, xpath.RootGNMIPath) { // Delete root
-	// 	for k := range jsonTree {
-	// 		delete(jsonTree, k)
-	// 	}
-	// }
-
-	// // Apply the validated operation to the config tree and device.
-	// if pathDeleted {
-	// 	newRoot, err := m.toGoStruct(jsonTree)
-	// 	if err != nil {
-	// 		return nil, status.Error(codes.Internal, err.Error())
-	// 	}
-	// 	if m.callback != nil {
-	// 		if applyErr := execConfigCallback(m.callback, newRoot); applyErr != nil {
-	// 			if rollbackErr := execConfigCallback(m.callback, m.dataroot); rollbackErr != nil {
-	// 				return nil, status.Errorf(codes.Internal, "error in rollback the failed operation (%v): %v", applyErr, rollbackErr)
-	// 			}
-	// 			return nil, status.Errorf(codes.Aborted, "error in applying operation to device: %v", applyErr)
-	// 		}
-	// 	}
-	// }
-	// return &gnmipb.UpdateResult{
-	// 	Path: path,
-	// 	Op:   gnmipb.UpdateResult_DELETE,
-	// }, nil
 }
 
 // SetReplace deletes the path from root if the path exists.
-func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedvalue *gnmipb.TypedValue) error {
+func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	var err error
-	// var target interface{}
-	// var targetSchema *yang.Entry
-	fullpath := xpath.GNMIFullPath(prefix, path)
-	targets, ok := m.Find(fullpath)
-	if !ok {
-		_, _, err = ytypes.GetOrCreateNode(m.GetSchema(), m.dataroot, fullpath)
-		if err != nil {
-			return err
-		}
-		err := ytypes.SetNode(m.GetSchema(), m.dataroot, fullpath, typedvalue)
-		if err != nil {
-			return err
-		}
-		path := xpath.ToXPath(fullpath)
-		m.transaction.add(opDelete, &path, nil, typedvalue)
-		return nil
-	}
-
-	for _, target := range targets {
-		targetPath, err := xpath.ToGNMIPath(target.Path)
-		if err != nil {
-			return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
-		}
-		err = ytypes.SetNode(m.GetSchema(), m.dataroot, targetPath, typedvalue)
-		if err != nil {
-			return err
-		}
-	}
-	for _, target := range targets {
-		m.transaction.add(opDelete, &target.Path, target.Value, nil)
-		dump.Print(m.transaction)
-	}
-
-	return nil
-}
-
-// SetUpdate deletes the path from root if the path exists.
-func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedvalue *gnmipb.TypedValue) error {
-	var err error
-	// var target interface{}
-	// var targetSchema *yang.Entry
 	fullpath := xpath.GNMIFullPath(prefix, path)
 	targets, ok := m.Find(fullpath)
 	if ok {
 		for _, target := range targets {
-			m.transaction.add(opUpdate, &target.Path, target.Value, typedvalue)
-			// dump.Print(m.transaction)
-			err = ytypes.SetNode(m.GetSchema(), m.dataroot, fullpath, typedvalue)
+			targetPath, err := xpath.ToGNMIPath(target.Path)
+			if err != nil {
+				return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
+			}
+			m.transaction.add(opReplace, &target.Path, targetPath, target.Value, typedValue)
+			err = ytypes.DeleteNode(m.GetSchema(), m.dataroot, targetPath)
+			if err != nil {
+				return err
+			}
+			err = m.WriteTypedValue(targetPath, typedValue)
 			if err != nil {
 				return err
 			}
 		}
-		return err
+		return nil
 	}
-	_, _, err = ytypes.GetOrCreateNode(m.GetSchema(), m.dataroot, fullpath)
+	tpath := xpath.ToXPath(fullpath)
+	m.transaction.add(opReplace, &tpath, fullpath, nil, typedValue)
+	err = m.WriteTypedValue(fullpath, typedValue)
 	if err != nil {
 		return err
 	}
-	err = ytypes.SetNode(m.GetSchema(), m.dataroot, fullpath, typedvalue)
+	return nil
+}
+
+// SetUpdate deletes the path from root if the path exists.
+func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
+	var err error
+	fullpath := xpath.GNMIFullPath(prefix, path)
+	targets, ok := m.Find(fullpath)
+	if ok {
+		for _, target := range targets {
+			targetPath, err := xpath.ToGNMIPath(target.Path)
+			if err != nil {
+				return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
+			}
+			m.transaction.add(opReplace, &target.Path, targetPath, target.Value, typedValue)
+			err = m.WriteTypedValue(targetPath, typedValue)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	tpath := xpath.ToXPath(fullpath)
+	m.transaction.add(opReplace, &tpath, fullpath, nil, typedValue)
+	err = m.WriteTypedValue(fullpath, typedValue)
 	if err != nil {
 		return err
 	}
