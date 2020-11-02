@@ -150,20 +150,6 @@ func (m *Model) RunSyncUpdate(syncIgnoreTime time.Duration, syncPaths []string) 
 	m.block.SyncTo(syncIgnoreTime, true, syncPaths...)
 }
 
-// Find - Find all values and paths (XPath, Value) from the root
-func (m *Model) Find(path *gnmipb.Path) ([]*DataAndPath, bool) {
-	return FindAllData(m.GetRoot(), path)
-}
-
-// FindSubsequence - Find all values and paths (XPath, Value) from the base
-func (m *Model) FindSubsequence(base *DataAndPath, path *gnmipb.Path) ([]*DataAndPath, bool) {
-	gs, ok := base.Value.(ygot.GoStruct)
-	if !ok {
-		return nil, false
-	}
-	return FindAllData(gs, path)
-}
-
 // WriteTypedValue - Write the TypedValue to the model instance
 func (m *Model) WriteTypedValue(path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	schema := m.GetSchema()
@@ -203,7 +189,7 @@ func (m *Model) SetCommit() error {
 	dump.Print(m.transaction)
 	for _, opinfo := range m.transaction.delete {
 		gs := opinfo.cvalue.(ygot.GoStruct)
-		dataAndPaths, _ := m.FindAllData(gs, xpath.WildcardGNMIPathDot3)
+		dataAndPaths, _ := m.Find(gs, xpath.WildcardGNMIPathDot3)
 		for i, dataAndPath := range dataAndPaths {
 			fmt.Println("D", i, *opinfo.xpath, dataAndPath.Path)
 		}
@@ -215,7 +201,7 @@ func (m *Model) SetCommit() error {
 // SetDelete deletes the path from root if the path exists.
 func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 	fullpath := xpath.GNMIFullPath(prefix, path)
-	targets, _ := m.Find(fullpath)
+	targets, _ := m.Get(fullpath)
 	for _, target := range targets {
 		targetPath, err := xpath.ToGNMIPath(target.Path)
 		if err != nil {
@@ -234,7 +220,7 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	var err error
 	fullpath := xpath.GNMIFullPath(prefix, path)
-	targets, ok := m.Find(fullpath)
+	targets, ok := m.Get(fullpath)
 	if ok {
 		for _, target := range targets {
 			targetPath, err := xpath.ToGNMIPath(target.Path)
@@ -266,7 +252,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	var err error
 	fullpath := xpath.GNMIFullPath(prefix, path)
-	targets, ok := m.Find(fullpath)
+	targets, ok := m.Get(fullpath)
 	if ok {
 		for _, target := range targets {
 			targetPath, err := xpath.ToGNMIPath(target.Path)

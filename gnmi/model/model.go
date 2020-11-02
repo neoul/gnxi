@@ -378,8 +378,27 @@ func (m *Model) findAllPaths(sp pathFinder, elems []*gnmipb.PathElem) []pathFind
 	return m.findAllPaths(csp, elems[1:])
 }
 
-// FindAllData - finds all data nodes matched to the gNMI Path.
-func (m *Model) FindAllData(gs ygot.GoStruct, path *gnmipb.Path) ([]*DataAndPath, bool) {
+// Get - Get all values and paths (XPath, Value) from the root
+func (m *Model) Get(path *gnmipb.Path) ([]*DataAndPath, bool) {
+	return m.Find(m.GetRoot(), path)
+}
+
+// FindOption is an interface that is implemented for the option of Model.Find().
+type FindOption interface {
+	// IsFindOpt is a marker method for each FindOption.
+	IsFindOpt()
+}
+
+// FindBySchema is used to find data and paths with schema info.
+type FindBySchema struct {
+	*ytypes.Schema
+}
+
+// IsFindOpt - FindBySchema is a FindOption.
+func (f FindBySchema) IsFindOpt() {}
+
+// Find - Find all values and paths (XPath, Value) from the base ygot.GoStruct
+func (m *Model) Find(gs ygot.GoStruct, path *gnmipb.Path) ([]*DataAndPath, bool) {
 	t := reflect.TypeOf(gs)
 	entry := m.FindSchemaByType(t)
 	if entry == nil {
@@ -417,22 +436,18 @@ func (m *Model) FindAllData(gs ygot.GoStruct, path *gnmipb.Path) ([]*DataAndPath
 	if num <= 0 {
 		return []*DataAndPath{}, false
 	}
-	i := 0
-	rvalues := make([]*DataAndPath, num)
+
+	rvalues := make([]*DataAndPath, 0, num)
 	for _, each := range founds {
 		if each.Value.CanInterface() {
 			dataAndGNMIPath := &DataAndPath{
 				Value: each.Value.Interface(),
 				Path:  strings.Join(each.Key, "/"),
 			}
-			rvalues[i] = dataAndGNMIPath
-			i++
+			rvalues = append(rvalues, dataAndGNMIPath)
 		}
 	}
-	if i > 0 {
-		return rvalues[:i], true
-	}
-	return []*DataAndPath{}, false
+	return rvalues, true
 }
 
 // ValidatePathSchema - validates all schema of the gNMI Path.

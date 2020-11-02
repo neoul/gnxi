@@ -637,7 +637,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *gnmipb.SubscribeReques
 	if err := xpath.ValidateGNMIPath(prefix); err != nil {
 		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := s.Model.FindAllData(s.Model.GetRoot(), prefix)
+	toplist, ok := s.Model.Find(s.Model.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
 		if ok = s.Model.ValidatePathSchema(prefix); ok {
 			// data-missing is not an error in SubscribeRPC
@@ -663,7 +663,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *gnmipb.SubscribeReques
 			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
 				return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-			datalist, ok := s.Model.FindAllData(branch, path)
+			datalist, ok := s.Model.Find(branch, path)
 			if !ok || len(datalist) <= 0 {
 				continue
 			}
@@ -732,7 +732,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 	if err := xpath.ValidateGNMIPath(prefix); err != nil {
 		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := s.Model.FindAllData(updatedroot, prefix)
+	toplist, ok := s.Model.Find(updatedroot, prefix)
 	if !ok || len(toplist) <= 0 {
 		if ok = s.Model.ValidatePathSchema(prefix); ok {
 			// data-missing is not an error in SubscribeRPC
@@ -766,7 +766,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
 				return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-			datalist, ok := s.Model.FindAllData(branch, path)
+			datalist, ok := s.Model.Find(branch, path)
 			if !ok || len(datalist) <= 0 {
 				continue
 			}

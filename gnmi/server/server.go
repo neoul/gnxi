@@ -196,7 +196,7 @@ func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 	if err := xpath.ValidateGNMIPath(prefix); err != nil {
 		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := s.Model.FindAllData(s.Model.GetRoot(), prefix)
+	toplist, ok := s.Model.Find(s.Model.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
 		if ok = s.Model.ValidatePathSchema(prefix); ok {
 			return nil, status.Errorf(codes.NotFound, "data-missing(%v)", xpath.ToXPath(prefix))
@@ -215,7 +215,7 @@ func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
 				return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-			datalist, ok := s.Model.FindAllData(branch, path)
+			datalist, ok := s.Model.Find(branch, path)
 			if !ok || len(datalist) <= 0 {
 				continue
 			}
