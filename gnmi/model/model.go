@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
-	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/neoul/trie"
 	"github.com/openconfig/goyang/pkg/yang"
@@ -36,7 +35,8 @@ import (
 
 // Model contains the model data and GoStruct information for the device.
 type Model struct {
-	*ytypes.Schema
+	// *ytypes.Schema
+	*MO
 	modelData   []*gnmipb.ModelData
 	dataroot    ygot.ValidatedGoStruct // the current data tree of the Model
 	updatedroot ygot.GoStruct          // a fake data tree to represent the changed data.
@@ -46,28 +46,19 @@ type Model struct {
 	transaction  *setTransaction
 }
 
-// GetName returns the name of the model.
-func (m *Model) GetName() string {
-	rootSchema := m.RootSchema()
-	if rootSchema == nil {
-		return "unknown"
-	}
-	return rootSchema.Name
-}
-
-// GetRootType returns the reflect.Type of the root
-func (m *Model) GetRootType() reflect.Type {
-	return reflect.TypeOf(m.Root).Elem()
-}
-
 // NewRoot returns new root (ygot.ValidatedGoStruct)
-func (m *Model) NewRoot(jsonData []byte) (ygot.ValidatedGoStruct, error) {
+func (m *Model) NewRoot(startup []byte) (ygot.ValidatedGoStruct, error) {
 	newRoot := reflect.New(m.GetRootType()).Interface()
 	root := newRoot.(ygot.ValidatedGoStruct)
-	if jsonData != nil {
-		if err := m.Unmarshal(jsonData, root); err != nil {
-			return nil, err
+	if startup != nil {
+		if err := m.Unmarshal(startup, root); err != nil {
+			block, close := ydb.OpenWithTargetStruct("tempRoot", m)
+			defer close()
+			if err := block.Parse(startup); err != nil {
+				return nil, err
+			}
 		}
+		// [FIXME] - error in creating gnmid: /device/interfaces: /device/interfaces/interface: list interface contains more than max allowed elements: 2 > 0
 		if err := root.Validate(); err != nil {
 			return nil, err
 		}
@@ -84,7 +75,7 @@ func NewModel(startup []byte, cb Callback) (*Model, error) {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	m := &Model{
-		Schema:    Schema,
+		MO:        (*MO)(Schema),
 		modelData: gostruct.ΓModelData,
 		Callback:  cb,
 	}
@@ -105,7 +96,7 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	m := &Model{
-		Schema:    s,
+		MO:        (*MO)(s),
 		modelData: modelData,
 		Callback:  cb,
 	}
@@ -116,8 +107,8 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 }
 
 // initModel - initializes the created model.
-func initModel(m *Model, startupYAML []byte) error {
-	dataroot, err := m.NewRoot(nil)
+func initModel(m *Model, startup []byte) error {
+	dataroot, err := m.NewRoot(startup)
 	if err != nil {
 		return err
 	}
@@ -139,17 +130,6 @@ func initModel(m *Model, startupYAML []byte) error {
 	}
 
 	m.block, _ = ydb.OpenWithTargetStruct("gnmi.target", m)
-	if startupYAML != nil {
-		if err := m.block.Parse(startupYAML); err != nil {
-			return err
-		}
-		// [FIXME] - error in creating gnmid: /device/interfaces: /device/interfaces/interface: list interface contains more than max allowed elements: 2 > 0
-		// if err := root.Validate(); err != nil {
-		// 	//???
-		// 	return nil, err
-		// }
-		// utilities.PrintStruct(dataroot)
-	}
 	if !*disableYdbChannel {
 		err := m.block.Connect("uss://gnmi", "pub")
 		if err != nil {
@@ -191,87 +171,6 @@ func (m *Model) CheckModels(models []*gnmipb.ModelData) error {
 // GetModelData - returns ModelData of the model.
 func (m *Model) GetModelData() []*gnmipb.ModelData {
 	return m.modelData
-}
-
-// GetSchema - returns the root yang.Entry of the model.
-func (m *Model) GetSchema() *yang.Entry {
-	return m.RootSchema()
-}
-
-// FindSchemaByType - find the yang.Entry by Type for schema info.
-func (m *Model) FindSchemaByType(t reflect.Type) *yang.Entry {
-	if t == reflect.TypeOf(nil) {
-		return nil
-	}
-	for t.Kind() == reflect.Ptr {
-		t = t.Elem()
-		if t == reflect.TypeOf(nil) {
-			return nil
-		}
-	}
-	return m.SchemaTree[t.Name()]
-}
-
-// FindSchema finds the *yang.Entry by value(ygot.GoStruct) for schema info.
-func (m *Model) FindSchema(value interface{}) *yang.Entry {
-	return m.FindSchemaByType(reflect.TypeOf(value))
-}
-
-// FindSchemaByXPath finds *yang.Entry by XPath string from root model
-func (m *Model) FindSchemaByXPath(path string) *yang.Entry {
-	return m.FindSchemaByRelativeXPath(m.Root, path)
-}
-
-// FindSchemaByRelativeXPath finds *yang.Entry by XPath string from base(ygot.GoStruct)
-func (m *Model) FindSchemaByRelativeXPath(base interface{}, path string) *yang.Entry {
-	bSchema := m.FindSchema(base)
-	if bSchema == nil {
-		return nil
-	}
-	findSchemaByXPath := func(entry *yang.Entry, path string) *yang.Entry {
-		slicedPath, err := xpath.ParseStringPath(path)
-		if err != nil {
-			return nil
-		}
-		for _, elem := range slicedPath {
-			switch v := elem.(type) {
-			case string:
-				entry = entry.Dir[v]
-				if entry == nil {
-					return nil
-				}
-			case map[string]string:
-				// skip keys
-			default:
-				return nil
-			}
-		}
-		return entry
-	}
-	return findSchemaByXPath(bSchema, path)
-}
-
-// FindSchemaByGNMIPath finds the schema(*yang.Entry) using the gNMI Path
-func (m *Model) FindSchemaByGNMIPath(path *gnmipb.Path) *yang.Entry {
-	return m.FindSchemaByRelativeGNMIPath(m.Root, path)
-}
-
-// FindSchemaByRelativeGNMIPath finds the schema(*yang.Entry) using the relative path
-func (m *Model) FindSchemaByRelativeGNMIPath(base interface{}, path *gnmipb.Path) *yang.Entry {
-	bSchema := m.FindSchema(base)
-	if bSchema == nil || path == nil {
-		return nil
-	}
-	findSchema := func(entry *yang.Entry, path *gnmipb.Path) *yang.Entry {
-		for _, e := range path.GetElem() {
-			entry = entry.Dir[e.GetName()]
-			if entry == nil {
-				return nil
-			}
-		}
-		return entry
-	}
-	return findSchema(bSchema, path)
 }
 
 // FindAllPaths - finds all XPaths against to the gNMI Path that has wildcard
@@ -408,8 +307,8 @@ func hasFindByModel(opts []FindOption) *Model {
 }
 
 // Find - Find all values and paths (XPath, Value) from the base ygot.GoStruct
-func (m *Model) Find(gs ygot.GoStruct, path *gnmipb.Path, opt ...FindOption) ([]*DataAndPath, bool) {
-	t := reflect.TypeOf(gs)
+func (m *Model) Find(base interface{}, path *gnmipb.Path, opt ...FindOption) ([]*DataAndPath, bool) {
+	t := reflect.TypeOf(base)
 	entry := m.FindSchemaByType(t)
 	if entry == nil {
 		return []*DataAndPath{}, false
@@ -418,7 +317,7 @@ func (m *Model) Find(gs ygot.GoStruct, path *gnmipb.Path, opt ...FindOption) ([]
 	elems := path.GetElem()
 	if len(elems) <= 0 {
 		dataAndGNMIPath := &DataAndPath{
-			Value: gs, Path: "/",
+			Value: base, Path: "/",
 		}
 		return []*DataAndPath{dataAndGNMIPath}, true
 	}
@@ -438,7 +337,7 @@ func (m *Model) Find(gs ygot.GoStruct, path *gnmipb.Path, opt ...FindOption) ([]
 			}
 		}
 	}
-	v := reflect.ValueOf(gs)
+	v := reflect.ValueOf(base)
 	datapath := &dataAndPath{Value: v, Key: []string{""}}
 	founds := findAllData(datapath, elems, opt...)
 	// fmt.Println(founds)

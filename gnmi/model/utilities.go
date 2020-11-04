@@ -5,9 +5,14 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/openconfig/goyang/pkg/yang"
 	"github.com/openconfig/ygot/ygot"
+	"github.com/openconfig/ygot/ytypes"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // DataAndPath - used to retrieve of the data and gNMI path from ygot go structure.
@@ -561,4 +566,70 @@ func findSchemaPath(sp pathFinder, elemname string) (pathFinder, bool) {
 		return sp, true
 	}
 	return sp, false
+}
+
+// FindSchemaByGNMIPath finds the schema(*yang.Entry) using the relative path
+func FindSchemaByGNMIPath(baseSchema *yang.Entry, base interface{}, path *gnmipb.Path) *yang.Entry {
+	findSchema := func(entry *yang.Entry, path *gnmipb.Path) *yang.Entry {
+		for _, e := range path.GetElem() {
+			entry = entry.Dir[e.GetName()]
+			if entry == nil {
+				return nil
+			}
+		}
+		return entry
+	}
+	return findSchema(baseSchema, path)
+}
+
+// ValWrite - Write the value to the model instance
+func ValWrite(schema *yang.Entry, base ygot.GoStruct, keys []string, value string) error {
+	path, err := xpath.SlicePathToGNMIPath(keys)
+	if err != nil {
+		return err
+	}
+	target, tSchema, err := ytypes.GetOrCreateNode(schema, base, path)
+	if err != nil {
+		return err
+	}
+	if !tSchema.IsDir() {
+		// v := reflect.ValueOf(target)
+		// fmt.Println(strings.Join(keys, "/"))
+		vt := reflect.TypeOf(target)
+		if vt.Kind() == reflect.Ptr {
+			vt = vt.Elem()
+		}
+		vv, err := ytypes.StringToType(vt, value)
+		if err != nil {
+			return err
+		}
+		typedValue, err := ygot.EncodeTypedValue(vv.Interface(), gnmipb.Encoding_JSON_IETF)
+		if err != nil {
+			return status.Errorf(codes.Internal, "encoding error(%s)", err.Error())
+		}
+		err = ytypes.SetNode(schema, base, path, typedValue, &ytypes.InitMissingElements{})
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// ValDelete - Delete the value from the model instance
+func ValDelete(schema *yang.Entry, base ygot.GoStruct, keys []string) error {
+	path, err := xpath.SlicePathToGNMIPath(keys)
+	if err != nil {
+		return err
+	}
+	tSchema := FindSchemaByGNMIPath(schema, base, path)
+	if tSchema == nil {
+		return status.Errorf(codes.Internal, "schema (%s) not found", xpath.ToXPath(path))
+	}
+	// The key field deletion is not allowed.
+	if pSchema := tSchema.Parent; pSchema != nil {
+		if strings.Contains(pSchema.Key, keys[len(keys)-1]) {
+			return nil
+		}
+	}
+	return ytypes.DeleteNode(schema, base, path)
 }

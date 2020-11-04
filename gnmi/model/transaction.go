@@ -30,18 +30,12 @@ func (op opType) String() string {
 	return "?"
 }
 
-type rollback struct {
-	op     opType
-	base   *DataAndPath
-	target *DataAndPath
-}
-
 type opInfo struct {
 	optype  opType
 	xpath   *string
 	gpath   *gnmipb.Path
-	cvalue  interface{}
-	nvalue  *gnmipb.TypedValue
+	curval  interface{}
+	newval  *gnmipb.TypedValue
 	created bool
 }
 
@@ -69,13 +63,13 @@ func startTransaction() *setTransaction {
 	return t
 }
 
-func (t *setTransaction) add(optype opType, xpath *string, gpath *gnmipb.Path, cvalue interface{}, nvalue *gnmipb.TypedValue) {
+func (t *setTransaction) add(optype opType, xpath *string, gpath *gnmipb.Path, curval interface{}, newval *gnmipb.TypedValue) {
 	opinfo := &opInfo{
 		optype: optype,
 		xpath:  xpath,
 		gpath:  gpath,
-		cvalue: cvalue,
-		nvalue: nvalue,
+		curval: curval,
+		newval: newval,
 	}
 	switch optype {
 	case opDelete:

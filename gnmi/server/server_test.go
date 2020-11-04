@@ -24,8 +24,10 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"github.com/neoul/gnxi/gnmi/model"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/value"
+	"github.com/openconfig/ygot/ygot"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -464,524 +466,524 @@ func TestGetWithYdb(t *testing.T) {
 	}
 }
 
-// type gnmiSetTestCase struct {
-// 	desc        string                    // description of test case.
-// 	initConfig  string                    // config before the operation.
-// 	op          gnmipb.UpdateResult_Operation // operation type.
-// 	textPbPath  string                    // text format of gnmi Path proto.
-// 	val         *gnmipb.TypedValue            // value for UPDATE/REPLACE operations. always nil for DELETE.
-// 	wantRetCode codes.Code                // grpc return code.
-// 	wantConfig  string                    // config after the operation.
-// }
+type gnmiSetTestCase struct {
+	desc        string                        // description of test case.
+	initConfig  string                        // config before the operation.
+	op          gnmipb.UpdateResult_Operation // operation type.
+	textPbPath  string                        // text format of gnmi Path proto.
+	val         *gnmipb.TypedValue            // value for UPDATE/REPLACE operations. always nil for DELETE.
+	wantRetCode codes.Code                    // grpc return code.
+	wantConfig  string                        // config after the operation.
+}
 
-// func TestDelete(t *testing.T) {
-// 	tests := []gnmiSetTestCase{{
-// 		desc: "delete leaf node",
-// 		initConfig: `{
-// 			"system": {
-// 				"config": {
-// 					"hostname": "switch_a",
-// 					"login-banner": "Hello!"
-// 				}
-// 			}
-// 		}`,
-// 		op: gnmipb.UpdateResult_DELETE,
-// 		textPbPath: `
-// 			elem: <name: "system" >
-// 			elem: <name: "config" >
-// 			elem: <name: "login-banner" >
-// 		`,
-// 		wantRetCode: codes.OK,
-// 		wantConfig: `{
-// 			"system": {
-// 				"config": {
-// 					"hostname": "switch_a"
-// 				}
-// 			}
-// 		}`,
-// 	}, {
-// 		desc: "delete sub-tree",
-// 		initConfig: `{
-// 			"system": {
-// 				"clock": {
-// 					"config": {
-// 						"timezone-name": "Europe/Stockholm"
-// 					}
-// 				},
-// 				"config": {
-// 					"hostname": "switch_a"
-// 				}
-// 			}
-// 		}`,
-// 		op: gnmipb.UpdateResult_DELETE,
-// 		textPbPath: `
-// 			elem: <name: "system" >
-// 			elem: <name: "clock" >
-// 		`,
-// 		wantRetCode: codes.OK,
-// 		wantConfig: `{
-// 			"system": {
-// 				"config": {
-// 					"hostname": "switch_a"
-// 				}
-// 			}
-// 		}`,
-// 	}, {
-// 		desc: "delete a sub-tree with only one leaf node",
-// 		initConfig: `{
-// 			"system": {
-// 				"clock": {
-// 					"config": {
-// 						"timezone-name": "Europe/Stockholm"
-// 					}
-// 				},
-// 				"config": {
-// 					"hostname": "switch_a"
-// 				}
-// 			}
-// 		}`,
-// 		op: gnmipb.UpdateResult_DELETE,
-// 		textPbPath: `
-// 			elem: <name: "system" >
-// 			elem: <name: "clock" >
-// 			elem: <name: "config" >
-// 		`,
-// 		wantRetCode: codes.OK,
-// 		wantConfig: `{
-// 			"system": {
-// 				"config": {
-// 					"hostname": "switch_a"
-// 				}
-// 			}
-// 		}`,
-// 	}, {
-// 		desc: "delete a leaf node whose parent has only this child",
-// 		initConfig: `{
-// 			"system": {
-// 				"clock": {
-// 					"config": {
-// 						"timezone-name": "Europe/Stockholm"
-// 					}
-// 				},
-// 				"config": {
-// 					"hostname": "switch_a"
-// 				}
-// 			}
-// 		}`,
-// 		op: gnmipb.UpdateResult_DELETE,
-// 		textPbPath: `
-// 			elem: <name: "system" >
-// 			elem: <name: "clock" >
-// 			elem: <name: "config" >
-// 			elem: <name: "timezone-name" >
-// 		`,
-// 		wantRetCode: codes.OK,
-// 		wantConfig: `{
-// 			"system": {
-// 				"config": {
-// 					"hostname": "switch_a"
-// 				}
-// 			}
-// 		}`,
-// 	}, {
-// 		desc: "delete root",
-// 		initConfig: `{
-// 			"system": {
-// 				"config": {
-// 					"hostname": "switch_a"
-// 				}
-// 			}
-// 		}`,
-// 		op:          gnmipb.UpdateResult_DELETE,
-// 		wantRetCode: codes.OK,
-// 		wantConfig:  `{}`,
-// 	}, {
-// 		desc: "delete non-existing node",
-// 		initConfig: `{
-// 			"system": {
-// 				"clock": {
-// 					"config": {
-// 						"timezone-name": "Europe/Stockholm"
-// 					}
-// 				}
-// 			}
-// 		}`,
-// 		op: gnmipb.UpdateResult_DELETE,
-// 		textPbPath: `
-// 			elem: <name: "system" >
-// 			elem: <name: "clock" >
-// 			elem: <name: "config" >
-// 			elem: <name: "foo-bar" >
-// 		`,
-// 		wantRetCode: codes.OK,
-// 		wantConfig: `{
-// 			"system": {
-// 				"clock": {
-// 					"config": {
-// 						"timezone-name": "Europe/Stockholm"
-// 					}
-// 				}
-// 			}
-// 		}`,
-// 	}, {
-// 		desc: "delete node with non-existing precedent path",
-// 		initConfig: `{
-// 			"system": {
-// 				"clock": {
-// 					"config": {
-// 						"timezone-name": "Europe/Stockholm"
-// 					}
-// 				}
-// 			}
-// 		}`,
-// 		op: gnmipb.UpdateResult_DELETE,
-// 		textPbPath: `
-// 			elem: <name: "system" >
-// 			elem: <name: "clock" >
-// 			elem: <name: "foo-bar" >
-// 			elem: <name: "timezone-name" >
-// 		`,
-// 		wantRetCode: codes.OK,
-// 		wantConfig: `{
-// 			"system": {
-// 				"clock": {
-// 					"config": {
-// 						"timezone-name": "Europe/Stockholm"
-// 					}
-// 				}
-// 			}
-// 		}`,
-// 	}, {
-// 		desc: "delete node with non-existing attribute in precedent path",
-// 		initConfig: `{
-// 			"system": {
-// 				"clock": {
-// 					"config": {
-// 						"timezone-name": "Europe/Stockholm"
-// 					}
-// 				}
-// 			}
-// 		}`,
-// 		op: gnmipb.UpdateResult_DELETE,
-// 		textPbPath: `
-// 			elem: <name: "system" >
-// 			elem: <name: "clock" >
-// 			elem: <
-// 				name: "config"
-// 				key: <key: "name" value: "foo" >
-// 			>
-// 			elem: <name: "timezone-name" >`,
-// 		wantRetCode: codes.OK,
-// 		wantConfig: `{
-// 			"system": {
-// 				"clock": {
-// 					"config": {
-// 						"timezone-name": "Europe/Stockholm"
-// 					}
-// 				}
-// 			}
-// 		}`,
-// 	}, {
-// 		desc: "delete node with non-existing attribute",
-// 		initConfig: `{
-// 			"system": {
-// 				"clock": {
-// 					"config": {
-// 						"timezone-name": "Europe/Stockholm"
-// 					}
-// 				}
-// 			}
-// 		}`,
-// 		op: gnmipb.UpdateResult_DELETE,
-// 		textPbPath: `
-// 			elem: <name: "system" >
-// 			elem: <name: "clock" >
-// 			elem: <name: "config" >
-// 			elem: <
-// 				name: "timezone-name"
-// 				key: <key: "name" value: "foo" >
-// 			>
-// 			elem: <name: "timezone-name" >`,
-// 		wantRetCode: codes.OK,
-// 		wantConfig: `{
-// 			"system": {
-// 				"clock": {
-// 					"config": {
-// 						"timezone-name": "Europe/Stockholm"
-// 					}
-// 				}
-// 			}
-// 		}`,
-// 	}, {
-// 		desc: "delete leaf node with attribute in its precedent path",
-// 		initConfig: `{
-// 			"components": {
-// 				"component": [
-// 					{
-// 						"name": "swpri1-1-1",
-// 						"config": {
-// 							"name": "swpri1-1-1"
-// 						},
-// 						"state": {
-// 							"name": "swpri1-1-1",
-// 							"mfg-name": "foo bar inc."
-// 						}
-// 					}
-// 				]
-// 			}
-// 		}`,
-// 		op: gnmipb.UpdateResult_DELETE,
-// 		textPbPath: `
-// 			elem: <name: "components" >
-// 			elem: <
-// 				name: "component"
-// 				key: <key: "name" value: "swpri1-1-1" >
-// 			>
-// 			elem: <name: "state" >
-// 			elem: <name: "mfg-name" >`,
-// 		wantRetCode: codes.OK,
-// 		wantConfig: `{
-// 			"components": {
-// 				"component": [
-// 					{
-// 						"name": "swpri1-1-1",
-// 						"config": {
-// 							"name": "swpri1-1-1"
-// 						},
-// 						"state": {
-// 							"name": "swpri1-1-1"
-// 						}
-// 					}
-// 				]
-// 			}
-// 		}`,
-// 	}, {
-// 		desc: "delete sub-tree with attribute in its precedent path",
-// 		initConfig: `{
-// 			"components": {
-// 				"component": [
-// 					{
-// 						"name": "swpri1-1-1",
-// 						"config": {
-// 							"name": "swpri1-1-1"
-// 						},
-// 						"state": {
-// 							"name": "swpri1-1-1",
-// 							"mfg-name": "foo bar inc."
-// 						}
-// 					}
-// 				]
-// 			}
-// 		}`,
-// 		op: gnmipb.UpdateResult_DELETE,
-// 		textPbPath: `
-// 			elem: <name: "components" >
-// 			elem: <
-// 				name: "component"
-// 				key: <key: "name" value: "swpri1-1-1" >
-// 			>
-// 			elem: <name: "state" >`,
-// 		wantRetCode: codes.OK,
-// 		wantConfig: `{
-// 			"components": {
-// 				"component": [
-// 					{
-// 						"name": "swpri1-1-1",
-// 						"config": {
-// 							"name": "swpri1-1-1"
-// 						}
-// 					}
-// 				]
-// 			}
-// 		}`,
-// 	}, {
-// 		desc: "delete path node with attribute",
-// 		initConfig: `{
-// 			"components": {
-// 				"component": [
-// 					{
-// 						"name": "swpri1-1-1",
-// 						"config": {
-// 							"name": "swpri1-1-1"
-// 						}
-// 					},
-// 					{
-// 						"name": "swpri1-1-2",
-// 						"config": {
-// 							"name": "swpri1-1-2"
-// 						}
-// 					}
-// 				]
-// 			}
-// 		}`,
-// 		op: gnmipb.UpdateResult_DELETE,
-// 		textPbPath: `
-// 			elem: <name: "components" >
-// 			elem: <
-// 				name: "component"
-// 				key: <key: "name" value: "swpri1-1-1" >
-// 			>`,
-// 		wantRetCode: codes.OK,
-// 		wantConfig: `{
-// 			"components": {
-// 				"component": [
-// 					{
-// 						"name": "swpri1-1-2",
-// 						"config": {
-// 							"name": "swpri1-1-2"
-// 						}
-// 					}
-// 				]
-// 			}
-// 		}`,
-// 	}, {
-// 		desc: "delete path node with int type attribute",
-// 		initConfig: `{
-// 			"system": {
-// 				"openflow": {
-// 					"controllers": {
-// 						"controller": [
-// 							{
-// 								"config": {
-// 									"name": "main"
-// 								},
-// 								"connections": {
-// 									"connection": [
-// 										{
-// 											"aux-id": 0,
-// 											"config": {
-// 												"address": "192.0.2.10",
-// 												"aux-id": 0
-// 											}
-// 										}
-// 									]
-// 								},
-// 								"name": "main"
-// 							}
-// 						]
-// 					}
-// 				}
-// 			}
-// 		}`,
-// 		op: gnmipb.UpdateResult_DELETE,
-// 		textPbPath: `
-// 			elem: <name: "system" >
-// 			elem: <name: "openflow" >
-// 			elem: <name: "controllers" >
-// 			elem: <
-// 				name: "controller"
-// 				key: <key: "name" value: "main" >
-// 			>
-// 			elem: <name: "connections" >
-// 			elem: <
-// 				name: "connection"
-// 				key: <key: "aux-id" value: "0" >
-// 			>
-// 			`,
-// 		wantRetCode: codes.OK,
-// 		wantConfig: `{
-// 			"system": {
-// 				"openflow": {
-// 					"controllers": {
-// 						"controller": [
-// 							{
-// 								"config": {
-// 									"name": "main"
-// 								},
-// 								"name": "main"
-// 							}
-// 						]
-// 					}
-// 				}
-// 			}
-// 		}`,
-// 	}, {
-// 		desc: "delete leaf node with non-existing attribute value",
-// 		initConfig: `{
-// 			"components": {
-// 				"component": [
-// 					{
-// 						"name": "swpri1-1-1",
-// 						"config": {
-// 							"name": "swpri1-1-1"
-// 						}
-// 					}
-// 				]
-// 			}
-// 		}`,
-// 		op: gnmipb.UpdateResult_DELETE,
-// 		textPbPath: `
-// 			elem: <name: "components" >
-// 			elem: <
-// 				name: "component"
-// 				key: <key: "name" value: "foo" >
-// 			>`,
-// 		wantRetCode: codes.OK,
-// 		wantConfig: `{
-// 			"components": {
-// 				"component": [
-// 					{
-// 						"name": "swpri1-1-1",
-// 						"config": {
-// 							"name": "swpri1-1-1"
-// 						}
-// 					}
-// 				]
-// 			}
-// 		}`,
-// 	}, {
-// 		desc: "delete leaf node with non-existing attribute value in precedent path",
-// 		initConfig: `{
-// 			"components": {
-// 				"component": [
-// 					{
-// 						"name": "swpri1-1-1",
-// 						"config": {
-// 							"name": "swpri1-1-1"
-// 						},
-// 						"state": {
-// 							"name": "swpri1-1-1",
-// 							"mfg-name": "foo bar inc."
-// 						}
-// 					}
-// 				]
-// 			}
-// 		}`,
-// 		op: gnmipb.UpdateResult_DELETE,
-// 		textPbPath: `
-// 			elem: <name: "components" >
-// 			elem: <
-// 				name: "component"
-// 				key: <key: "name" value: "foo" >
-// 			>
-// 			elem: <name: "state" >
-// 			elem: <name: "mfg-name" >
-// 		`,
-// 		wantRetCode: codes.OK,
-// 		wantConfig: `{
-// 			"components": {
-// 				"component": [
-// 					{
-// 						"name": "swpri1-1-1",
-// 						"config": {
-// 							"name": "swpri1-1-1"
-// 						},
-// 						"state": {
-// 							"name": "swpri1-1-1",
-// 							"mfg-name": "foo bar inc."
-// 						}
-// 					}
-// 				]
-// 			}
-// 		}`,
-// 	}}
+func TestDelete(t *testing.T) {
+	tests := []gnmiSetTestCase{{
+		desc: "delete leaf node",
+		initConfig: `{
+			"system": {
+				"config": {
+					"hostname": "switch_a",
+					"login-banner": "Hello!"
+				}
+			}
+		}`,
+		op: gnmipb.UpdateResult_DELETE,
+		textPbPath: `
+			elem: <name: "system" >
+			elem: <name: "config" >
+			elem: <name: "login-banner" >
+		`,
+		wantRetCode: codes.OK,
+		wantConfig: `{
+			"system": {
+				"config": {
+					"hostname": "switch_a"
+				}
+			}
+		}`,
+	}, {
+		desc: "delete sub-tree",
+		initConfig: `{
+			"system": {
+				"clock": {
+					"config": {
+						"timezone-name": "Europe/Stockholm"
+					}
+				},
+				"config": {
+					"hostname": "switch_a"
+				}
+			}
+		}`,
+		op: gnmipb.UpdateResult_DELETE,
+		textPbPath: `
+			elem: <name: "system" >
+			elem: <name: "clock" >
+		`,
+		wantRetCode: codes.OK,
+		wantConfig: `{
+			"system": {
+				"config": {
+					"hostname": "switch_a"
+				}
+			}
+		}`,
+	}, {
+		desc: "delete a sub-tree with only one leaf node",
+		initConfig: `{
+			"system": {
+				"clock": {
+					"config": {
+						"timezone-name": "Europe/Stockholm"
+					}
+				},
+				"config": {
+					"hostname": "switch_a"
+				}
+			}
+		}`,
+		op: gnmipb.UpdateResult_DELETE,
+		textPbPath: `
+			elem: <name: "system" >
+			elem: <name: "clock" >
+			elem: <name: "config" >
+		`,
+		wantRetCode: codes.OK,
+		wantConfig: `{
+			"system": {
+				"config": {
+					"hostname": "switch_a"
+				}
+			}
+		}`,
+	}, {
+		desc: "delete a leaf node whose parent has only this child",
+		initConfig: `{
+			"system": {
+				"clock": {
+					"config": {
+						"timezone-name": "Europe/Stockholm"
+					}
+				},
+				"config": {
+					"hostname": "switch_a"
+				}
+			}
+		}`,
+		op: gnmipb.UpdateResult_DELETE,
+		textPbPath: `
+			elem: <name: "system" >
+			elem: <name: "clock" >
+			elem: <name: "config" >
+			elem: <name: "timezone-name" >
+		`,
+		wantRetCode: codes.OK,
+		wantConfig: `{
+			"system": {
+				"config": {
+					"hostname": "switch_a"
+				}
+			}
+		}`,
+	}, {
+		desc: "delete root",
+		initConfig: `{
+			"system": {
+				"config": {
+					"hostname": "switch_a"
+				}
+			}
+		}`,
+		op:          gnmipb.UpdateResult_DELETE,
+		wantRetCode: codes.OK,
+		wantConfig:  `{}`,
+	}, {
+		desc: "delete non-existing node",
+		initConfig: `{
+			"system": {
+				"clock": {
+					"config": {
+						"timezone-name": "Europe/Stockholm"
+					}
+				}
+			}
+		}`,
+		op: gnmipb.UpdateResult_DELETE,
+		textPbPath: `
+			elem: <name: "system" >
+			elem: <name: "clock" >
+			elem: <name: "config" >
+			elem: <name: "foo-bar" >
+		`,
+		wantRetCode: codes.OK,
+		wantConfig: `{
+			"system": {
+				"clock": {
+					"config": {
+						"timezone-name": "Europe/Stockholm"
+					}
+				}
+			}
+		}`,
+	}, {
+		desc: "delete node with non-existing precedent path",
+		initConfig: `{
+			"system": {
+				"clock": {
+					"config": {
+						"timezone-name": "Europe/Stockholm"
+					}
+				}
+			}
+		}`,
+		op: gnmipb.UpdateResult_DELETE,
+		textPbPath: `
+			elem: <name: "system" >
+			elem: <name: "clock" >
+			elem: <name: "foo-bar" >
+			elem: <name: "timezone-name" >
+		`,
+		wantRetCode: codes.OK,
+		wantConfig: `{
+			"system": {
+				"clock": {
+					"config": {
+						"timezone-name": "Europe/Stockholm"
+					}
+				}
+			}
+		}`,
+	}, {
+		desc: "delete node with non-existing attribute in precedent path",
+		initConfig: `{
+			"system": {
+				"clock": {
+					"config": {
+						"timezone-name": "Europe/Stockholm"
+					}
+				}
+			}
+		}`,
+		op: gnmipb.UpdateResult_DELETE,
+		textPbPath: `
+			elem: <name: "system" >
+			elem: <name: "clock" >
+			elem: <
+				name: "config"
+				key: <key: "name" value: "foo" >
+			>
+			elem: <name: "timezone-name" >`,
+		wantRetCode: codes.OK,
+		wantConfig: `{
+			"system": {
+				"clock": {
+					"config": {
+						"timezone-name": "Europe/Stockholm"
+					}
+				}
+			}
+		}`,
+	}, {
+		desc: "delete node with non-existing attribute",
+		initConfig: `{
+			"system": {
+				"clock": {
+					"config": {
+						"timezone-name": "Europe/Stockholm"
+					}
+				}
+			}
+		}`,
+		op: gnmipb.UpdateResult_DELETE,
+		textPbPath: `
+			elem: <name: "system" >
+			elem: <name: "clock" >
+			elem: <name: "config" >
+			elem: <
+				name: "timezone-name"
+				key: <key: "name" value: "foo" >
+			>
+			elem: <name: "timezone-name" >`,
+		wantRetCode: codes.OK,
+		wantConfig: `{
+			"system": {
+				"clock": {
+					"config": {
+						"timezone-name": "Europe/Stockholm"
+					}
+				}
+			}
+		}`,
+	}, {
+		desc: "delete leaf node with attribute in its precedent path",
+		initConfig: `{
+			"components": {
+				"component": [
+					{
+						"name": "swpri1-1-1",
+						"config": {
+							"name": "swpri1-1-1"
+						},
+						"state": {
+							"name": "swpri1-1-1",
+							"mfg-name": "foo bar inc."
+						}
+					}
+				]
+			}
+		}`,
+		op: gnmipb.UpdateResult_DELETE,
+		textPbPath: `
+			elem: <name: "components" >
+			elem: <
+				name: "component"
+				key: <key: "name" value: "swpri1-1-1" >
+			>
+			elem: <name: "state" >
+			elem: <name: "mfg-name" >`,
+		wantRetCode: codes.OK,
+		wantConfig: `{
+			"components": {
+				"component": [
+					{
+						"name": "swpri1-1-1",
+						"config": {
+							"name": "swpri1-1-1"
+						},
+						"state": {
+							"name": "swpri1-1-1"
+						}
+					}
+				]
+			}
+		}`,
+	}, {
+		desc: "delete sub-tree with attribute in its precedent path",
+		initConfig: `{
+			"components": {
+				"component": [
+					{
+						"name": "swpri1-1-1",
+						"config": {
+							"name": "swpri1-1-1"
+						},
+						"state": {
+							"name": "swpri1-1-1",
+							"mfg-name": "foo bar inc."
+						}
+					}
+				]
+			}
+		}`,
+		op: gnmipb.UpdateResult_DELETE,
+		textPbPath: `
+			elem: <name: "components" >
+			elem: <
+				name: "component"
+				key: <key: "name" value: "swpri1-1-1" >
+			>
+			elem: <name: "state" >`,
+		wantRetCode: codes.OK,
+		wantConfig: `{
+			"components": {
+				"component": [
+					{
+						"name": "swpri1-1-1",
+						"config": {
+							"name": "swpri1-1-1"
+						}
+					}
+				]
+			}
+		}`,
+	}, {
+		desc: "delete path node with attribute",
+		initConfig: `{
+			"components": {
+				"component": [
+					{
+						"name": "swpri1-1-1",
+						"config": {
+							"name": "swpri1-1-1"
+						}
+					},
+					{
+						"name": "swpri1-1-2",
+						"config": {
+							"name": "swpri1-1-2"
+						}
+					}
+				]
+			}
+		}`,
+		op: gnmipb.UpdateResult_DELETE,
+		textPbPath: `
+			elem: <name: "components" >
+			elem: <
+				name: "component"
+				key: <key: "name" value: "swpri1-1-1" >
+			>`,
+		wantRetCode: codes.OK,
+		wantConfig: `{
+			"components": {
+				"component": [
+					{
+						"name": "swpri1-1-2",
+						"config": {
+							"name": "swpri1-1-2"
+						}
+					}
+				]
+			}
+		}`,
+	}, {
+		desc: "delete path node with int type attribute",
+		initConfig: `{
+			"system": {
+				"openflow": {
+					"controllers": {
+						"controller": [
+							{
+								"config": {
+									"name": "main"
+								},
+								"connections": {
+									"connection": [
+										{
+											"aux-id": 0,
+											"config": {
+												"address": "192.0.2.10",
+												"aux-id": 0
+											}
+										}
+									]
+								},
+								"name": "main"
+							}
+						]
+					}
+				}
+			}
+		}`,
+		op: gnmipb.UpdateResult_DELETE,
+		textPbPath: `
+			elem: <name: "system" >
+			elem: <name: "openflow" >
+			elem: <name: "controllers" >
+			elem: <
+				name: "controller"
+				key: <key: "name" value: "main" >
+			>
+			elem: <name: "connections" >
+			elem: <
+				name: "connection"
+				key: <key: "aux-id" value: "0" >
+			>
+			`,
+		wantRetCode: codes.OK,
+		wantConfig: `{
+			"system": {
+				"openflow": {
+					"controllers": {
+						"controller": [
+							{
+								"config": {
+									"name": "main"
+								},
+								"name": "main"
+							}
+						]
+					}
+				}
+			}
+		}`,
+	}, {
+		desc: "delete leaf node with non-existing attribute value",
+		initConfig: `{
+			"components": {
+				"component": [
+					{
+						"name": "swpri1-1-1",
+						"config": {
+							"name": "swpri1-1-1"
+						}
+					}
+				]
+			}
+		}`,
+		op: gnmipb.UpdateResult_DELETE,
+		textPbPath: `
+			elem: <name: "components" >
+			elem: <
+				name: "component"
+				key: <key: "name" value: "foo" >
+			>`,
+		wantRetCode: codes.OK,
+		wantConfig: `{
+			"components": {
+				"component": [
+					{
+						"name": "swpri1-1-1",
+						"config": {
+							"name": "swpri1-1-1"
+						}
+					}
+				]
+			}
+		}`,
+	}, {
+		desc: "delete leaf node with non-existing attribute value in precedent path",
+		initConfig: `{
+			"components": {
+				"component": [
+					{
+						"name": "swpri1-1-1",
+						"config": {
+							"name": "swpri1-1-1"
+						},
+						"state": {
+							"name": "swpri1-1-1",
+							"mfg-name": "foo bar inc."
+						}
+					}
+				]
+			}
+		}`,
+		op: gnmipb.UpdateResult_DELETE,
+		textPbPath: `
+			elem: <name: "components" >
+			elem: <
+				name: "component"
+				key: <key: "name" value: "foo" >
+			>
+			elem: <name: "state" >
+			elem: <name: "mfg-name" >
+		`,
+		wantRetCode: codes.OK,
+		wantConfig: `{
+			"components": {
+				"component": [
+					{
+						"name": "swpri1-1-1",
+						"config": {
+							"name": "swpri1-1-1"
+						},
+						"state": {
+							"name": "swpri1-1-1",
+							"mfg-name": "foo bar inc."
+						}
+					}
+				]
+			}
+		}`,
+	}}
 
-// 	for _, tc := range tests {
-// 		t.Run(tc.desc, func(t *testing.T) {
-// 			runTestSet(t, model, tc)
-// 		})
-// 	}
-// }
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			runTestSet(t, model, tc)
+		})
+	}
+}
 
 // func TestReplace(t *testing.T) {
 // 	systemConfig := `{
@@ -1294,54 +1296,54 @@ func TestGetWithYdb(t *testing.T) {
 // 	}
 // }
 
-// func runTestSet(t *testing.T, m *Model, tc gnmiSetTestCase) {
-// 	// Create a new server with empty config
-// 	s, err := NewServer(m, []byte(tc.initConfig), nil)
-// 	if err != nil {
-// 		t.Fatalf("error in creating config server: %v", err)
-// 	}
+func runTestSet(t *testing.T, m *model.Model, tc gnmiSetTestCase) {
+	// Create a new server with empty config
+	s, err := NewServer(m, []byte(tc.initConfig), nil)
+	if err != nil {
+		t.Fatalf("error in creating config server: %v", err)
+	}
 
-// 	// Send request
-// 	var pbPath gnmipb.Path
-// 	if err := proto.UnmarshalText(tc.textPbPath, &pbPath); err != nil {
-// 		t.Fatalf("error in unmarshaling path: %v", err)
-// 	}
-// 	var req *gnmipb.SetRequest
-// 	switch tc.op {
-// 	case gnmipb.UpdateResult_DELETE:
-// 		req = &gnmipb.SetRequest{Delete: []*gnmipb.Path{&pbPath}}
-// 	case gnmipb.UpdateResult_REPLACE:
-// 		req = &gnmipb.SetRequest{Replace: []*gnmipb.Update{{Path: &pbPath, Val: tc.val}}}
-// 	case gnmipb.UpdateResult_UPDATE:
-// 		req = &gnmipb.SetRequest{Update: []*gnmipb.Update{{Path: &pbPath, Val: tc.val}}}
-// 	default:
-// 		t.Fatalf("invalid op type: %v", tc.op)
-// 	}
-// 	_, err = s.Set(nil, req)
+	// Send request
+	var pbPath gnmipb.Path
+	if err := proto.UnmarshalText(tc.textPbPath, &pbPath); err != nil {
+		t.Fatalf("error in unmarshaling path: %v", err)
+	}
+	var req *gnmipb.SetRequest
+	switch tc.op {
+	case gnmipb.UpdateResult_DELETE:
+		req = &gnmipb.SetRequest{Delete: []*gnmipb.Path{&pbPath}}
+	case gnmipb.UpdateResult_REPLACE:
+		req = &gnmipb.SetRequest{Replace: []*gnmipb.Update{{Path: &pbPath, Val: tc.val}}}
+	case gnmipb.UpdateResult_UPDATE:
+		req = &gnmipb.SetRequest{Update: []*gnmipb.Update{{Path: &pbPath, Val: tc.val}}}
+	default:
+		t.Fatalf("invalid op type: %v", tc.op)
+	}
+	_, err = s.Set(nil, req)
 
-// 	// Check return code
-// 	gotRetStatus, ok := status.FromError(err)
-// 	if !ok {
-// 		t.Fatal("got a non-grpc error from grpc call")
-// 	}
-// 	if gotRetStatus.Code() != tc.wantRetCode {
-// 		t.Fatalf("got return code %v, want %v\nerror message: %v", gotRetStatus.Code(), tc.wantRetCode, err)
-// 	}
+	// Check return code
+	gotRetStatus, ok := status.FromError(err)
+	if !ok {
+		t.Fatal("got a non-grpc error from grpc call")
+	}
+	if gotRetStatus.Code() != tc.wantRetCode {
+		t.Fatalf("got return code %v, want %v\nerror message: %v", gotRetStatus.Code(), tc.wantRetCode, err)
+	}
 
-// 	// Check server config
-// 	wantConfigStruct, err := NewModelData(m, []byte(tc.wantConfig))
-// 	if err != nil {
-// 		t.Fatalf("wantConfig data cannot be loaded as a config struct: %v", err)
-// 	}
-// 	wantConfigJSON, err := ygot.ConstructIETFJSON(wantConfigStruct, &ygot.RFC7951JSONConfig{})
-// 	if err != nil {
-// 		t.Fatalf("error in constructing IETF JSON tree from wanted config: %v", err)
-// 	}
-// 	gotConfigJSON, err := ygot.ConstructIETFJSON(s.config, &ygot.RFC7951JSONConfig{})
-// 	if err != nil {
-// 		t.Fatalf("error in constructing IETF JSON tree from server config: %v", err)
-// 	}
-// 	if !reflect.DeepEqual(gotConfigJSON, wantConfigJSON) {
-// 		t.Fatalf("got server config %v\nwant: %v", gotConfigJSON, wantConfigJSON)
-// 	}
-// }
+	// Check server config
+	wantConfigStruct, err := NewModelData(m, []byte(tc.wantConfig))
+	if err != nil {
+		t.Fatalf("wantConfig data cannot be loaded as a config struct: %v", err)
+	}
+	wantConfigJSON, err := ygot.ConstructIETFJSON(wantConfigStruct, &ygot.RFC7951JSONConfig{})
+	if err != nil {
+		t.Fatalf("error in constructing IETF JSON tree from wanted config: %v", err)
+	}
+	gotConfigJSON, err := ygot.ConstructIETFJSON(s.config, &ygot.RFC7951JSONConfig{})
+	if err != nil {
+		t.Fatalf("error in constructing IETF JSON tree from server config: %v", err)
+	}
+	if !reflect.DeepEqual(gotConfigJSON, wantConfigJSON) {
+		t.Fatalf("got server config %v\nwant: %v", gotConfigJSON, wantConfigJSON)
+	}
+}

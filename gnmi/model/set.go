@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"time"
 
@@ -187,11 +188,25 @@ func (m *Model) SetRollback() {
 // SetCommit commit the changed configuration.
 func (m *Model) SetCommit() error {
 	dump.Print(m.transaction)
+	// delete
 	for _, opinfo := range m.transaction.delete {
-		gs := opinfo.cvalue.(ygot.GoStruct)
-		dataAndPaths, _ := m.Find(gs, xpath.WildcardGNMIPathDot3)
+		cur := opinfo.curval.(ygot.GoStruct)
+		dataAndPaths, _ := m.Find(cur, xpath.WildcardGNMIPathDot3)
+		sort.Slice(dataAndPaths, func(i, j int) bool {
+			return dataAndPaths[i].Path < dataAndPaths[j].Path
+		})
 		for i, dataAndPath := range dataAndPaths {
-			fmt.Println("D", i, *opinfo.xpath, dataAndPath.Path)
+			fmt.Println(i, "D"+*opinfo.xpath+dataAndPath.Path)
+		}
+	}
+	// replace (delete and update)
+	// update
+	for _, opinfo := range m.transaction.update {
+		// cur := opinfo.curval.(ygot.GoStruct)
+		// dataAndPaths, _ := m.Find(cur, xpath.WildcardGNMIPathDot3)
+		new, _ := m.Find(m.dataroot, opinfo.gpath)
+		for i, dataAndPath := range new {
+			fmt.Println(i, "U"+*opinfo.xpath+dataAndPath.Path, dataAndPath.Value)
 		}
 	}
 	m.transaction = nil
