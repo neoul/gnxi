@@ -126,24 +126,28 @@ func (mo *MO) FindSchemaByRelativeGNMIPath(base interface{}, path *gnmipb.Path) 
 func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 	vgs := reflect.New(mo.GetRootType()).Interface()
 	root := vgs.(ygot.ValidatedGoStruct)
-	if startup != nil {
-		if err := mo.Unmarshal(startup, root); err != nil {
-			block, close := ydb.OpenWithTargetStruct("tempRoot", mo)
-			defer close()
-			if err := block.Parse(startup); err != nil {
-				return nil, err
-			}
-		}
-		// [FIXME] - error in creating gnmid: /device/interfaces: /device/interfaces/interface: list interface contains more than max allowed elements: 2 > 0
-		if err := root.Validate(); err != nil {
-			return nil, err
-		}
-	}
 	newMO := &MO{
 		Root:       root,
 		SchemaTree: mo.SchemaTree,
 		Unmarshal:  mo.Unmarshal,
 	}
+	if startup != nil {
+		if err := newMO.Unmarshal(startup, newMO.GetRoot()); err != nil {
+			block, close := ydb.Open("NewRoot")
+			defer close()
+			if err := block.Parse(startup); err != nil {
+				return nil, err
+			}
+			if _, err := block.Convert(ydb.RetrieveAll(), ydb.RetrieveStruct(newMO)); err != nil {
+				return nil, err
+			}
+		}
+		// [FIXME] - error in creating gnmid: /device/interfaces: /device/interfaces/interface: list interface contains more than max allowed elements: 2 > 0
+		// if err := root.Validate(); err != nil {
+		// 	return nil, err
+		// }
+	}
+
 	return newMO, nil
 }
 
