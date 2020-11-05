@@ -205,13 +205,16 @@ func (m *Model) SetCommit() error {
 		default:
 			fmt.Println(0, "D"+*opinfo.xpath)
 		}
-
 	}
-	// replace (delete and update)
+	// replace (delete and then update)
+	for _, opinfo := range m.transaction.update {
+		new, _ := m.Find(m.GetRoot(), opinfo.gpath)
+		for i, dataAndPath := range new {
+			fmt.Println(i, "R"+*opinfo.xpath+dataAndPath.Path, dataAndPath.Value)
+		}
+	}
 	// update
 	for _, opinfo := range m.transaction.update {
-		// cur := opinfo.curval.(ygot.GoStruct)
-		// dataAndPaths, _ := m.Find(cur, xpath.WildcardGNMIPathDot3)
 		new, _ := m.Find(m.GetRoot(), opinfo.gpath)
 		for i, dataAndPath := range new {
 			fmt.Println(i, "U"+*opinfo.xpath+dataAndPath.Path, dataAndPath.Value)
@@ -290,7 +293,7 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 			if err != nil {
 				return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
 			}
-			m.transaction.add(opReplace, &target.Path, targetPath, target.Value, typedValue)
+			m.transaction.add(opUpdate, &target.Path, targetPath, target.Value, typedValue)
 			err = m.WriteTypedValue(targetPath, typedValue)
 			if err != nil {
 				return err
@@ -299,7 +302,7 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 		return nil
 	}
 	tpath := xpath.ToXPath(fullpath)
-	m.transaction.add(opReplace, &tpath, fullpath, nil, typedValue)
+	m.transaction.add(opUpdate, &tpath, fullpath, nil, typedValue)
 	err = m.WriteTypedValue(fullpath, typedValue)
 	if err != nil {
 		return err
