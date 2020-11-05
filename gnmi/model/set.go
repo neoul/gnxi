@@ -1,7 +1,6 @@
 package model
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"reflect"
@@ -79,16 +78,11 @@ func (m *Model) Close() {
 	m.block.Close()
 }
 
-// GetRoot - replaces the root of the Model Data
-func (m *Model) GetRoot() ygot.ValidatedGoStruct {
-	return m.dataroot
-}
-
-// ChangeRoot - replaces the root of the Model Data
-func (m *Model) ChangeRoot(root ygot.ValidatedGoStruct) error {
-	m.dataroot = root
-	return m.block.RelaceTargetStruct(root, false)
-}
+// // ChangeRoot - replaces the root of the Model Data
+// func (m *Model) ChangeRoot(root ygot.ValidatedGoStruct) error {
+// 	m.dataroot = root
+// 	return m.block.RelaceTargetStruct(root, false)
+// }
 
 func buildSyncUpdatePath(entries []*yang.Entry, elems []*gnmipb.PathElem) string {
 	entrieslen := len(entries)
@@ -154,7 +148,7 @@ func (m *Model) RunSyncUpdate(syncIgnoreTime time.Duration, syncPaths []string) 
 // WriteTypedValue - Write the TypedValue to the model instance
 func (m *Model) WriteTypedValue(path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	schema := m.GetSchema()
-	base := m.dataroot
+	base := m.GetRoot()
 	_, _, err := ytypes.GetOrCreateNode(schema, base, path)
 	if err != nil {
 		return err
@@ -204,7 +198,7 @@ func (m *Model) SetCommit() error {
 	for _, opinfo := range m.transaction.update {
 		// cur := opinfo.curval.(ygot.GoStruct)
 		// dataAndPaths, _ := m.Find(cur, xpath.WildcardGNMIPathDot3)
-		new, _ := m.Find(m.dataroot, opinfo.gpath)
+		new, _ := m.Find(m.GetRoot(), opinfo.gpath)
 		for i, dataAndPath := range new {
 			fmt.Println(i, "U"+*opinfo.xpath+dataAndPath.Path, dataAndPath.Value)
 		}
@@ -223,7 +217,7 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 			return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
 		}
 		m.transaction.add(opDelete, &target.Path, targetPath, target.Value, nil)
-		err = ytypes.DeleteNode(m.GetSchema(), m.dataroot, targetPath)
+		err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath)
 		if err != nil {
 			return err
 		}
@@ -243,7 +237,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 				return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
 			}
 			m.transaction.add(opReplace, &target.Path, targetPath, target.Value, typedValue)
-			err = ytypes.DeleteNode(m.GetSchema(), m.dataroot, targetPath)
+			err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath)
 			if err != nil {
 				return err
 			}
@@ -384,17 +378,17 @@ func (m *Model) SetReplaceOrUpdate(jsonTree map[string]interface{}, op gnmipb.Up
 	}, nil
 }
 
-func (m *Model) toGoStruct(jsonTree map[string]interface{}) (ygot.ValidatedGoStruct, error) {
-	jsonDump, err := json.Marshal(jsonTree)
-	if err != nil {
-		return nil, fmt.Errorf("error in marshaling IETF JSON tree to bytes: %v", err)
-	}
-	root, err := m.NewRoot(jsonDump)
-	if err != nil {
-		return nil, fmt.Errorf("error in creating config struct from IETF JSON data: %v", err)
-	}
-	return root, nil
-}
+// func (m *Model) toGoStruct(jsonTree map[string]interface{}) (ygot.ValidatedGoStruct, error) {
+// 	jsonDump, err := json.Marshal(jsonTree)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("error in marshaling IETF JSON tree to bytes: %v", err)
+// 	}
+// 	root, err := m.NewRoot(jsonDump)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("error in creating config struct from IETF JSON data: %v", err)
+// 	}
+// 	return root, nil
+// }
 
 // isNIl checks if an interface is nil or its value is nil.
 func isNil(i interface{}) bool {

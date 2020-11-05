@@ -10,12 +10,13 @@ import (
 func (m *Model) Create(keys []string, key string, tag string, value string) error {
 	// fmt.Printf("m.Create %v %v %v %v {\n", keys, key, tag, value)
 	keys = append(keys, key)
-	schema := m.FindSchema(m.dataroot)
-	err := ValWrite(schema, m.dataroot, keys, value)
+	schema := m.RootSchema()
+	err := ValWrite(schema, m.GetRoot(), keys, value)
 	if err == nil {
-		ValWrite(schema, m.updatedroot, keys, value)
+		fakeRoot := m.updatedroot.GetRoot()
+		ValWrite(schema, fakeRoot, keys, value)
 		if onchangecb, ok := m.Callback.(ChangeNotification); ok {
-			onchangecb.ChangeCreated(keys, m.updatedroot)
+			onchangecb.ChangeCreated(keys, fakeRoot)
 		}
 	} else {
 		glog.Errorf("%v", err)
@@ -28,12 +29,13 @@ func (m *Model) Create(keys []string, key string, tag string, value string) erro
 func (m *Model) Replace(keys []string, key string, tag string, value string) error {
 	// fmt.Printf("m.Replace %v %v %v %v {\n", keys, key, tag, value)
 	keys = append(keys, key)
-	schema := m.FindSchema(m.dataroot)
-	err := ValWrite(schema, m.dataroot, keys, value)
+	schema := m.RootSchema()
+	err := ValWrite(schema, m.GetRoot(), keys, value)
 	if err == nil {
-		ValWrite(schema, m.updatedroot, keys, value)
+		fakeRoot := m.updatedroot.GetRoot()
+		ValWrite(schema, fakeRoot, keys, value)
 		if onchangecb, ok := m.Callback.(ChangeNotification); ok {
-			onchangecb.ChangeReplaced(keys, m.updatedroot)
+			onchangecb.ChangeReplaced(keys, fakeRoot)
 		}
 	} else {
 		glog.Errorf("%v", err)
@@ -46,8 +48,8 @@ func (m *Model) Replace(keys []string, key string, tag string, value string) err
 func (m *Model) Delete(keys []string, key string) error {
 	// fmt.Printf("m.Delete %v %v {\n", keys, key)
 	keys = append(keys, key)
-	schema := m.FindSchema(m.dataroot)
-	err := ValDelete(schema, m.dataroot, keys)
+	schema := m.RootSchema()
+	err := ValDelete(schema, m.GetRoot(), keys)
 	if err == nil {
 		if onchangecb, ok := m.Callback.(ChangeNotification); ok {
 			onchangecb.ChangeDeleted(keys)
@@ -55,7 +57,7 @@ func (m *Model) Delete(keys []string, key string) error {
 	} else {
 		glog.Errorf("%v", err)
 	}
-	// dump.Print(m.dataroot)
+	// dump.Print(m.GetRoot())
 	// fmt.Println("}")
 	return err
 }
@@ -69,14 +71,14 @@ func (m *Model) UpdateStart() {
 	}
 	m.updatedroot = updatedroot
 	if onchangecb, ok := m.Callback.(ChangeNotification); ok {
-		onchangecb.ChangeStarted(m.updatedroot)
+		onchangecb.ChangeStarted(m.updatedroot.GetRoot())
 	}
 }
 
 // UpdateEnd - indicates the end of the model instance update
 func (m *Model) UpdateEnd() {
 	if onchangecb, ok := m.Callback.(ChangeNotification); ok {
-		onchangecb.ChangeFinished(m.updatedroot)
+		onchangecb.ChangeFinished(m.updatedroot.GetRoot())
 	}
 	m.updatedroot = nil
 }

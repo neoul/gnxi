@@ -4,8 +4,10 @@ import (
 	"reflect"
 
 	"github.com/neoul/gnxi/utilities/xpath"
+	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/goyang/pkg/yang"
+	"github.com/openconfig/ygot/ygot"
 	"github.com/openconfig/ygot/ytypes"
 )
 
@@ -37,6 +39,11 @@ func (mo *MO) GetSchema() *yang.Entry {
 // GetRootType returns the reflect.Type of the root
 func (mo *MO) GetRootType() reflect.Type {
 	return reflect.TypeOf(mo.Root).Elem()
+}
+
+// GetRoot returns the Root
+func (mo *MO) GetRoot() ygot.ValidatedGoStruct {
+	return mo.Root
 }
 
 // FindSchemaByType - find the yang.Entry by Type for schema info.
@@ -115,23 +122,45 @@ func (mo *MO) FindSchemaByRelativeGNMIPath(base interface{}, path *gnmipb.Path) 
 	return findSchema(bSchema, path)
 }
 
+// NewRoot returns new root
+func (mo *MO) NewRoot(startup []byte) (*MO, error) {
+	vgs := reflect.New(mo.GetRootType()).Interface()
+	root := vgs.(ygot.ValidatedGoStruct)
+	if startup != nil {
+		if err := mo.Unmarshal(startup, root); err != nil {
+			block, close := ydb.OpenWithTargetStruct("tempRoot", mo)
+			defer close()
+			if err := block.Parse(startup); err != nil {
+				return nil, err
+			}
+		}
+		// [FIXME] - error in creating gnmid: /device/interfaces: /device/interfaces/interface: list interface contains more than max allowed elements: 2 > 0
+		if err := root.Validate(); err != nil {
+			return nil, err
+		}
+	}
+	newMO := &MO{
+		Root:       root,
+		SchemaTree: mo.SchemaTree,
+		Unmarshal:  mo.Unmarshal,
+	}
+	return newMO, nil
+}
+
 // Create constructs the Model instance
 func (mo *MO) Create(keys []string, key string, tag string, value string) error {
 	keys = append(keys, key)
-	schema := mo.FindSchema(mo.Root)
-	return ValWrite(schema, mo.Root, keys, value)
+	return ValWrite(mo.RootSchema(), mo.Root, keys, value)
 }
 
 // Replace constructs the Model instance
 func (mo *MO) Replace(keys []string, key string, tag string, value string) error {
 	keys = append(keys, key)
-	schema := mo.FindSchema(mo.Root)
-	return ValWrite(schema, mo.Root, keys, value)
+	return ValWrite(mo.RootSchema(), mo.Root, keys, value)
 }
 
 // Delete constructs the Model instance
 func (mo *MO) Delete(keys []string, key string) error {
 	keys = append(keys, key)
-	schema := mo.FindSchema(mo.Root)
-	return ValDelete(schema, mo.Root, keys)
+	return ValDelete(mo.RootSchema(), mo.Root, keys)
 }

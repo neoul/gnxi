@@ -25,7 +25,6 @@ import (
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/neoul/trie"
 	"github.com/openconfig/goyang/pkg/yang"
-	"github.com/openconfig/ygot/ygot"
 	"github.com/openconfig/ygot/ytypes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -37,45 +36,27 @@ import (
 type Model struct {
 	// *ytypes.Schema
 	*MO
-	modelData   []*gnmipb.ModelData
-	dataroot    ygot.ValidatedGoStruct // the current data tree of the Model
-	updatedroot ygot.GoStruct          // a fake data tree to represent the changed data.
+	schema    func() (*ytypes.Schema, error)
+	modelData []*gnmipb.ModelData
+	// dataroot    ygot.ValidatedGoStruct // the current data tree of the Model
 	Callback
 	block        *ydb.YDB
 	syncRequired *trie.Trie
 	transaction  *setTransaction
-}
-
-// NewRoot returns new root (ygot.ValidatedGoStruct)
-func (m *Model) NewRoot(startup []byte) (ygot.ValidatedGoStruct, error) {
-	newRoot := reflect.New(m.GetRootType()).Interface()
-	root := newRoot.(ygot.ValidatedGoStruct)
-	if startup != nil {
-		if err := m.Unmarshal(startup, root); err != nil {
-			block, close := ydb.OpenWithTargetStruct("tempRoot", m)
-			defer close()
-			if err := block.Parse(startup); err != nil {
-				return nil, err
-			}
-		}
-		// [FIXME] - error in creating gnmid: /device/interfaces: /device/interfaces/interface: list interface contains more than max allowed elements: 2 > 0
-		if err := root.Validate(); err != nil {
-			return nil, err
-		}
-	}
-	return root, nil
+	updatedroot  *MO // a fake data tree to represent the changed data.
 }
 
 // NewModel - returns new model instance based on model/gostruct.
 // - startup: The YAML startup data to populate the creating structure (gostruct).
 // - cb: Callback interface to be invoked on data change.
 func NewModel(startup []byte, cb Callback) (*Model, error) {
-	Schema, err := gostruct.Schema()
+	s, err := gostruct.Schema()
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	m := &Model{
-		MO:        (*MO)(Schema),
+		MO:        (*MO)(s),
+		schema:    gostruct.Schema,
 		modelData: gostruct.ΓModelData,
 		Callback:  cb,
 	}
@@ -97,6 +78,7 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 	}
 	m := &Model{
 		MO:        (*MO)(s),
+		schema:    schema,
 		modelData: modelData,
 		Callback:  cb,
 	}
@@ -108,13 +90,12 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 
 // initModel - initializes the created model.
 func initModel(m *Model, startup []byte) error {
-	dataroot, err := m.NewRoot(startup)
+	mo, err := m.NewRoot(startup)
 	if err != nil {
 		return err
 	}
-	m.dataroot = dataroot
+	m.MO = mo
 	m.syncRequired = trie.New()
-
 	for _, p := range srpaths {
 		// glog.Infof("sync-required-path %s", p)
 		entry := m.FindSchemaByXPath(p)
