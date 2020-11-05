@@ -147,15 +147,20 @@ func (m *Model) RunSyncUpdate(syncIgnoreTime time.Duration, syncPaths []string) 
 
 // WriteTypedValue - Write the TypedValue to the model instance
 func (m *Model) WriteTypedValue(path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
+	// var err error
 	schema := m.GetSchema()
 	base := m.GetRoot()
-	_, _, err := ytypes.GetOrCreateNode(schema, base, path)
+	tValue, tSchema, err := ytypes.GetOrCreateNode(schema, base, path)
 	if err != nil {
 		return err
 	}
-	err = ytypes.SetNode(schema, base, path, typedValue, &ytypes.InitMissingElements{})
-	if err != nil {
-		return err
+	if tSchema.IsDir() {
+		target := tValue.(ygot.GoStruct)
+		if err := m.Unmarshal(typedValue.GetJsonIetfVal(), target); err != nil {
+			return status.Errorf(codes.InvalidArgument, "unmarshaling json failed: %v", err)
+		}
+	} else { // (schema.IsLeaf() || schema.IsLeafList())
+		err = ytypes.SetNode(schema, base, path, typedValue, &ytypes.InitMissingElements{})
 	}
 	return err
 }
@@ -184,14 +189,23 @@ func (m *Model) SetCommit() error {
 	dump.Print(m.transaction)
 	// delete
 	for _, opinfo := range m.transaction.delete {
-		cur := opinfo.curval.(ygot.GoStruct)
-		dataAndPaths, _ := m.Find(cur, xpath.WildcardGNMIPathDot3)
-		sort.Slice(dataAndPaths, func(i, j int) bool {
-			return dataAndPaths[i].Path < dataAndPaths[j].Path
-		})
-		for i, dataAndPath := range dataAndPaths {
-			fmt.Println(i, "D"+*opinfo.xpath+dataAndPath.Path)
+		switch cur := opinfo.curval.(type) {
+		case ygot.GoStruct:
+			dataAndPaths, _ := m.Find(cur, xpath.WildcardGNMIPathDot3)
+			sort.Slice(dataAndPaths, func(i, j int) bool {
+				return dataAndPaths[i].Path < dataAndPaths[j].Path
+			})
+			for i, dataAndPath := range dataAndPaths {
+				if *opinfo.xpath == "/" {
+					fmt.Println(i, "D"+dataAndPath.Path)
+				} else {
+					fmt.Println(i, "D"+*opinfo.xpath+dataAndPath.Path)
+				}
+			}
+		default:
+			fmt.Println(0, "D"+*opinfo.xpath)
 		}
+
 	}
 	// replace (delete and update)
 	// update
@@ -217,9 +231,17 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 			return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
 		}
 		m.transaction.add(opDelete, &target.Path, targetPath, target.Value, nil)
-		err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath)
-		if err != nil {
-			return err
+		if len(targetPath.GetElem()) == 0 {
+			// root deletion
+			if mo, err := m.NewRoot(nil); err == nil {
+				m.MO = mo
+			} else {
+				return err
+			}
+		} else {
+			if err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

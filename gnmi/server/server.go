@@ -278,7 +278,7 @@ func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 			result = append(result, buildUpdateResultAborted(gnmipb.UpdateResult_UPDATE, path))
 			continue
 		}
-		err = s.Model.SetReplace(prefix, path, typedvalue)
+		err = s.Model.SetUpdate(prefix, path, typedvalue)
 		result = append(result, buildUpdateResult(gnmipb.UpdateResult_UPDATE, path, err))
 	}
 	if err == nil {
