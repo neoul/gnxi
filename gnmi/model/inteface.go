@@ -17,3 +17,18 @@ type ChangeNotification interface {
 	ChangeDeleted(path []string)
 	ChangeFinished(changes ygot.GoStruct)
 }
+
+// DataUpdate for Modeled Data Update
+type DataUpdate interface {
+	UpdateStart()
+	UpdateCreate(path string, value string) error
+	UpdateReplace(path string, value string) error
+	// UpdateMerge(path string, value string) error
+	UpdateDelete(path string) error
+	UpdateEnd()
+}
+
+// DataSync for Modeled Data Sync
+type DataSync interface {
+	UpdateSync(path string) error
+}
