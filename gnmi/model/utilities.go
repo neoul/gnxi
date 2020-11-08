@@ -88,10 +88,8 @@ func (dpath *dataAndPath) getAllChildren(prefix string, opt ...FindOption) ([]*d
 				continue
 			}
 			key := prefix
-			if ydb.EnableTagLookup {
-				if tag, ok := sft.Tag.Lookup(ydb.TagLookupKey); ok {
-					key = prefix + tag
-				}
+			if tag, ok := sft.Tag.Lookup(ydb.TagLookupKey); ok {
+				key = prefix + tag
 			}
 			if key == prefix {
 				key = sft.Name
