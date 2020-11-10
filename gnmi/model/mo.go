@@ -138,7 +138,7 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 			if err := block.Parse(startup); err != nil {
 				return nil, err
 			}
-			if _, err := block.Convert(ydb.RetrieveAll(), ydb.RetrieveStruct(newMO)); err != nil {
+			if err := block.Convert(newMO); err != nil {
 				return nil, err
 			}
 		}

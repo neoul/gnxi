@@ -334,7 +334,7 @@ func main() {
 	ticker := time.NewTicker(time.Second * 5)
 	// reader := bufio.NewReader(os.Stdin)
 	info := &IfInfo{Ifstats: make(map[string]*IfStats)}
-	db, dbclose := ydb.OpenWithTargetStruct("subsystem", info)
+	db, dbclose := ydb.OpenWithSync("subsystem", info)
 	defer dbclose()
 	err := db.Connect("uss://gnmi", "pub")
 	if err != nil {

@@ -57,7 +57,7 @@ func testSetDataAndPath(s string, value interface{}) *DataAndPath {
 
 func TestFindAllData(t *testing.T) {
 	root := gostruct.Device{}
-	datablock, _ := ydb.OpenWithTargetStruct("gnmi_target", &root)
+	datablock, _ := ydb.OpenWithSync("gnmi_target", &root)
 	defer datablock.Close()
 
 	r, err := os.Open("data/sample.yaml")

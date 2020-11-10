@@ -81,7 +81,7 @@ func (m *Model) Close() {
 // // ChangeRoot - replaces the root of the Model Data
 // func (m *Model) ChangeRoot(root ygot.ValidatedGoStruct) error {
 // 	m.dataroot = root
-// 	return m.block.RelaceTargetStruct(root, false)
+// 	return m.block.ReplaceTarget(root, false)
 // }
 
 func buildSyncUpdatePath(entries []*yang.Entry, elems []*gnmipb.PathElem) string {

@@ -110,7 +110,7 @@ func initModel(m *Model, startup []byte) error {
 		m.syncRequired.Add(p, sentries)
 	}
 
-	m.block, _ = ydb.OpenWithTargetStruct("gnmi.target", m)
+	m.block, _ = ydb.OpenWithSync("gnmi.target", m)
 	if !*disableYdbChannel {
 		err := m.block.Connect("uss://gnmi", "pub")
 		if err != nil {
