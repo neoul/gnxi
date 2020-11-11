@@ -93,7 +93,7 @@ func NewServer(startup []byte, disableBundling bool) (*Server, error) {
 }
 
 // NewCustomServer creates an instance of Server with given json config.
-func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*gnmipb.ModelData, startup []byte, startupIsJSON, disableBundling bool) (*Server, error) {
+func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*gnmipb.ModelData, startup []byte, disableBundling bool) (*Server, error) {
 	var err error
 	var m *model.Model
 	s := &Server{
