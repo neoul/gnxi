@@ -7,7 +7,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/kylelemons/godebug/pretty"
-	"github.com/neoul/libydb/go/ydb"
 )
 
 var (
@@ -21,15 +20,4 @@ func PrintProto(m proto.Message) {
 		return
 	}
 	fmt.Println(proto.MarshalTextString(m))
-}
-
-// PrintStruct - print the type and value of the input structure with well-formed display.
-func PrintStruct(value interface{}, excludedField ...string) {
-	ydb.DebugValueString(value, 2, func(x ...interface{}) { fmt.Print(x...) }, excludedField...)
-	fmt.Println()
-}
-
-// SprintStructInline - print the type and value of the input structure with well-formed display.
-func SprintStructInline(value interface{}, excludedField ...string) string {
-	return ydb.DebugValueStringInline(value, 0, nil, excludedField...)
 }

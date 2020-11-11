@@ -466,7 +466,6 @@ func (telesub *TelemetrySubscription) run(teleses *TelemetrySession) {
 					}
 				}
 				if telesub.Configured.SubscriptionMode == gnmipb.SubscriptionMode_ON_CHANGE {
-					// utilities.PrintStruct(event.updatedroot)
 					err := teleses.telemetryUpdate(telesub, event.updatedroot)
 					if err != nil {
 						glog.Errorf("telemetry[%d][%d].failed(%v)", telesub.SessionID, telesub.ID, err)

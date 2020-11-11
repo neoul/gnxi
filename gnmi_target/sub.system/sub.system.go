@@ -242,9 +242,6 @@ func initSyslog(db *ydb.YDB) {
 
 	go func(channel syslog.LogPartsChannel) {
 		for logParts := range channel {
-			// fmt.Println(logParts)
-			// utilities.PrintStruct(logParts)
-			// fmt.Println()
 			SendMessage(db, logParts)
 		}
 	}(channel)

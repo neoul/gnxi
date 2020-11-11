@@ -22,9 +22,11 @@ import (
 	"strings"
 
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
+	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/neoul/trie"
 	"github.com/openconfig/goyang/pkg/yang"
+	"github.com/openconfig/ygot/ygot"
 	"github.com/openconfig/ygot/ytypes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -338,6 +340,24 @@ func (m *Model) Find(base interface{}, path *gnmipb.Path, opt ...FindOption) ([]
 		}
 	}
 	return rvalues, true
+}
+
+// ListAll find and list all child values.
+func (m *Model) ListAll(base interface{}, path *gnmipb.Path, opt ...FindOption) []*DataAndPath {
+	children := []*DataAndPath{}
+	targetNodes, _ := m.Find(base, path, opt...)
+	for _, targetNode := range targetNodes {
+		switch v := targetNode.Value.(type) {
+		case ygot.GoStruct:
+			allNodes, _ := m.Find(v, xpath.WildcardGNMIPathDot3)
+			for _, node := range allNodes {
+				children = append(children, node)
+			}
+		default:
+			children = append(children, targetNode)
+		}
+	}
+	return children
 }
 
 // ValidatePathSchema - validates all schema of the gNMI Path.

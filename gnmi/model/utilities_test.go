@@ -529,10 +529,6 @@ func TestFindAllNodes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, got1 := FindAllDataNodes(tt.args.vgs, tt.args.path)
-			// for _, r := range got {
-			// 	utils.PrintStruct(r)
-			// }
-
 			if !testIsEqualList(got, tt.want) {
 				t.Errorf("FindAllDataNodes() got = %v, want %v", got, tt.want)
 				dump.Print(got)

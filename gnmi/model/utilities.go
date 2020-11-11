@@ -283,7 +283,6 @@ func findAllDataNodes(v reflect.Value, elems []*gnmipb.PathElem) []reflect.Value
 		return []reflect.Value{}
 	}
 	elem := elems[0]
-	// fmt.Println("** Search", elem.GetName(), "from", utils.SprintStructInline(v.Interface()))
 	if elem.GetName() == "*" {
 		rv := []reflect.Value{}
 		cvlist, ok := ydb.ValGetAll(v)

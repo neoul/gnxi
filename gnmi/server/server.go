@@ -298,7 +298,6 @@ func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 // Subscribe implements the Subscribe RPC in gNMI spec.
 func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 	teleses := newTelemetrySession(stream.Context(), s)
-	// utilities.PrintStruct(teleses)
 	// run stream responsor
 	teleses.waitgroup.Add(1)
 	go func(

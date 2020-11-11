@@ -146,7 +146,6 @@ func loadConfig() (*configuration, error) {
 		}
 	}
 
-	// utilities.PrintStruct(config)
 	return &config, nil
 }
 
