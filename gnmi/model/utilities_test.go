@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/neoul/gdump"
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
-	"github.com/neoul/gostruct-dump/dump"
 	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
@@ -531,8 +531,8 @@ func TestFindAllNodes(t *testing.T) {
 			got, got1 := FindAllDataNodes(tt.args.vgs, tt.args.path)
 			if !testIsEqualList(got, tt.want) {
 				t.Errorf("FindAllDataNodes() got = %v, want %v", got, tt.want)
-				dump.Print(got)
-				dump.Print(tt.want)
+				gdump.Print(got)
+				gdump.Print(tt.want)
 			}
 			if got1 != tt.want1 {
 				t.Errorf("FindAllDataNodes() got1 = %v, want %v", got1, tt.want1)

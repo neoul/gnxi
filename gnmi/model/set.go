@@ -10,7 +10,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/neoul/gnxi/utilities/xpath"
-	"github.com/neoul/gostruct-dump/dump"
 	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/value"
@@ -186,7 +185,6 @@ func (m *Model) SetRollback() {
 
 // SetCommit commit the changed configuration.
 func (m *Model) SetCommit() error {
-	dump.Print(m.transaction)
 	// delete
 	for _, opinfo := range m.transaction.delete {
 		switch cur := opinfo.curval.(type) {
