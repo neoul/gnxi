@@ -21,6 +21,29 @@ type DataAndPath struct {
 	Path  string
 }
 
+// String returns DataAndPath string
+func (dap *DataAndPath) String() string {
+	t := reflect.TypeOf(dap.Value)
+	if ydb.IsTypeScalar(t) {
+		if dap.Value == nil {
+			return fmt.Sprintf("%s=", dap.Path)
+		}
+		typedValue, err := ygot.EncodeTypedValue(dap.Value, gnmipb.Encoding_JSON_IETF)
+		if err != nil || typedValue == nil || typedValue.Value == nil {
+			return fmt.Sprintf("%s=", dap.Path)
+		}
+		v := reflect.ValueOf(typedValue.Value)
+		if v.Kind() == reflect.Ptr {
+			v = v.Elem()
+		}
+		if v.Kind() == reflect.Struct {
+			return fmt.Sprintf("%s=%v", dap.Path, v.Field(0))
+		}
+		return fmt.Sprintf("%s=%v", dap.Path, v.Elem())
+	}
+	return fmt.Sprintf("%s", dap.Path)
+}
+
 // FindAllData - finds all nodes matched to the gNMI Path.
 func FindAllData(gs ygot.GoStruct, path *gnmipb.Path) ([]*DataAndPath, bool) {
 	elems := path.GetElem()

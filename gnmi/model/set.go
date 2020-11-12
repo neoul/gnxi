@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"reflect"
-	"sort"
 	"strconv"
 	"time"
 
@@ -187,36 +186,22 @@ func (m *Model) SetRollback() {
 func (m *Model) SetCommit() error {
 	// delete
 	for _, opinfo := range m.transaction.delete {
-		switch cur := opinfo.curval.(type) {
-		case ygot.GoStruct:
-			dataAndPaths, _ := m.Find(cur, xpath.WildcardGNMIPathDot3)
-			sort.Slice(dataAndPaths, func(i, j int) bool {
-				return dataAndPaths[i].Path < dataAndPaths[j].Path
-			})
-			for i, dataAndPath := range dataAndPaths {
-				if *opinfo.xpath == "/" {
-					fmt.Println(i, "D"+dataAndPath.Path)
-				} else {
-					fmt.Println(i, "D"+*opinfo.xpath+dataAndPath.Path)
-				}
-			}
-		default:
-			fmt.Println(0, "D"+*opinfo.xpath)
-		}
+		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath}, &FindAndSort{})
+		fmt.Println("Delete curlist:", curlist)
 	}
 	// replace (delete and then update)
-	for _, opinfo := range m.transaction.update {
-		new, _ := m.Find(m.GetRoot(), opinfo.gpath)
-		for i, dataAndPath := range new {
-			fmt.Println(i, "R"+*opinfo.xpath+dataAndPath.Path, dataAndPath.Value)
-		}
+	for _, opinfo := range m.transaction.replace {
+		newlist := m.ListAll(m.GetRoot(), opinfo.gpath, &FindAndSort{})
+		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath}, &FindAndSort{})
+		fmt.Println("Replace curlist:", curlist)
+		fmt.Println("Replace newlist:", newlist)
 	}
 	// update
 	for _, opinfo := range m.transaction.update {
-		new, _ := m.Find(m.GetRoot(), opinfo.gpath)
-		for i, dataAndPath := range new {
-			fmt.Println(i, "U"+*opinfo.xpath+dataAndPath.Path, dataAndPath.Value)
-		}
+		newlist := m.ListAll(m.GetRoot(), opinfo.gpath, &FindAndSort{})
+		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath}, &FindAndSort{})
+		fmt.Println("Update curlist:", curlist)
+		fmt.Println("Update newlist:", newlist)
 	}
 	m.transaction = nil
 	return nil

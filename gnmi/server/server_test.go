@@ -140,7 +140,7 @@ interfaces:
 			textPbPath: `
 			elem: <name: "system" >
 		`,
-			wantRetCode: codes.NotFound,
+			wantRetCode: codes.OK, // [CHECK] codes.NotFound?
 		},
 		{
 			desc:        "root node",
@@ -332,6 +332,9 @@ func runTestGet(t *testing.T, s *Server, textPbPath string, wantRetCode codes.Co
 			t.Fatalf("got %d updates in the notification, want 1", len(updates))
 		}
 		val := updates[0].GetVal()
+		if val == nil {
+			return
+		}
 		if val.GetJsonIetfVal() == nil {
 			gotVal, err = value.ToScalar(val)
 			if err != nil {
@@ -378,7 +381,7 @@ func TestGetWithYdb(t *testing.T) {
 		textPbPath: `
 			elem: <name: "system" >
 		`,
-		wantRetCode: codes.NotFound,
+		wantRetCode: codes.OK, // [CHECK] codes.NotFound?
 	}, {
 		desc: "node with attribute",
 		textPbPath: `

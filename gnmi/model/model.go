@@ -289,18 +289,73 @@ func hasFindByModel(opts []FindOption) *Model {
 	return nil
 }
 
+// AddFakePrefix is a FindOption to add a prefix to DataAndPath.Path.
+type AddFakePrefix struct {
+	Prefix *gnmipb.Path
+}
+
+// IsFindOpt - AddFakePrefix is a FindOption.
+func (f *AddFakePrefix) IsFindOpt() {}
+
+func hasAddFakePrefix(opts []FindOption) *gnmipb.Path {
+	for _, o := range opts {
+		switch v := o.(type) {
+		case *AddFakePrefix:
+			return v.Prefix
+		}
+	}
+	return nil
+}
+
+func replaceAddFakePrefix(opts []FindOption, opt FindOption) []FindOption {
+	var ok bool
+	for i, o := range opts {
+		_, ok := o.(*AddFakePrefix)
+		if ok {
+			opts[i] = opt
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		opts = append(opts, opt)
+	}
+	return opts
+}
+
+// FindAndSort is used to sort the found result.
+type FindAndSort struct{}
+
+// IsFindOpt - FindAndSort is a FindOption.
+func (f *FindAndSort) IsFindOpt() {}
+
+func hasFindAndSort(opts []FindOption) bool {
+	for _, o := range opts {
+		switch o.(type) {
+		case *FindAndSort:
+			return true
+		}
+	}
+	return false
+}
+
 // Find - Find all values and paths (XPath, Value) from the base ygot.GoStruct
-func (m *Model) Find(base interface{}, path *gnmipb.Path, opt ...FindOption) ([]*DataAndPath, bool) {
+func (m *Model) Find(base interface{}, path *gnmipb.Path, opts ...FindOption) ([]*DataAndPath, bool) {
 	t := reflect.TypeOf(base)
 	entry := m.FindSchemaByType(t)
 	if entry == nil {
 		return []*DataAndPath{}, false
 	}
+	fprefix := hasAddFakePrefix(opts)
+	if fprefix == nil {
+		fprefix = xpath.EmptyGNMIPath
+	}
+	prefix := xpath.ToXPath(fprefix)
 
 	elems := path.GetElem()
 	if len(elems) <= 0 {
 		dataAndGNMIPath := &DataAndPath{
-			Value: base, Path: "/",
+			Value: base, Path: prefix,
 		}
 		return []*DataAndPath{dataAndGNMIPath}, true
 	}
@@ -322,7 +377,7 @@ func (m *Model) Find(base interface{}, path *gnmipb.Path, opt ...FindOption) ([]
 	}
 	v := reflect.ValueOf(base)
 	datapath := &dataAndPath{Value: v, Key: []string{""}}
-	founds := findAllData(datapath, elems, opt...)
+	founds := findAllData(datapath, elems, opts...)
 	// fmt.Println(founds)
 	num := len(founds)
 	if num <= 0 {
@@ -332,24 +387,44 @@ func (m *Model) Find(base interface{}, path *gnmipb.Path, opt ...FindOption) ([]
 	rvalues := make([]*DataAndPath, 0, num)
 	for _, each := range founds {
 		if each.Value.CanInterface() {
+			var p string
+			if prefix == "/" {
+				p = strings.Join(each.Key, "/")
+			} else {
+				p = prefix + strings.Join(each.Key, "/")
+			}
 			dataAndGNMIPath := &DataAndPath{
 				Value: each.Value.Interface(),
-				Path:  strings.Join(each.Key, "/"),
+				Path:  p,
 			}
 			rvalues = append(rvalues, dataAndGNMIPath)
 		}
+	}
+	if hasFindAndSort(opts) {
+		sort.Slice(rvalues, func(i, j int) bool {
+			return rvalues[i].Path < rvalues[j].Path
+		})
 	}
 	return rvalues, true
 }
 
 // ListAll find and list all child values.
-func (m *Model) ListAll(base interface{}, path *gnmipb.Path, opt ...FindOption) []*DataAndPath {
-	children := []*DataAndPath{}
-	targetNodes, _ := m.Find(base, path, opt...)
+func (m *Model) ListAll(base interface{}, path *gnmipb.Path, opts ...FindOption) []*DataAndPath {
+	var targetNodes []*DataAndPath
+	var children []*DataAndPath
+	if path == nil {
+		targetNodes, _ = m.Find(base, xpath.WildcardGNMIPathDot3, opts...)
+		return targetNodes
+	}
+
+	targetNodes, _ = m.Find(base, path, opts...)
 	for _, targetNode := range targetNodes {
 		switch v := targetNode.Value.(type) {
 		case ygot.GoStruct:
-			allNodes, _ := m.Find(v, xpath.WildcardGNMIPathDot3)
+			tpath, _ := xpath.ToGNMIPath(targetNode.Path)
+			opts = replaceAddFakePrefix(opts, &AddFakePrefix{Prefix: tpath})
+			// opts = append(opts, &AddFakePrefix{Prefix: tpath})
+			allNodes, _ := m.Find(v, xpath.WildcardGNMIPathDot3, opts...)
 			for _, node := range allNodes {
 				children = append(children, node)
 			}
