@@ -423,7 +423,6 @@ func (m *Model) ListAll(base interface{}, path *gnmipb.Path, opts ...FindOption)
 		case ygot.GoStruct:
 			tpath, _ := xpath.ToGNMIPath(targetNode.Path)
 			opts = replaceAddFakePrefix(opts, &AddFakePrefix{Prefix: tpath})
-			// opts = append(opts, &AddFakePrefix{Prefix: tpath})
 			allNodes, _ := m.Find(v, xpath.WildcardGNMIPathDot3, opts...)
 			for _, node := range allNodes {
 				children = append(children, node)

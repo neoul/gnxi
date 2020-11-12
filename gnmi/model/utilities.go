@@ -39,7 +39,7 @@ func (dap *DataAndPath) String() string {
 		if v.Kind() == reflect.Struct {
 			return fmt.Sprintf("%s=%v", dap.Path, v.Field(0))
 		}
-		return fmt.Sprintf("%s=%v", dap.Path, v.Elem())
+		return fmt.Sprintf("%s=%v", dap.Path, v)
 	}
 	return fmt.Sprintf("%s", dap.Path)
 }
