@@ -156,16 +156,20 @@ func newServer() (*server, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	var startup []byte
+	var opts []gnmiserver.Option
 	if s.config.Startup != "" {
+		var startup []byte
 		startup, err = ioutil.ReadFile(s.config.Startup)
 		if err != nil {
 			glog.Exitf("error in reading startup file: %v", err)
 		}
+		opts = append(opts, gnmiserver.Startup(startup))
 	}
 
-	s.Server, err = gnmiserver.NewServer(startup, s.config.DisableBundling)
+	if s.config.DisableBundling {
+		opts = []gnmiserver.Option{gnmiserver.DisableBundling{}}
+	}
+	s.Server, err = gnmiserver.NewServer(opts...)
 	if err != nil {
 		return nil, err
 	}

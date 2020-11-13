@@ -33,7 +33,7 @@ import (
 
 func TestCapabilities(t *testing.T) {
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(nil, false)
+	s, err := NewServer(nil)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -122,7 +122,7 @@ interfaces:
       "enabled": true
 `
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer([]byte(yamlData), false)
+	s, err := NewServer(Startup(yamlData))
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -364,7 +364,7 @@ func TestGetWithYdb(t *testing.T) {
 		glog.Exitf("error in reading config file: %v", err)
 	}
 	flag.Set("disable-ydb", "true")
-	s, err := NewServer(yamlData, false)
+	s, err := NewServer(Startup(yamlData))
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -1300,7 +1300,7 @@ func TestUpdate(t *testing.T) {
 
 func runTestSet(t *testing.T, tc gnmiSetTestCase) {
 	// Create a new server with empty config
-	s, err := NewServer([]byte(tc.initConfig), false)
+	s, err := NewServer(Startup(tc.initConfig))
 	if err != nil {
 		t.Fatalf("error in creating config server: %v", err)
 	}
@@ -1333,7 +1333,7 @@ func runTestSet(t *testing.T, tc gnmiSetTestCase) {
 	}
 
 	// Check server config
-	wantServer, err := NewServer([]byte(tc.wantConfig), false)
+	wantServer, err := NewServer(Startup(tc.wantConfig))
 	if err != nil {
 		t.Fatalf("wantConfig data cannot be loaded as a config struct: %v", err)
 	}

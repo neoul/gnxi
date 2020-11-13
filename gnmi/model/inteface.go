@@ -28,7 +28,7 @@ type StateConfig interface {
 	UpdateEnd()
 }
 
-// StateUpdate interface is used for the update of modeled data.
+// StateUpdate interface is used for the update of the modeled data.
 // The system that has source data must invoke the StateUpdate interface to update the modeled data.
 type StateUpdate interface {
 	UpdateStart()

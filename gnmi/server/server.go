@@ -44,10 +44,6 @@ var (
 	supportedEncodings = []gnmipb.Encoding{gnmipb.Encoding_JSON, gnmipb.Encoding_JSON_IETF}
 )
 
-// func init() {
-// 	ydb.SetInternalLog(ydb.LogDebug)
-// }
-
 // Server struct maintains the data structure for device config and implements the interface of gnmi server. It supports Capabilities, Get, and Set APIs.
 // Typical usage:
 //	g := grpc.NewServer()
@@ -74,17 +70,55 @@ type Server struct {
 	useAliases      bool
 }
 
+// Option is an interface that is implemented for gNMI Server startup configuration
+type Option interface {
+	// IsOption is a marker method for each Option.
+	IsOption()
+}
+
+// DisableBundling is used to disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1
+type DisableBundling struct{}
+
+// IsOption - DisableBundling is a Option.
+func (f DisableBundling) IsOption() {}
+
+func hasDisableBundling(opts []Option) bool {
+	for _, o := range opts {
+		switch o.(type) {
+		case DisableBundling:
+			return true
+		}
+	}
+	return false
+}
+
+// Startup is used to disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1
+type Startup []byte
+
+// IsOption - Startup is a Option.
+func (f Startup) IsOption() {}
+
+func hasStartup(opts []Option) []byte {
+	for _, o := range opts {
+		switch v := o.(type) {
+		case Startup:
+			return []byte(v)
+		}
+	}
+	return nil
+}
+
 // NewServer creates an instance of Server with given json config.
-func NewServer(startup []byte, disableBundling bool) (*Server, error) {
+func NewServer(opts ...Option) (*Server, error) {
 	var err error
 	var m *model.Model
 	s := &Server{
-		disableBundling: disableBundling,
+		disableBundling: hasDisableBundling(opts),
 		alias:           map[string]*gnmipb.Alias{},
 		sessions:        map[string]*Session{},
 		telemetryCtrl:   newTelemetryCB(),
 	}
-	m, err = model.NewModel(startup, s)
+	m, err = model.NewModel(hasStartup(opts), s)
 	if err != nil {
 		return nil, err
 	}
@@ -93,16 +127,16 @@ func NewServer(startup []byte, disableBundling bool) (*Server, error) {
 }
 
 // NewCustomServer creates an instance of Server with given json config.
-func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*gnmipb.ModelData, startup []byte, disableBundling bool) (*Server, error) {
+func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*gnmipb.ModelData, opts ...Option) (*Server, error) {
 	var err error
 	var m *model.Model
 	s := &Server{
-		disableBundling: disableBundling,
+		disableBundling: hasDisableBundling(opts),
 		alias:           map[string]*gnmipb.Alias{},
 		sessions:        map[string]*Session{},
 		telemetryCtrl:   newTelemetryCB(),
 	}
-	m, err = model.NewCustomModel(schema, supportedModels, startup, s)
+	m, err = model.NewCustomModel(schema, supportedModels, hasStartup(opts), s)
 	if err != nil {
 		return nil, err
 	}
