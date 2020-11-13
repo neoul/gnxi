@@ -174,7 +174,7 @@ func newServer() (*server, error) {
 }
 
 func main() {
-
+	// ydb.SetLogLevel(logrus.DebugLevel)
 	s, err := newServer()
 	if err != nil {
 		glog.Exitf("error in creating gnmid: %v", err)

@@ -99,15 +99,8 @@ func GNMIFullPath(prefix, path *gnmipb.Path) *gnmipb.Path {
 }
 
 // IsSchemaPath - returns the path is schema path.
-func IsSchemaPath(prefix, path *gnmipb.Path) bool {
+func IsSchemaPath(path *gnmipb.Path) bool {
 	isSchemaPath := true
-	if prefix != nil {
-		for _, e := range prefix.Elem {
-			if e.Key != nil && len(e.Key) > 0 {
-				isSchemaPath = false
-			}
-		}
-	}
 	if path != nil {
 		for _, e := range path.Elem {
 			if e.Key != nil && len(e.Key) > 0 {
@@ -237,9 +230,16 @@ func ToXPath(p *gnmipb.Path) string {
 }
 
 // PathElemToXPATH - returns XPath string converted from gNMI Path
-func PathElemToXPATH(elem []*gnmipb.PathElem) string {
+func PathElemToXPATH(elem []*gnmipb.PathElem, schemaPath bool) string {
 	if elem == nil {
 		return ""
+	}
+	if schemaPath {
+		pe := []string{""}
+		for _, e := range elem {
+			pe = append(pe, e.GetName())
+		}
+		return strings.Join(pe, "/")
 	}
 
 	pe := []string{""}

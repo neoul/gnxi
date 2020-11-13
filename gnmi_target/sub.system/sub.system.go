@@ -226,7 +226,7 @@ func syncStats(db *ydb.YDB, name string) {
 	}
 }
 
-func initSyslog(db *ydb.YDB) {
+func initSyslog(db *ydb.YDB) *syslog.Server {
 	channel := make(syslog.LogPartsChannel)
 	handler := syslog.NewChannelHandler(channel)
 
@@ -246,7 +246,7 @@ func initSyslog(db *ydb.YDB) {
 		}
 	}(channel)
 
-	server.Wait()
+	return server
 }
 
 const (
@@ -268,6 +268,7 @@ func SendMessage(db *ydb.YDB, logData format.LogParts) {
 		msg,
 		logData["priority"],
 		logData["tag"], "")
+	// fmt.Println(s)
 	db.Write([]byte(s))
 }
 
@@ -326,7 +327,7 @@ func SendMessage(db *ydb.YDB, logData format.LogParts) {
 // 	• tls_peer:٭string())
 
 func main() {
-	// ydb.SetInternalLog(ydb.LogDebug)
+	// ydb.SetLogLevel(logrus.DebugLevel)
 	done := make(chan bool)
 	ticker := time.NewTicker(time.Second * 5)
 	// reader := bufio.NewReader(os.Stdin)
@@ -339,7 +340,6 @@ func main() {
 		return
 	}
 	db.Serve()
-
 	go info.pollStats(db, ticker, done)
 	// for {
 	// 	// text, _ := reader.ReadString('\n')
@@ -349,5 +349,6 @@ func main() {
 	// 	// }
 	// 	time.Sleep(time.Second)
 	// }
-	initSyslog(db)
+	server := initSyslog(db)
+	server.Wait()
 }

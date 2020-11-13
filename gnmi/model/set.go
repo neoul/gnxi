@@ -89,9 +89,9 @@ func buildSyncUpdatePath(entries []*yang.Entry, elems []*gnmipb.PathElem) string
 		for i := elemslen + 1; i < entrieslen; i++ {
 			elems = append(elems, &gnmipb.PathElem{Name: entries[i].Name})
 		}
-		return xpath.PathElemToXPATH(elems)
+		return xpath.PathElemToXPATH(elems, false)
 	}
-	return xpath.PathElemToXPATH(elems[:entrieslen])
+	return xpath.PathElemToXPATH(elems[:entrieslen], false)
 }
 
 // GetSyncUpdatePath - synchronizes the data in the path

@@ -151,20 +151,17 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 	return newMO, nil
 }
 
-// Create constructs the Model instance
-func (mo *MO) Create(keys []string, key string, tag string, value string) error {
-	keys = append(keys, key)
-	return ValWrite(mo.RootSchema(), mo.Root, keys, value)
+// UpdateCreate constructs the Model instance
+func (mo *MO) UpdateCreate(path string, value string) error {
+	return ValWrite(mo.RootSchema(), mo.Root, path, value)
 }
 
-// Replace constructs the Model instance
-func (mo *MO) Replace(keys []string, key string, tag string, value string) error {
-	keys = append(keys, key)
-	return ValWrite(mo.RootSchema(), mo.Root, keys, value)
+// UpdateReplace constructs the Model instance
+func (mo *MO) UpdateReplace(path string, value string) error {
+	return ValWrite(mo.RootSchema(), mo.Root, path, value)
 }
 
-// Delete constructs the Model instance
-func (mo *MO) Delete(keys []string, key string) error {
-	keys = append(keys, key)
-	return ValDelete(mo.RootSchema(), mo.Root, keys)
+// UpdateDelete constructs the Model instance
+func (mo *MO) UpdateDelete(path string) error {
+	return ValDelete(mo.RootSchema(), mo.Root, path)
 }

@@ -6,17 +6,16 @@ import (
 	"github.com/golang/glog"
 )
 
-// Create - constructs the model instance
-func (m *Model) Create(keys []string, key string, tag string, value string) error {
-	// fmt.Printf("m.Create %v %v %v %v {\n", keys, key, tag, value)
-	keys = append(keys, key)
+// UpdateCreate - constructs the model instance for newly created data
+func (m *Model) UpdateCreate(path string, value string) error {
+	// fmt.Printf("m.UpdateCreate %v %v {\n", path, value)
 	schema := m.RootSchema()
-	err := ValWrite(schema, m.GetRoot(), keys, value)
+	err := ValWrite(schema, m.GetRoot(), path, value)
 	if err == nil {
 		fakeRoot := m.updatedroot.GetRoot()
-		ValWrite(schema, fakeRoot, keys, value)
+		ValWrite(schema, fakeRoot, path, value)
 		if onchangecb, ok := m.Callback.(ChangeNotification); ok {
-			onchangecb.ChangeCreated(keys, fakeRoot)
+			onchangecb.ChangeCreated(path, fakeRoot)
 		}
 	} else {
 		glog.Errorf("%v", err)
@@ -25,17 +24,16 @@ func (m *Model) Create(keys []string, key string, tag string, value string) erro
 	return err
 }
 
-// Replace - constructs the model instance
-func (m *Model) Replace(keys []string, key string, tag string, value string) error {
-	// fmt.Printf("m.Replace %v %v %v %v {\n", keys, key, tag, value)
-	keys = append(keys, key)
+// UpdateReplace - constructs the model instance
+func (m *Model) UpdateReplace(path string, value string) error {
+	// fmt.Printf("m.UpdateCreate %v %v {\n", path, value)
 	schema := m.RootSchema()
-	err := ValWrite(schema, m.GetRoot(), keys, value)
+	err := ValWrite(schema, m.GetRoot(), path, value)
 	if err == nil {
 		fakeRoot := m.updatedroot.GetRoot()
-		ValWrite(schema, fakeRoot, keys, value)
+		ValWrite(schema, fakeRoot, path, value)
 		if onchangecb, ok := m.Callback.(ChangeNotification); ok {
-			onchangecb.ChangeReplaced(keys, fakeRoot)
+			onchangecb.ChangeReplaced(path, fakeRoot)
 		}
 	} else {
 		glog.Errorf("%v", err)
@@ -44,20 +42,18 @@ func (m *Model) Replace(keys []string, key string, tag string, value string) err
 	return err
 }
 
-// Delete - constructs the model instance
-func (m *Model) Delete(keys []string, key string) error {
-	// fmt.Printf("m.Delete %v %v {\n", keys, key)
-	keys = append(keys, key)
+// UpdateDelete - constructs the model instance
+func (m *Model) UpdateDelete(path string) error {
+	// fmt.Printf("m.UpdateDelete %v {\n", path)
 	schema := m.RootSchema()
-	err := ValDelete(schema, m.GetRoot(), keys)
+	err := ValDelete(schema, m.GetRoot(), path)
 	if err == nil {
 		if onchangecb, ok := m.Callback.(ChangeNotification); ok {
-			onchangecb.ChangeDeleted(keys)
+			onchangecb.ChangeDeleted(path)
 		}
 	} else {
 		glog.Errorf("%v", err)
 	}
-	// dump.Print(m.GetRoot())
 	// fmt.Println("}")
 	return err
 }

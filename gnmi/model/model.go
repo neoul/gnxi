@@ -36,7 +36,6 @@ import (
 
 // Model contains the model data and GoStruct information for the device.
 type Model struct {
-	// *ytypes.Schema
 	*MO
 	schema    func() (*ytypes.Schema, error)
 	modelData []*gnmipb.ModelData

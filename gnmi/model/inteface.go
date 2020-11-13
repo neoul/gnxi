@@ -12,23 +12,34 @@ type Callback interface {
 type ChangeNotification interface {
 	Callback
 	ChangeStarted(changes ygot.GoStruct)
-	ChangeCreated(path []string, changes ygot.GoStruct)
-	ChangeReplaced(path []string, changes ygot.GoStruct)
-	ChangeDeleted(path []string)
+	ChangeCreated(path string, changes ygot.GoStruct)
+	ChangeReplaced(path string, changes ygot.GoStruct)
+	ChangeDeleted(path string)
 	ChangeFinished(changes ygot.GoStruct)
 }
 
-// DataUpdate for Modeled Data Update
-type DataUpdate interface {
+// StateConfig interface is invoked by the Model to inform configuration changes to the system.
+// The system must configure the configuration changes and then update the modeled data via StateUpdate interface.
+type StateConfig interface {
 	UpdateStart()
 	UpdateCreate(path string, value string) error
 	UpdateReplace(path string, value string) error
-	// UpdateMerge(path string, value string) error
 	UpdateDelete(path string) error
 	UpdateEnd()
 }
 
-// DataSync for Modeled Data Sync
-type DataSync interface {
+// StateUpdate interface is used for the update of modeled data.
+// The system that has source data must invoke the StateUpdate interface to update the modeled data.
+type StateUpdate interface {
+	UpdateStart()
+	UpdateCreate(path string, value string) error
+	UpdateReplace(path string, value string) error
+	UpdateDelete(path string) error
+	UpdateEnd()
+}
+
+// StateUpdateSync interface is used to synchonize the modeled data.
+// The system must update the data requested by the path if it is invoked.
+type StateUpdateSync interface {
 	UpdateSync(path string) error
 }

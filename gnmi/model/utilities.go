@@ -603,12 +603,12 @@ func FindSchemaByGNMIPath(baseSchema *yang.Entry, base interface{}, path *gnmipb
 }
 
 // ValWrite - Write the value to the model instance
-func ValWrite(schema *yang.Entry, base ygot.GoStruct, keys []string, value string) error {
-	path, err := xpath.SlicePathToGNMIPath(keys)
+func ValWrite(schema *yang.Entry, base ygot.GoStruct, path string, value string) error {
+	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
 		return err
 	}
-	target, tSchema, err := ytypes.GetOrCreateNode(schema, base, path)
+	target, tSchema, err := ytypes.GetOrCreateNode(schema, base, gpath)
 	if err != nil {
 		return err
 	}
@@ -627,7 +627,7 @@ func ValWrite(schema *yang.Entry, base ygot.GoStruct, keys []string, value strin
 		if err != nil {
 			return status.Errorf(codes.Internal, "encoding error(%s)", err.Error())
 		}
-		err = ytypes.SetNode(schema, base, path, typedValue, &ytypes.InitMissingElements{})
+		err = ytypes.SetNode(schema, base, gpath, typedValue, &ytypes.InitMissingElements{})
 		if err != nil {
 			return err
 		}
@@ -636,20 +636,21 @@ func ValWrite(schema *yang.Entry, base ygot.GoStruct, keys []string, value strin
 }
 
 // ValDelete - Delete the value from the model instance
-func ValDelete(schema *yang.Entry, base ygot.GoStruct, keys []string) error {
-	path, err := xpath.SlicePathToGNMIPath(keys)
+func ValDelete(schema *yang.Entry, base ygot.GoStruct, path string) error {
+	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
 		return err
 	}
-	tSchema := FindSchemaByGNMIPath(schema, base, path)
+	tSchema := FindSchemaByGNMIPath(schema, base, gpath)
 	if tSchema == nil {
-		return status.Errorf(codes.Internal, "schema (%s) not found", xpath.ToXPath(path))
+		return status.Errorf(codes.Internal, "schema (%s) not found", path)
 	}
 	// The key field deletion is not allowed.
 	if pSchema := tSchema.Parent; pSchema != nil {
-		if strings.Contains(pSchema.Key, keys[len(keys)-1]) {
+		elem := gpath.GetElem()
+		if strings.Contains(pSchema.Key, elem[len(elem)-1].GetName()) {
 			return nil
 		}
 	}
-	return ytypes.DeleteNode(schema, base, path)
+	return ytypes.DeleteNode(schema, base, gpath)
 }

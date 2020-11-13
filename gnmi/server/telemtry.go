@@ -85,7 +85,7 @@ func (tcb *telemetryCtrl) unregisterTelemetry(telesub *TelemetrySubscription) {
 	}
 }
 
-// ChangeStarted - callback for Telemetry subscription on data changes
+// ChangeNotification.ChangeStarted - callback for Telemetry subscription on data changes
 func (tcb *telemetryCtrl) ChangeStarted(changes ygot.GoStruct) {
 	tcb.mutex.RLock()
 	defer tcb.mutex.RUnlock()
@@ -95,14 +95,20 @@ func (tcb *telemetryCtrl) ChangeStarted(changes ygot.GoStruct) {
 	tcb.deletedList = map[TelemetryID]pathSet{}
 }
 
-// ChangeCreated - callback for Telemetry subscription on data changes
-func (tcb *telemetryCtrl) ChangeCreated(slicepath []string, changes ygot.GoStruct) {
-	tcb.mutex.RLock()
-	defer tcb.mutex.RUnlock()
-	datapath := "/" + strings.Join(slicepath, "/")
-	glog.Infof("telectrl.onchange(created).path(%s)", datapath)
-	for i := len(slicepath); i >= 0; i-- {
-		path := "/" + strings.Join(slicepath[:i], "/")
+func (tcb *telemetryCtrl) updateTelemetryCtrl(datapath string, gpath *gnmipb.Path, op int, isSchema bool) {
+	var targetList map[TelemetryID]pathSet
+	switch op {
+	case 'C':
+		targetList = tcb.createdList
+	case 'R':
+		targetList = tcb.replacedList
+	case 'D':
+		targetList = tcb.deletedList
+	default:
+		return
+	}
+	for i := len(gpath.GetElem()); i >= 0; i-- {
+		path := xpath.PathElemToXPATH(gpath.GetElem()[:i], isSchema)
 		subgroup, ok := tcb.lookupTeleSub[path]
 		if ok {
 			for _, telesub := range subgroup {
@@ -112,11 +118,11 @@ func (tcb *telemetryCtrl) ChangeCreated(slicepath []string, changes ygot.GoStruc
 				glog.Infof("telemetry[%d][%d].onchange(created).matched.path(%s)",
 					telesub.SessionID, telesub.ID, path)
 				tcb.readyToUpdate[telesub.ID] = telesub
-				if tcb.createdList[telesub.ID] == nil {
-					tcb.createdList[telesub.ID] = pathSet{datapath: &present{duplicates: 1}}
+				if targetList[telesub.ID] == nil {
+					targetList[telesub.ID] = pathSet{datapath: &present{duplicates: 1}}
 				} else {
-					if p, ok := tcb.createdList[telesub.ID][datapath]; !ok {
-						tcb.createdList[telesub.ID][datapath] = &present{duplicates: 1}
+					if p, ok := targetList[telesub.ID][datapath]; !ok {
+						targetList[telesub.ID][datapath] = &present{duplicates: 1}
 					} else {
 						p.duplicates++
 					}
@@ -124,150 +130,54 @@ func (tcb *telemetryCtrl) ChangeCreated(slicepath []string, changes ygot.GoStruc
 			}
 		}
 	}
-	sliceschema, isEqual := xpath.ToSchemaSlicePath(slicepath)
-	if !isEqual {
-		for i := len(sliceschema); i >= 0; i-- {
-			path := "/" + strings.Join(sliceschema[:i], "/")
-			subgroup, ok := tcb.lookupTeleSub[path]
-			if ok {
-				for _, telesub := range subgroup {
-					if telesub.IsPolling {
-						continue
-					}
-					glog.Infof("telemetry[%d][%d].onchange(created).matched.path(%s)",
-						telesub.SessionID, telesub.ID, path)
-					tcb.readyToUpdate[telesub.ID] = telesub
-					if tcb.createdList[telesub.ID] == nil {
-						tcb.createdList[telesub.ID] = pathSet{datapath: &present{duplicates: 1}}
-					} else {
-						if p, ok := tcb.createdList[telesub.ID][datapath]; !ok {
-							tcb.createdList[telesub.ID][datapath] = &present{duplicates: 1}
-						} else {
-							p.duplicates++
-						}
-					}
-				}
-			}
-		}
+}
+
+// ChangeNotification.ChangeCreated - callback for Telemetry subscription on data changes
+func (tcb *telemetryCtrl) ChangeCreated(datapath string, changes ygot.GoStruct) {
+	tcb.mutex.RLock()
+	defer tcb.mutex.RUnlock()
+	glog.Infof("telectrl.onchange(created).path(%s)", datapath)
+	gpath, err := xpath.ToGNMIPath(datapath)
+	if err != nil {
+		return
+	}
+	tcb.updateTelemetryCtrl(datapath, gpath, 'C', false)
+	if !xpath.IsSchemaPath(gpath) {
+		tcb.updateTelemetryCtrl(datapath, gpath, 'C', true)
 	}
 }
 
-// ChangeReplaced - callback for Telemetry subscription on data changes
-func (tcb *telemetryCtrl) ChangeReplaced(slicepath []string, changes ygot.GoStruct) {
+// ChangeNotification.ChangeReplaced - callback for Telemetry subscription on data changes
+func (tcb *telemetryCtrl) ChangeReplaced(datapath string, changes ygot.GoStruct) {
 	tcb.mutex.RLock()
 	defer tcb.mutex.RUnlock()
-	datapath := "/" + strings.Join(slicepath, "/")
 	glog.Infof("telectrl.onchange(replaced).path(%s)", datapath)
-	for i := len(slicepath); i >= 0; i-- {
-		path := "/" + strings.Join(slicepath[:i], "/")
-		subgroup, ok := tcb.lookupTeleSub[path]
-		if ok {
-			for _, telesub := range subgroup {
-				if telesub.IsPolling {
-					continue
-				}
-				glog.Infof("telemetry[%d][%d].onchange(replaced).matched.path(%s)",
-					telesub.SessionID, telesub.ID, path)
-				tcb.readyToUpdate[telesub.ID] = telesub
-				if tcb.replacedList[telesub.ID] == nil {
-					tcb.replacedList[telesub.ID] = pathSet{datapath: &present{duplicates: 1}}
-				} else {
-					if p, ok := tcb.replacedList[telesub.ID][datapath]; !ok {
-						tcb.replacedList[telesub.ID][datapath] = &present{duplicates: 1}
-					} else {
-						p.duplicates++
-						// fmt.Println("p.duplicates++", p.duplicates)
-					}
-				}
-			}
-		}
+	gpath, err := xpath.ToGNMIPath(datapath)
+	if err != nil {
+		return
 	}
-	sliceschema, isEqual := xpath.ToSchemaSlicePath(slicepath)
-	if !isEqual {
-		for i := len(sliceschema); i >= 0; i-- {
-			path := "/" + strings.Join(sliceschema[:i], "/")
-			subgroup, ok := tcb.lookupTeleSub[path]
-			if ok {
-				for _, telesub := range subgroup {
-					if telesub.IsPolling {
-						continue
-					}
-					glog.Infof("telemetry[%d][%d].onchange(replaced).matched.path(%s)",
-						telesub.SessionID, telesub.ID, path)
-					tcb.readyToUpdate[telesub.ID] = telesub
-					if tcb.replacedList[telesub.ID] == nil {
-						tcb.replacedList[telesub.ID] = pathSet{datapath: &present{duplicates: 1}}
-					} else {
-						if p, ok := tcb.replacedList[telesub.ID][datapath]; !ok {
-							tcb.replacedList[telesub.ID][datapath] = &present{duplicates: 1}
-						} else {
-							p.duplicates++
-						}
-					}
-				}
-			}
-		}
+	tcb.updateTelemetryCtrl(datapath, gpath, 'R', false)
+	if !xpath.IsSchemaPath(gpath) {
+		tcb.updateTelemetryCtrl(datapath, gpath, 'R', true)
 	}
 }
 
-// ChangeDeleted - callback for Telemetry subscription on data changes
-func (tcb *telemetryCtrl) ChangeDeleted(slicepath []string) {
+// ChangeNotification.ChangeDeleted - callback for Telemetry subscription on data changes
+func (tcb *telemetryCtrl) ChangeDeleted(datapath string) {
 	tcb.mutex.RLock()
 	defer tcb.mutex.RUnlock()
-	datapath := "/" + strings.Join(slicepath, "/")
-	glog.Infof("telectrl.onchange(deleted).path(%s)", datapath)
-	for i := len(slicepath); i >= 0; i-- {
-		path := "/" + strings.Join(slicepath[:i], "/")
-		subgroup, ok := tcb.lookupTeleSub[path]
-		if ok {
-			for _, telesub := range subgroup {
-				if telesub.IsPolling {
-					continue
-				}
-				glog.Infof("telemetry[%d][%d].onchange(deleted).matched.path(%s)",
-					telesub.SessionID, telesub.ID, path)
-				tcb.readyToUpdate[telesub.ID] = telesub
-				if tcb.deletedList[telesub.ID] == nil {
-					tcb.deletedList[telesub.ID] = pathSet{datapath: &present{duplicates: 1}}
-				} else {
-					if p, ok := tcb.deletedList[telesub.ID][datapath]; !ok {
-						tcb.deletedList[telesub.ID][datapath] = &present{duplicates: 1}
-					} else {
-						p.duplicates++
-					}
-				}
-			}
-		}
+	glog.Infof("telectrl.onchange(created).path(%s)", datapath)
+	gpath, err := xpath.ToGNMIPath(datapath)
+	if err != nil {
+		return
 	}
-	sliceschema, isEqual := xpath.ToSchemaSlicePath(slicepath)
-	if !isEqual {
-		for i := len(sliceschema); i >= 0; i-- {
-			path := "/" + strings.Join(sliceschema[:i], "/")
-			subgroup, ok := tcb.lookupTeleSub[path]
-			if ok {
-				for _, telesub := range subgroup {
-					if telesub.IsPolling {
-						continue
-					}
-					glog.Infof("telemetry[%d][%d].onchange(deleted).matched.path(%s)",
-						telesub.SessionID, telesub.ID, path)
-					tcb.readyToUpdate[telesub.ID] = telesub
-					if tcb.deletedList[telesub.ID] == nil {
-						tcb.deletedList[telesub.ID] = pathSet{datapath: &present{duplicates: 1}}
-					} else {
-						if p, ok := tcb.deletedList[telesub.ID][datapath]; !ok {
-							tcb.deletedList[telesub.ID][datapath] = &present{duplicates: 1}
-						} else {
-							p.duplicates++
-						}
-					}
-				}
-			}
-		}
+	tcb.updateTelemetryCtrl(datapath, gpath, 'D', false)
+	if !xpath.IsSchemaPath(gpath) {
+		tcb.updateTelemetryCtrl(datapath, gpath, 'D', true)
 	}
 }
 
-// OnStarted - callback for Telemetry subscription on data changes
+// ChangeNotification.ChangeFinished - callback for Telemetry subscription on data changes
 func (tcb *telemetryCtrl) ChangeFinished(changes ygot.GoStruct) {
 	tcb.mutex.RLock()
 	defer tcb.mutex.RUnlock()
