@@ -4,13 +4,8 @@ import (
 	"github.com/openconfig/ygot/ygot"
 )
 
-// Callback is the interface invoked by the model to notify the model data change.
-type Callback interface {
-}
-
 // ChangeNotification is an interface to be invoked upon the model data changes
 type ChangeNotification interface {
-	Callback
 	ChangeStarted(changes ygot.GoStruct)
 	ChangeCreated(path string, changes ygot.GoStruct)
 	ChangeReplaced(path string, changes ygot.GoStruct)
@@ -18,7 +13,7 @@ type ChangeNotification interface {
 	ChangeFinished(changes ygot.GoStruct)
 }
 
-// StateConfig interface is invoked by the Model to inform configuration changes to the system.
+// StateConfig is an interface that must be implemented to the data source (e.g. system)
 // The system must configure the configuration changes and then update the modeled data via StateUpdate interface.
 type StateConfig interface {
 	UpdateStart()
@@ -28,8 +23,8 @@ type StateConfig interface {
 	UpdateEnd()
 }
 
-// StateUpdate interface is used for the update of the modeled data.
-// The system that has source data must invoke the StateUpdate interface to update the modeled data.
+// StateUpdate is an interface implemented to the MO & Model struct in gnmi/model.
+// The StateUpdate must be invoked to update the state of a Model instance.
 type StateUpdate interface {
 	UpdateStart()
 	UpdateCreate(path string, value string) error

@@ -11,16 +11,21 @@ import (
 	"github.com/openconfig/ygot/ytypes"
 )
 
-// MO (ModelObject) for wrapping ygot.GoStruct and schema
+// MO (ModeledObject) for wrapping ygot.GoStruct and schema
 type MO ytypes.Schema
 
-// RootSchema returns the YANG entry schema corresponding to the type of the root within
-// the schema.
+// RootSchema returns the YANG entry schema corresponding to the type
+// of the root within the schema.
 func (mo *MO) RootSchema() *yang.Entry {
 	return mo.SchemaTree[reflect.TypeOf(mo.Root).Elem().Name()]
 }
 
-// GetName returns the name of the model.
+// GetSchema returns the root yang.Entry of the model.
+func (mo *MO) GetSchema() *yang.Entry {
+	return mo.RootSchema()
+}
+
+// GetName returns the name of the MO.
 func (mo *MO) GetName() string {
 	// schema := (*ytypes.Schema)(mo)
 	// rootSchema := schema.RootSchema()
@@ -29,11 +34,6 @@ func (mo *MO) GetName() string {
 		return "unknown"
 	}
 	return rootSchema.Name
-}
-
-// GetSchema - returns the root yang.Entry of the model.
-func (mo *MO) GetSchema() *yang.Entry {
-	return mo.RootSchema()
 }
 
 // GetRootType returns the reflect.Type of the root
@@ -122,7 +122,7 @@ func (mo *MO) FindSchemaByRelativeGNMIPath(base interface{}, path *gnmipb.Path) 
 	return findSchema(bSchema, path)
 }
 
-// NewRoot returns new root
+// NewRoot returns new MO (ModeledObject)
 func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 	vgs := reflect.New(mo.GetRootType()).Interface()
 	root := vgs.(ygot.ValidatedGoStruct)
@@ -151,17 +151,17 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 	return newMO, nil
 }
 
-// UpdateCreate constructs the Model instance
+// UpdateCreate is a function of StateUpdate Interface to add a new value to the path of the MO.
 func (mo *MO) UpdateCreate(path string, value string) error {
 	return ValWrite(mo.RootSchema(), mo.Root, path, value)
 }
 
-// UpdateReplace constructs the Model instance
+// UpdateReplace is a function of StateUpdate Interface to replace the value in the path of the MO.
 func (mo *MO) UpdateReplace(path string, value string) error {
 	return ValWrite(mo.RootSchema(), mo.Root, path, value)
 }
 
-// UpdateDelete constructs the Model instance
+// UpdateDelete is a function of StateUpdate Interface to delete the value in the path of the MO.
 func (mo *MO) UpdateDelete(path string) error {
 	return ValDelete(mo.RootSchema(), mo.Root, path)
 }

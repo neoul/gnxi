@@ -70,7 +70,7 @@ type Server struct {
 	useAliases      bool
 }
 
-// Option is an interface that is implemented for gNMI Server startup configuration
+// Option is an interface used in the gNMI Server configuration
 type Option interface {
 	// IsOption is a marker method for each Option.
 	IsOption()
@@ -80,7 +80,7 @@ type Option interface {
 type DisableBundling struct{}
 
 // IsOption - DisableBundling is a Option.
-func (f DisableBundling) IsOption() {}
+func (o DisableBundling) IsOption() {}
 
 func hasDisableBundling(opts []Option) bool {
 	for _, o := range opts {
@@ -92,17 +92,43 @@ func hasDisableBundling(opts []Option) bool {
 	return false
 }
 
-// Startup is used to disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1
+// Startup is JSON or YAML bytes to be loaded at startup.
 type Startup []byte
 
 // IsOption - Startup is a Option.
-func (f Startup) IsOption() {}
+func (o Startup) IsOption() {}
 
 func hasStartup(opts []Option) []byte {
 	for _, o := range opts {
 		switch v := o.(type) {
 		case Startup:
 			return []byte(v)
+		}
+	}
+	return nil
+}
+
+// SetCallback includes a callback interface to configure or execute
+// gNMI Set to the system. The callback interface consists of a set of
+// the following functions that must be implemented by the system.
+//
+// 	UpdateStart() // Set starts.
+// 	UpdateCreate(path string, value string) error // Set creates new config data.
+// 	UpdateReplace(path string, value string) error // Set replaces config data.
+// 	UpdateDelete(path string) error // Set deletes config data.
+// 	UpdateEnd() // Set ends.
+type SetCallback struct {
+	model.StateConfig
+}
+
+// IsOption - SetCallback is a Option.
+func (o SetCallback) IsOption() {}
+
+func hasSetCallback(opts []Option) model.StateConfig {
+	for _, o := range opts {
+		switch v := o.(type) {
+		case SetCallback:
+			return v.StateConfig
 		}
 	}
 	return nil
