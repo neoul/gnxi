@@ -39,11 +39,12 @@ import (
 )
 
 var (
-	configFile      = pflag.StringP("config", "c", "", "configuration file for gnmid; search gnmid.conf from $PWD, /etc and $HOME/.gnmid if not specified")
-	bindAddr        = pflag.StringP("bind-address", "b", ":10161", "bind to address:port")
-	startup         = pflag.String("startup", "", "IETF JSON or YAML file for target startup data")
-	disableBundling = pflag.Bool("disable-update-bundling", false, "disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1")
-	help            = pflag.BoolP("help", "h", false, "help for gnmi_target")
+	configFile        = pflag.StringP("config", "c", "", "configuration file for gnmid; search gnmid.conf from $PWD, /etc and $HOME/.gnmid if not specified")
+	bindAddr          = pflag.StringP("bind-address", "b", ":10161", "bind to address:port")
+	startup           = pflag.String("startup", "", "IETF JSON or YAML file for target startup data")
+	disableBundling   = pflag.Bool("disable-update-bundling", false, "disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1")
+	disableYdbChannel = flag.Bool("disable-ydb", false, "disable YAML Datablock interface")
+	help              = pflag.BoolP("help", "h", false, "help for gnmi_target")
 )
 
 type server struct {
@@ -140,10 +141,10 @@ func loadConfig() (*configuration, error) {
 		pflag.Set("cheat-code", config.CheatCode)
 	}
 
-	syncReq := viper.Get("sync-required-path")
+	syncReq := viper.Get("sync-path")
 	if syncReqList, ok := syncReq.([]interface{}); ok {
 		for i := range syncReqList {
-			flag.Set("sync-required-path", syncReqList[i].(string))
+			flag.Set("sync-path", syncReqList[i].(string))
 		}
 	}
 
@@ -181,9 +182,11 @@ func newServer() (*server, func(), error) {
 		close()
 		return nil, nil, err
 	}
-	if err = db.Connect("uss://gnmi", "pub"); err != nil {
-		close()
-		return nil, nil, err
+	if !s.config.DisableYDB {
+		if err = db.Connect("uss://gnmi", "pub"); err != nil {
+			close()
+			return nil, nil, err
+		}
 	}
 	db.SetTarget(s.Model, true)
 	db.Serve()

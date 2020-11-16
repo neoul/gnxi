@@ -270,8 +270,7 @@ func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 
 	prefix := req.GetPrefix()
 	paths := req.GetPath()
-	syncPaths := s.Model.GetSyncUpdatePath(prefix, paths)
-	s.Model.RunSyncUpdate(time.Second*3, syncPaths)
+	s.Model.RequestStateSync(prefix, paths)
 
 	s.Model.RLock()
 	defer s.Model.RUnlock()

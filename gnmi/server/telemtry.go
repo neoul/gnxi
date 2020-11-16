@@ -538,8 +538,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *gnmipb.SubscribeReques
 	for _, updateEntry := range subList {
 		paths = append(paths, updateEntry.Path)
 	}
-	syncPaths := s.Model.GetSyncUpdatePath(prefix, paths)
-	s.Model.RunSyncUpdate(time.Second*3, syncPaths)
+	s.Model.RequestStateSync(prefix, paths)
 
 	s.Model.RLock()
 	defer s.Model.RUnlock()
@@ -629,8 +628,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 		// alias = xxx
 	}
 	if telesub.Configured.SubscriptionMode != gnmipb.SubscriptionMode_ON_CHANGE {
-		syncPaths := s.Model.GetSyncUpdatePath(prefix, telesub.Paths)
-		s.Model.RunSyncUpdate(time.Second*3, syncPaths)
+		s.Model.RequestStateSync(prefix, telesub.Paths)
 	}
 
 	s.Model.RLock()

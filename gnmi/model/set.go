@@ -1,111 +1,15 @@
 package model
 
 import (
-	"flag"
 	"fmt"
-	"time"
 
-	"github.com/golang/glog"
 	"github.com/neoul/gnxi/utilities/xpath"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/openconfig/goyang/pkg/yang"
 	"github.com/openconfig/ygot/ygot"
 	"github.com/openconfig/ygot/ytypes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-// var (
-// 	defaultSyncRequiredSchemaPath = []string{
-// 		"/interfaces/interface/state/counters",
-// 		"/interfaces/interface/time-sensitive-networking/state/statistics",
-// 		"/interfaces/interface/radio-over-ethernet/state/statistics",
-// 	}
-// )
-
-type syncRequiredPaths []string
-
-func (srpaths *syncRequiredPaths) String() string {
-	return fmt.Sprint(*srpaths)
-}
-
-func (srpaths *syncRequiredPaths) Set(value string) error {
-	*srpaths = append(*srpaths, value)
-	return nil
-}
-
-var srpaths syncRequiredPaths
-
-var disableYdbChannel = flag.Bool("disable-ydb", false, "disable YAML Datablock interface")
-
-func init() {
-	flag.Var(&srpaths, "sync-required-path", "path required YDB sync operation to update data")
-	// flag.Set("sync-required-path", "/interfaces/interface/state/counters")
-}
-
-func buildSyncUpdatePath(entries []*yang.Entry, elems []*gnmipb.PathElem) string {
-	entrieslen := len(entries)
-	elemslen := len(elems)
-	if entrieslen > elemslen {
-		for i := elemslen + 1; i < entrieslen; i++ {
-			elems = append(elems, &gnmipb.PathElem{Name: entries[i].Name})
-		}
-		return xpath.PathElemToXPATH(elems, false)
-	}
-	return xpath.PathElemToXPATH(elems[:entrieslen], false)
-}
-
-// GetSyncUpdatePath - synchronizes the data in the path
-func (m *Model) GetSyncUpdatePath(prefix *gnmipb.Path, paths []*gnmipb.Path) []string {
-	syncPaths := make([]string, 0, 8)
-	for _, path := range paths {
-		// glog.Info(":::SynUpdate:::", xpath.ToXPath(xpath.GNMIFullPath(prefix, path)))
-		fullpath := xpath.GNMIFullPath(prefix, path)
-		if len(fullpath.GetElem()) > 0 {
-			schemaPaths, ok := m.FindSchemaPaths(fullpath)
-			if !ok {
-				continue
-			}
-			for _, spath := range schemaPaths {
-				requiredPath := m.syncRequired.PrefixSearch(spath)
-				for _, rpath := range requiredPath {
-					if n, ok := m.syncRequired.Find(rpath); ok {
-						entires := n.Meta().([]*yang.Entry)
-						if entires != nil {
-							syncPaths = append(syncPaths, buildSyncUpdatePath(entires, fullpath.GetElem()))
-						}
-					}
-				}
-				if rpath, ok := m.syncRequired.FindLongestMatch(spath); ok {
-					if n, ok := m.syncRequired.Find(rpath); ok {
-						entires := n.Meta().([]*yang.Entry)
-						if entires != nil {
-							syncPaths = append(syncPaths, buildSyncUpdatePath(entires, fullpath.GetElem()))
-						}
-					}
-				}
-			}
-		} else {
-			requiredPath := m.syncRequired.PrefixSearch("/")
-			syncPaths = append(syncPaths, requiredPath...)
-		}
-	}
-	return syncPaths
-}
-
-// RunSyncUpdate - synchronizes & update the data in the path. It locks model data.
-func (m *Model) RunSyncUpdate(syncIgnoreTime time.Duration, syncPaths []string) {
-	if syncPaths == nil || len(syncPaths) == 0 {
-		return
-	}
-	for _, sp := range syncPaths {
-		glog.Infof("sync-update %s", sp)
-	}
-	if m.StateSync != nil {
-		// m.UpdateSync(syncIgnoreTime, true, syncPaths...)
-		// m.UpdateSync(syncPaths...)
-	}
-}
 
 // WriteTypedValue - Write the TypedValue to the model instance
 func (m *Model) WriteTypedValue(path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {

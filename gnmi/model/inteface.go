@@ -22,8 +22,8 @@ type ChangeNotification interface {
 	ChangeFinished(changes ygot.GoStruct)
 }
 
-// StateConfig is an interface that must be implemented to the data source (e.g. system)
-// The system must configure the configuration changes and then update the modeled data via StateUpdate interface.
+// StateConfig is an interface that must be implemented to the external system.
+// The external system must configure the configuration changes and then update the modeled data via StateUpdate interface.
 type StateConfig interface {
 	StateCallback
 }
@@ -34,8 +34,8 @@ type StateUpdate interface {
 	StateCallback
 }
 
-// StateSync interface is used to synchonize the modeled data.
-// The system must update the data requested by the path if it is invoked.
+// StateSync interface is used to request the sync of the modeled data.
+// The external system must update the data requested by the path if it is invoked.
 type StateSync interface {
 	UpdateSync(path string) error
 }

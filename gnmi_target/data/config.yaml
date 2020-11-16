@@ -6,7 +6,7 @@ tls:
   ca-cert: "../pki/ca.crt"
   server-cert: "../pki/server.crt"
   server-key: "../pki/server.key"
-sync-required-path:
+sync-path:
   - "/interfaces/interface/state/counters"
   - "/interfaces/interface/time-sensitive-networking/state/statistics"
   - "/interfaces/interface/radio-over-ethernet/state/statistics"

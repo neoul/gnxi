@@ -13,7 +13,7 @@ go build
   --v 2 \
   --cheat-code admin \
   --bind-address :10161 \
-  --sync-required-path /interfaces/interface/state/counters \
+  --sync-path /interfaces/interface/state/counters \
   --server-key ../pki/server.key \
   --server-cert ../pki/server.crt \
   --ca-cert ../pki/ca.crt \
