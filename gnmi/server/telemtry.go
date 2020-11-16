@@ -257,8 +257,8 @@ func newTelemetrySession(ctx context.Context, s *Server) *TelemetrySession {
 }
 
 func (teleses *TelemetrySession) stopTelemetrySession() {
-	block := teleses.server.Model.GetYDB()
-	delDynamicTeleSubscriptionInfo(block, teleses)
+	// block := teleses.server.Model.GetYDB()
+	// delDynamicTeleSubscriptionInfo(block, teleses)
 	teleses.lock()
 	defer teleses.unlock()
 	for _, telesub := range teleses.Telesub {
@@ -916,8 +916,8 @@ func processSR(teleses *TelemetrySession, req *gnmipb.SubscribeRequest) error {
 			startingList = append(startingList, telesub)
 		}
 	}
-	block := teleses.server.Model.GetYDB()
-	addDynamicTeleSubscriptionInfo(block, startingList)
+	// block := teleses.server.Model.GetYDB()
+	// addDynamicTeleSubscriptionInfo(block, startingList)
 	for _, telesub := range startingList {
 		err = teleses.StartTelmetryUpdate(telesub)
 		if err != nil {

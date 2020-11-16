@@ -34,8 +34,8 @@ type StateUpdate interface {
 	StateCallback
 }
 
-// StateUpdateSync interface is used to synchonize the modeled data.
+// StateSync interface is used to synchonize the modeled data.
 // The system must update the data requested by the path if it is invoked.
-type StateUpdateSync interface {
+type StateSync interface {
 	UpdateSync(path string) error
 }

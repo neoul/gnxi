@@ -146,6 +146,8 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 		// if err := root.Validate(); err != nil {
 		// 	return nil, err
 		// }
+
+		// [FIXME] - SetCommit
 	}
 
 	return newMO, nil

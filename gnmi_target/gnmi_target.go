@@ -150,12 +150,17 @@ func loadConfig() (*configuration, error) {
 	return &config, nil
 }
 
-func newServer() (*server, error) {
+func newServer() (*server, func(), error) {
 	var err error
+	// ydb.SetLogLevel(logrus.DebugLevel)
+	ydb.SetInternalLog(ydb.LogDebug)
+	db, close := ydb.Open("gnmi.target")
+
 	s := server{}
 	s.config, err = loadConfig()
 	if err != nil {
-		return nil, err
+		close()
+		return nil, nil, err
 	}
 	var opts []gnmiserver.Option
 	if s.config.Startup != "" {
@@ -170,21 +175,27 @@ func newServer() (*server, error) {
 	if s.config.DisableBundling {
 		opts = []gnmiserver.Option{gnmiserver.DisableBundling{}}
 	}
+	opts = append(opts, gnmiserver.GetCallback{StateSync: db})
 	s.Server, err = gnmiserver.NewServer(opts...)
 	if err != nil {
-		return nil, err
+		close()
+		return nil, nil, err
 	}
-
-	return &s, nil
+	if err = db.Connect("uss://gnmi", "pub"); err != nil {
+		close()
+		return nil, nil, err
+	}
+	db.SetTarget(s.Model, true)
+	db.Serve()
+	return &s, close, nil
 }
 
 func main() {
-	// ydb.SetLogLevel(logrus.DebugLevel)
-	ydb.SetInternalLog(ydb.LogDebug)
-	s, err := newServer()
+	s, close, err := newServer()
 	if err != nil {
 		glog.Exitf("error in creating gnmid: %v", err)
 	}
+	defer close()
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Supported models:\n")
 		for _, m := range s.Model.SupportedModels() {
@@ -194,7 +205,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults()
 	}
-	defer s.Close()
+
 	opts := credentials.ServerCredentials(s.config.TLS.CAFile,
 		s.config.TLS.CertFile, s.config.TLS.KeyFile,
 		s.config.TLS.SkipVerify, s.config.NoTLS)

@@ -7,7 +7,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/neoul/gnxi/utilities/xpath"
-	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/goyang/pkg/yang"
 	"github.com/openconfig/ygot/ygot"
@@ -36,41 +35,12 @@ func (srpaths *syncRequiredPaths) Set(value string) error {
 }
 
 var srpaths syncRequiredPaths
+
 var disableYdbChannel = flag.Bool("disable-ydb", false, "disable YAML Datablock interface")
 
 func init() {
 	flag.Var(&srpaths, "sync-required-path", "path required YDB sync operation to update data")
 	// flag.Set("sync-required-path", "/interfaces/interface/state/counters")
-}
-
-// GetYDB - Get YAML DataBlock
-func (m *Model) GetYDB() *ydb.YDB {
-	return m.block
-}
-
-// Lock - Lock the YDB instance for use.
-func (m *Model) Lock() {
-	m.block.Lock()
-}
-
-// Unlock - Unlock of the YDB instance.
-func (m *Model) Unlock() {
-	m.block.Unlock()
-}
-
-// RLock - Lock the YDB instance for read.
-func (m *Model) RLock() {
-	m.block.RLock()
-}
-
-// RUnlock - Unlock of the YDB instance for read.
-func (m *Model) RUnlock() {
-	m.block.RUnlock()
-}
-
-// Close the connected YDB instance
-func (m *Model) Close() {
-	m.block.Close()
 }
 
 func buildSyncUpdatePath(entries []*yang.Entry, elems []*gnmipb.PathElem) string {
@@ -131,7 +101,10 @@ func (m *Model) RunSyncUpdate(syncIgnoreTime time.Duration, syncPaths []string) 
 	for _, sp := range syncPaths {
 		glog.Infof("sync-update %s", sp)
 	}
-	m.block.SyncTo(syncIgnoreTime, true, syncPaths...)
+	if m.StateSync != nil {
+		// m.UpdateSync(syncIgnoreTime, true, syncPaths...)
+		// m.UpdateSync(syncPaths...)
+	}
 }
 
 // WriteTypedValue - Write the TypedValue to the model instance
@@ -185,6 +158,10 @@ func newDataAndPathMap(in []*DataAndPath) map[string]*DataAndPath {
 
 // SetCommit commit the changed configuration.
 func (m *Model) SetCommit() error {
+	if m.StateConfig == nil {
+		m.transaction = nil
+		return fmt.Errorf("no StateConfig interface configured")
+	}
 	m.StateConfig.UpdateStart()
 	// delete
 	for _, opinfo := range m.transaction.delete {
@@ -324,23 +301,27 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 	return nil
 }
 
-type stateConfigDefault struct{}
+type emptySource struct{}
 
-func (sc *stateConfigDefault) UpdateStart() {
-	// fmt.Println("StateConfig.UpdateStart")
+func (sc *emptySource) UpdateStart() {
+	// fmt.Println("emptySource.UpdateStart")
 }
-func (sc *stateConfigDefault) UpdateCreate(path string, value string) error {
-	// fmt.Println("StateConfig.UpdateCreate", "C", path, value)
+func (sc *emptySource) UpdateCreate(path string, value string) error {
+	// fmt.Println("emptySource.UpdateCreate", "C", path, value)
 	return nil
 }
-func (sc *stateConfigDefault) UpdateReplace(path string, value string) error {
-	// fmt.Println("StateConfig.UpdateReplace", "R", path, value)
+func (sc *emptySource) UpdateReplace(path string, value string) error {
+	// fmt.Println("emptySource.UpdateReplace", "R", path, value)
 	return nil
 }
-func (sc *stateConfigDefault) UpdateDelete(path string) error {
-	// fmt.Println("StateConfig.UpdateDelete", "D", path)
+func (sc *emptySource) UpdateDelete(path string) error {
+	// fmt.Println("emptySource.UpdateDelete", "D", path)
 	return nil
 }
-func (sc *stateConfigDefault) UpdateEnd() {
-	// fmt.Println("StateConfig.UpdateEnd")
+func (sc *emptySource) UpdateEnd() {
+	// fmt.Println("emptySource.UpdateEnd")
+}
+func (sc *emptySource) UpdateSync(path string) error {
+	// fmt.Println("emptySource.UpdateSync", path)
+	return nil
 }

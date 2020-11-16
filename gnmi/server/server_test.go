@@ -17,7 +17,6 @@ package server
 
 import (
 	"encoding/json"
-	"flag"
 	"io/ioutil"
 	"reflect"
 	"testing"
@@ -32,12 +31,10 @@ import (
 )
 
 func TestCapabilities(t *testing.T) {
-	flag.Set("disable-ydb", "true")
 	s, err := NewServer(nil)
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
-	defer s.Close()
 	resp, err := s.Capabilities(nil, &gnmipb.CapabilityRequest{})
 	t.Log(resp)
 	if err != nil {
@@ -121,12 +118,11 @@ interfaces:
       "description": "n/a"
       "enabled": true
 `
-	flag.Set("disable-ydb", "true")
+
 	s, err := NewServer(Startup(yamlData))
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
-	defer s.Close()
 
 	tds := []struct {
 		desc        string
@@ -363,12 +359,11 @@ func TestGetWithYdb(t *testing.T) {
 	if err != nil {
 		glog.Exitf("error in reading config file: %v", err)
 	}
-	flag.Set("disable-ydb", "true")
+
 	s, err := NewServer(Startup(yamlData))
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
-	defer s.Close()
 
 	tds := []struct {
 		desc        string

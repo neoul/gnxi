@@ -134,6 +134,28 @@ func hasSetCallback(opts []Option) model.StateConfig {
 	return nil
 }
 
+// GetCallback includes a callback interface to get the config state data
+// from the system. The callback interface consists of a following function
+// that must be implemented by the system.
+//
+// 	UpdateSync(path string) error
+type GetCallback struct {
+	model.StateSync
+}
+
+// IsOption - GetCallback is a Option.
+func (o GetCallback) IsOption() {}
+
+func hasGetCallback(opts []Option) model.StateSync {
+	for _, o := range opts {
+		switch v := o.(type) {
+		case GetCallback:
+			return v.StateSync
+		}
+	}
+	return nil
+}
+
 // NewServer creates an instance of Server with given json config.
 func NewServer(opts ...Option) (*Server, error) {
 	var err error
@@ -144,11 +166,14 @@ func NewServer(opts ...Option) (*Server, error) {
 		sessions:        map[string]*Session{},
 		telemetryCtrl:   newTelemetryCB(),
 	}
-	m, err = model.NewModel(hasStartup(opts), s, hasSetCallback(opts))
+	m, err = model.NewModel(s, hasSetCallback(opts), hasGetCallback(opts))
 	if err != nil {
 		return nil, err
 	}
 	s.Model = m
+	if startup := hasStartup(opts); startup != nil {
+		m.Load(startup)
+	}
 	return s, nil
 }
 
@@ -163,17 +188,15 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 		telemetryCtrl:   newTelemetryCB(),
 	}
 
-	m, err = model.NewCustomModel(schema, supportedModels, hasStartup(opts), s, hasSetCallback(opts))
+	m, err = model.NewCustomModel(schema, supportedModels, s, hasSetCallback(opts), hasGetCallback(opts))
 	if err != nil {
 		return nil, err
 	}
 	s.Model = m
+	if startup := hasStartup(opts); startup != nil {
+		m.Load(startup)
+	}
 	return s, nil
-}
-
-// Close the connected YDB instance
-func (s *Server) Close() {
-	s.Model.Close()
 }
 
 // checkEncoding checks whether encoding and models are supported by the server. Return error if anything is unsupported.
