@@ -144,7 +144,7 @@ func NewServer(opts ...Option) (*Server, error) {
 		sessions:        map[string]*Session{},
 		telemetryCtrl:   newTelemetryCB(),
 	}
-	m, err = model.NewModel(hasStartup(opts), s)
+	m, err = model.NewModel(hasStartup(opts), s, hasSetCallback(opts))
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,8 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 		sessions:        map[string]*Session{},
 		telemetryCtrl:   newTelemetryCB(),
 	}
-	m, err = model.NewCustomModel(schema, supportedModels, hasStartup(opts), s)
+
+	m, err = model.NewCustomModel(schema, supportedModels, hasStartup(opts), s, hasSetCallback(opts))
 	if err != nil {
 		return nil, err
 	}

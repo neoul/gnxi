@@ -173,12 +173,28 @@ func (m *Model) SetRollback() {
 
 }
 
+func filterDuplicates(in []*DataAndPath) []*DataAndPath {
+	filter := make(map[string]bool)
+	new := make([]*DataAndPath, 0, len(in))
+	for _, entry := range in {
+		if _, found := filter[entry.Path]; !found {
+			filter[entry.Path] = true
+			new = append(new, entry)
+		}
+	}
+	return new
+}
+
 // SetCommit commit the changed configuration.
 func (m *Model) SetCommit() error {
+	m.StateConfig.UpdateStart()
 	// delete
 	for _, opinfo := range m.transaction.delete {
 		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath}, &FindAndSort{})
-		fmt.Println("Delete curlist:", curlist)
+		curlist = filterDuplicates(curlist)
+		for i := range curlist {
+			m.StateConfig.UpdateDelete(curlist[i].Path)
+		}
 	}
 	// replace (delete and then update)
 	for _, opinfo := range m.transaction.replace {
@@ -194,6 +210,7 @@ func (m *Model) SetCommit() error {
 		fmt.Println("Update curlist:", curlist)
 		fmt.Println("Update newlist:", newlist)
 	}
+	m.StateConfig.UpdateEnd()
 	m.transaction = nil
 	return nil
 }

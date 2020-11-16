@@ -312,7 +312,7 @@ func TestFindAllNodes(t *testing.T) {
 		t.Fatalf("test data load failed: %v", err)
 	}
 
-	model, err := NewModel(b, nil)
+	model, err := NewModel(b, nil, nil)
 	root := model.GetRoot().(*gostruct.Device)
 
 	type args struct {

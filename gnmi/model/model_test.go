@@ -22,7 +22,7 @@ import (
 )
 
 func TestModel_FindSchemaPaths(t *testing.T) {
-	m, err := NewModel(nil, nil)
+	m, err := NewModel(nil, nil, nil)
 	if err != nil {
 		t.Errorf("%v", err)
 		return
