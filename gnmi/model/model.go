@@ -94,6 +94,9 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 
 // initModel - initializes the created model.
 func initModel(m *Model, startup []byte) error {
+	if m.StateConfig == nil {
+		m.StateConfig = &stateConfigDefault{}
+	}
 	mo, err := m.NewRoot(startup)
 	if err != nil {
 		return err

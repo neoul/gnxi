@@ -21,6 +21,29 @@ type DataAndPath struct {
 	Path  string
 }
 
+// GetValueString returns DataAndPath string
+func (dap *DataAndPath) GetValueString() string {
+	t := reflect.TypeOf(dap.Value)
+	if ydb.IsTypeScalar(t) {
+		if dap.Value == nil {
+			return ""
+		}
+		typedValue, err := ygot.EncodeTypedValue(dap.Value, gnmipb.Encoding_JSON_IETF)
+		if err != nil || typedValue == nil || typedValue.Value == nil {
+			return ""
+		}
+		v := reflect.ValueOf(typedValue.Value)
+		if v.Kind() == reflect.Ptr {
+			v = v.Elem()
+		}
+		if v.Kind() == reflect.Struct {
+			return fmt.Sprintf("%v", v.Field(0))
+		}
+		return fmt.Sprintf("%v", v)
+	}
+	return ""
+}
+
 // String returns DataAndPath string
 func (dap *DataAndPath) String() string {
 	t := reflect.TypeOf(dap.Value)

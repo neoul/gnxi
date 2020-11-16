@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	gnmiserver "github.com/neoul/gnxi/gnmi/server"
+	"github.com/neoul/libydb/go/ydb"
 
 	"github.com/neoul/gnxi/utilities/netsession"
 	"github.com/neoul/gnxi/utilities/server/credentials"
@@ -179,6 +180,7 @@ func newServer() (*server, error) {
 
 func main() {
 	// ydb.SetLogLevel(logrus.DebugLevel)
+	ydb.SetInternalLog(ydb.LogDebug)
 	s, err := newServer()
 	if err != nil {
 		glog.Exitf("error in creating gnmid: %v", err)

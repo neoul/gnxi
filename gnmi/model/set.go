@@ -173,16 +173,14 @@ func (m *Model) SetRollback() {
 
 }
 
-func filterDuplicates(in []*DataAndPath) []*DataAndPath {
-	filter := make(map[string]bool)
-	new := make([]*DataAndPath, 0, len(in))
+func newDataAndPathMap(in []*DataAndPath) map[string]*DataAndPath {
+	m := make(map[string]*DataAndPath)
 	for _, entry := range in {
-		if _, found := filter[entry.Path]; !found {
-			filter[entry.Path] = true
-			new = append(new, entry)
+		if _, found := m[entry.Path]; !found {
+			m[entry.Path] = entry
 		}
 	}
-	return new
+	return m
 }
 
 // SetCommit commit the changed configuration.
@@ -191,24 +189,49 @@ func (m *Model) SetCommit() error {
 	// delete
 	for _, opinfo := range m.transaction.delete {
 		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath}, &FindAndSort{})
-		curlist = filterDuplicates(curlist)
-		for i := range curlist {
-			m.StateConfig.UpdateDelete(curlist[i].Path)
+		for p := range newDataAndPathMap(curlist) {
+			m.StateConfig.UpdateDelete(p)
 		}
 	}
 	// replace (delete and then update)
 	for _, opinfo := range m.transaction.replace {
 		newlist := m.ListAll(m.GetRoot(), opinfo.gpath, &FindAndSort{})
 		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath}, &FindAndSort{})
-		fmt.Println("Replace curlist:", curlist)
-		fmt.Println("Replace newlist:", newlist)
+		cur := newDataAndPathMap(curlist)
+		new := newDataAndPathMap(newlist)
+		// Get difference between cur and new for C/R/D operations
+		for p := range cur {
+			if _, exists := new[p]; !exists {
+				m.StateConfig.UpdateDelete(p)
+			}
+		}
+		for p, entry := range new {
+			if _, exists := cur[p]; exists {
+				m.StateConfig.UpdateReplace(p, entry.GetValueString())
+			} else {
+				m.StateConfig.UpdateCreate(p, entry.GetValueString())
+			}
+		}
 	}
 	// update
 	for _, opinfo := range m.transaction.update {
 		newlist := m.ListAll(m.GetRoot(), opinfo.gpath, &FindAndSort{})
 		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath}, &FindAndSort{})
-		fmt.Println("Update curlist:", curlist)
-		fmt.Println("Update newlist:", newlist)
+		cur := newDataAndPathMap(curlist)
+		new := newDataAndPathMap(newlist)
+		// Get difference between cur and new for C/R/D operations
+		for p := range cur {
+			if _, exists := new[p]; !exists {
+				m.StateConfig.UpdateDelete(p)
+			}
+		}
+		for p, entry := range new {
+			if _, exists := cur[p]; exists {
+				m.StateConfig.UpdateReplace(p, entry.GetValueString())
+			} else {
+				m.StateConfig.UpdateCreate(p, entry.GetValueString())
+			}
+		}
 	}
 	m.StateConfig.UpdateEnd()
 	m.transaction = nil
@@ -299,4 +322,25 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 		return err
 	}
 	return nil
+}
+
+type stateConfigDefault struct{}
+
+func (sc *stateConfigDefault) UpdateStart() {
+	// fmt.Println("StateConfig.UpdateStart")
+}
+func (sc *stateConfigDefault) UpdateCreate(path string, value string) error {
+	// fmt.Println("StateConfig.UpdateCreate", "C", path, value)
+	return nil
+}
+func (sc *stateConfigDefault) UpdateReplace(path string, value string) error {
+	// fmt.Println("StateConfig.UpdateReplace", "R", path, value)
+	return nil
+}
+func (sc *stateConfigDefault) UpdateDelete(path string) error {
+	// fmt.Println("StateConfig.UpdateDelete", "D", path)
+	return nil
+}
+func (sc *stateConfigDefault) UpdateEnd() {
+	// fmt.Println("StateConfig.UpdateEnd")
 }

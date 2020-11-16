@@ -133,12 +133,12 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 	}
 	if startup != nil {
 		if err := newMO.Unmarshal(startup, newMO.GetRoot()); err != nil {
-			block, close := ydb.Open("NewRoot")
+			datablock, close := ydb.Open("NewRoot")
 			defer close()
-			if err := block.Parse(startup); err != nil {
+			if err := datablock.Parse(startup); err != nil {
 				return nil, err
 			}
-			if err := block.Convert(newMO); err != nil {
+			if err := datablock.Convert(newMO); err != nil {
 				return nil, err
 			}
 		}

@@ -80,7 +80,3 @@ func (t *setTransaction) add(optype opType, xpath *string, gpath *gnmipb.Path, c
 		t.update[opinfo.getKey()] = opinfo
 	}
 }
-
-func (t *setTransaction) commit() {
-
-}
