@@ -174,7 +174,7 @@ func newServer() (*server, func(), error) {
 	}
 
 	if s.config.DisableBundling {
-		opts = []gnmiserver.Option{gnmiserver.DisableBundling{}}
+		opts = append(opts, gnmiserver.DisableBundling{})
 	}
 	opts = append(opts, gnmiserver.GetCallback{StateSync: db})
 	s.Server, err = gnmiserver.NewServer(opts...)
@@ -182,14 +182,14 @@ func newServer() (*server, func(), error) {
 		close()
 		return nil, nil, err
 	}
+	db.SetTarget(s.Model, true)
 	if !s.config.DisableYDB {
 		if err = db.Connect("uss://gnmi", "pub"); err != nil {
 			close()
 			return nil, nil, err
 		}
+		db.Serve()
 	}
-	db.SetTarget(s.Model, true)
-	db.Serve()
 	return &s, close, nil
 }
 

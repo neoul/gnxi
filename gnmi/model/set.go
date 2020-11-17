@@ -128,7 +128,7 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 		if err != nil {
 			return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
 		}
-		m.transaction.add(opDelete, &target.Path, targetPath, target.Value, nil)
+		m.transaction.add(opDelete, &target.Path, targetPath, target.Value)
 		if len(targetPath.GetElem()) == 0 {
 			// root deletion
 			if mo, err := m.NewRoot(nil); err == nil {
@@ -156,7 +156,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 			if err != nil {
 				return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
 			}
-			m.transaction.add(opReplace, &target.Path, targetPath, target.Value, typedValue)
+			m.transaction.add(opReplace, &target.Path, targetPath, target.Value)
 			err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath)
 			if err != nil {
 				return err
@@ -169,7 +169,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 		return nil
 	}
 	tpath := xpath.ToXPath(fullpath)
-	m.transaction.add(opReplace, &tpath, fullpath, nil, typedValue)
+	m.transaction.add(opReplace, &tpath, fullpath, nil)
 	err = m.WriteTypedValue(fullpath, typedValue)
 	if err != nil {
 		return err
@@ -188,7 +188,7 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 			if err != nil {
 				return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
 			}
-			m.transaction.add(opUpdate, &target.Path, targetPath, target.Value, typedValue)
+			m.transaction.add(opUpdate, &target.Path, targetPath, target.Value)
 			err = m.WriteTypedValue(targetPath, typedValue)
 			if err != nil {
 				return err
@@ -197,7 +197,7 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 		return nil
 	}
 	tpath := xpath.ToXPath(fullpath)
-	m.transaction.add(opUpdate, &tpath, fullpath, nil, typedValue)
+	m.transaction.add(opUpdate, &tpath, fullpath, nil)
 	err = m.WriteTypedValue(fullpath, typedValue)
 	if err != nil {
 		return err
@@ -205,27 +205,27 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 	return nil
 }
 
-type emptySource struct{}
+type emptyStateConfig struct{}
 
-func (sc *emptySource) UpdateStart() {
-	// fmt.Println("emptySource.UpdateStart")
+func (sc *emptyStateConfig) UpdateStart() {
+	fmt.Println("emptyStateConfig.UpdateStart")
 }
-func (sc *emptySource) UpdateCreate(path string, value string) error {
-	// fmt.Println("emptySource.UpdateCreate", "C", path, value)
+func (sc *emptyStateConfig) UpdateCreate(path string, value string) error {
+	fmt.Println("emptyStateConfig.UpdateCreate", "C", path, value)
 	return nil
 }
-func (sc *emptySource) UpdateReplace(path string, value string) error {
-	// fmt.Println("emptySource.UpdateReplace", "R", path, value)
+func (sc *emptyStateConfig) UpdateReplace(path string, value string) error {
+	fmt.Println("emptyStateConfig.UpdateReplace", "R", path, value)
 	return nil
 }
-func (sc *emptySource) UpdateDelete(path string) error {
-	// fmt.Println("emptySource.UpdateDelete", "D", path)
+func (sc *emptyStateConfig) UpdateDelete(path string) error {
+	fmt.Println("emptyStateConfig.UpdateDelete", "D", path)
 	return nil
 }
-func (sc *emptySource) UpdateEnd() {
-	// fmt.Println("emptySource.UpdateEnd")
+func (sc *emptyStateConfig) UpdateEnd() {
+	fmt.Println("emptyStateConfig.UpdateEnd")
 }
-func (sc *emptySource) UpdateSync(path ...string) error {
-	// fmt.Println("emptySource.UpdateSync", path)
+func (sc *emptyStateConfig) UpdateSync(path ...string) error {
+	fmt.Println("emptyStateConfig.UpdateSync", path)
 	return nil
 }

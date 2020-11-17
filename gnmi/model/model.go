@@ -10,11 +10,9 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
-	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/neoul/trie"
 	"github.com/openconfig/goyang/pkg/yang"
-	"github.com/openconfig/ygot/ygot"
 	"github.com/openconfig/ygot/ytypes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -71,7 +69,7 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 		syncRequired:       trie.New(),
 	}
 	if m.StateConfig == nil {
-		m.StateConfig = &emptySource{}
+		m.StateConfig = &emptyStateConfig{}
 	}
 	m.initStateSync()
 	return m, nil
@@ -79,22 +77,31 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 
 // Load loads the startup state of the Model.
 //  - startup: The YAML or JSON startup data to populate the creating structure (gostruct).
-func (m *Model) Load(startup []byte) error {
+func (m *Model) Load(startup []byte, sync bool) error {
 	mo, err := m.NewRoot(startup)
 	if err != nil {
 		return err
 	}
+	if sync {
+		newlist := mo.ListAll(mo.GetRoot(), nil)
+		curlist := m.ListAll(m.GetRoot(), nil)
+		cur := newDataAndPathMap(curlist)
+		new := newDataAndPathMap(newlist)
+		// Get difference between cur and new for C/R/D operations
+		for p := range cur {
+			if _, exists := new[p]; !exists {
+				m.StateConfig.UpdateDelete(p)
+			}
+		}
+		for p, entry := range new {
+			if _, exists := cur[p]; exists {
+				m.StateConfig.UpdateReplace(p, entry.GetValueString())
+			} else {
+				m.StateConfig.UpdateCreate(p, entry.GetValueString())
+			}
+		}
+	}
 	m.MO = mo
-
-	// m.block, _ = ydb.OpenWithSync("gnmi.target", m)
-	// if !*disableYdbChannel {
-	// 	err := m.block.Connect("uss://gnmi", "pub")
-	// 	if err != nil {
-	// 		m.block.Close()
-	// 		return err
-	// 	}
-	// 	m.block.Serve()
-	// }
 	return nil
 }
 
@@ -232,180 +239,6 @@ func (m *Model) findAllPaths(sp pathFinder, elems []*gnmipb.PathElem) []pathFind
 	}
 
 	return m.findAllPaths(csp, elems[1:])
-}
-
-// Get - Get all values and paths (XPath, Value) from the root
-func (m *Model) Get(path *gnmipb.Path) ([]*DataAndPath, bool) {
-	return m.Find(m.GetRoot(), path)
-}
-
-// FindOption is an interface that is implemented for the option of Model.Find().
-type FindOption interface {
-	// IsFindOpt is a marker method for each FindOption.
-	IsFindOpt()
-}
-
-// FindByModel is used to find data and paths with schema info.
-type FindByModel struct {
-	*Model
-}
-
-// IsFindOpt - FindByModel is a FindOption.
-func (f *FindByModel) IsFindOpt() {}
-
-func hasFindByModel(opts []FindOption) *Model {
-	for _, o := range opts {
-		switch v := o.(type) {
-		case *FindByModel:
-			return v.Model
-		}
-	}
-	return nil
-}
-
-// AddFakePrefix is a FindOption to add a prefix to DataAndPath.Path.
-type AddFakePrefix struct {
-	Prefix *gnmipb.Path
-}
-
-// IsFindOpt - AddFakePrefix is a FindOption.
-func (f *AddFakePrefix) IsFindOpt() {}
-
-func hasAddFakePrefix(opts []FindOption) *gnmipb.Path {
-	for _, o := range opts {
-		switch v := o.(type) {
-		case *AddFakePrefix:
-			return v.Prefix
-		}
-	}
-	return nil
-}
-
-func replaceAddFakePrefix(opts []FindOption, opt FindOption) []FindOption {
-	var ok bool
-	for i, o := range opts {
-		_, ok := o.(*AddFakePrefix)
-		if ok {
-			opts[i] = opt
-			ok = true
-			break
-		}
-	}
-	if !ok {
-		opts = append(opts, opt)
-	}
-	return opts
-}
-
-// FindAndSort is used to sort the found result.
-type FindAndSort struct{}
-
-// IsFindOpt - FindAndSort is a FindOption.
-func (f *FindAndSort) IsFindOpt() {}
-
-func hasFindAndSort(opts []FindOption) bool {
-	for _, o := range opts {
-		switch o.(type) {
-		case *FindAndSort:
-			return true
-		}
-	}
-	return false
-}
-
-// Find - Find all values and paths (XPath, Value) from the base ygot.GoStruct
-func (m *Model) Find(base interface{}, path *gnmipb.Path, opts ...FindOption) ([]*DataAndPath, bool) {
-	t := reflect.TypeOf(base)
-	entry := m.FindSchemaByType(t)
-	if entry == nil {
-		return []*DataAndPath{}, false
-	}
-	fprefix := hasAddFakePrefix(opts)
-	if fprefix == nil {
-		fprefix = xpath.EmptyGNMIPath
-	}
-	prefix := xpath.ToXPath(fprefix)
-
-	elems := path.GetElem()
-	if len(elems) <= 0 {
-		dataAndGNMIPath := &DataAndPath{
-			Value: base, Path: prefix,
-		}
-		return []*DataAndPath{dataAndGNMIPath}, true
-	}
-	for _, e := range elems {
-		if e.Name == "*" || e.Name == "..." {
-			break
-		}
-		entry = entry.Dir[e.Name]
-		if entry == nil {
-			return []*DataAndPath{}, false
-		}
-		if e.Key != nil {
-			for kname := range e.Key {
-				if !strings.Contains(entry.Key, kname) {
-					return []*DataAndPath{}, false
-				}
-			}
-		}
-	}
-	v := reflect.ValueOf(base)
-	datapath := &dataAndPath{Value: v, Key: []string{""}}
-	founds := findAllData(datapath, elems, opts...)
-	// fmt.Println(founds)
-	num := len(founds)
-	if num <= 0 {
-		return []*DataAndPath{}, false
-	}
-
-	rvalues := make([]*DataAndPath, 0, num)
-	for _, each := range founds {
-		if each.Value.CanInterface() {
-			var p string
-			if prefix == "/" {
-				p = strings.Join(each.Key, "/")
-			} else {
-				p = prefix + strings.Join(each.Key, "/")
-			}
-			dataAndGNMIPath := &DataAndPath{
-				Value: each.Value.Interface(),
-				Path:  p,
-			}
-			rvalues = append(rvalues, dataAndGNMIPath)
-		}
-	}
-	if hasFindAndSort(opts) {
-		sort.Slice(rvalues, func(i, j int) bool {
-			return rvalues[i].Path < rvalues[j].Path
-		})
-	}
-	return rvalues, true
-}
-
-// ListAll find and list all child values.
-func (m *Model) ListAll(base interface{}, path *gnmipb.Path, opts ...FindOption) []*DataAndPath {
-	var targetNodes []*DataAndPath
-	var children []*DataAndPath
-	if path == nil {
-		targetNodes, _ = m.Find(base, xpath.WildcardGNMIPathDot3, opts...)
-		return targetNodes
-	}
-
-	targetNodes, _ = m.Find(base, path, opts...)
-	for _, targetNode := range targetNodes {
-		switch v := targetNode.Value.(type) {
-		case ygot.GoStruct:
-			tpath, _ := xpath.ToGNMIPath(targetNode.Path)
-			opts = replaceAddFakePrefix(opts, &AddFakePrefix{Prefix: tpath})
-			allNodes, _ := m.Find(v, xpath.WildcardGNMIPathDot3, opts...)
-			for _, node := range allNodes {
-				children = append(children, node)
-			}
-		default:
-			children = append(children, targetNode)
-		}
-	}
-	return children
 }
 
 // ValidatePathSchema - validates all schema of the gNMI Path.

@@ -35,7 +35,6 @@ type opInfo struct {
 	xpath   *string
 	gpath   *gnmipb.Path
 	curval  interface{}
-	newval  *gnmipb.TypedValue
 	created bool
 }
 
@@ -63,13 +62,12 @@ func startTransaction() *setTransaction {
 	return t
 }
 
-func (t *setTransaction) add(optype opType, xpath *string, gpath *gnmipb.Path, curval interface{}, newval *gnmipb.TypedValue) {
+func (t *setTransaction) add(optype opType, xpath *string, gpath *gnmipb.Path, curval interface{}) {
 	opinfo := &opInfo{
 		optype: optype,
 		xpath:  xpath,
 		gpath:  gpath,
 		curval: curval,
-		newval: newval,
 	}
 	switch optype {
 	case opDelete:

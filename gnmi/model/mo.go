@@ -2,6 +2,8 @@ package model
 
 import (
 	"reflect"
+	"sort"
+	"strings"
 
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
@@ -122,6 +124,162 @@ func (mo *MO) FindSchemaByRelativeGNMIPath(base interface{}, path *gnmipb.Path) 
 	return findSchema(bSchema, path)
 }
 
+// FindOption is an interface that is implemented for the option of MO.Find().
+type FindOption interface {
+	// IsFindOpt is a marker method for each FindOption.
+	IsFindOpt()
+}
+
+// AddFakePrefix is a FindOption to add a prefix to DataAndPath.Path.
+type AddFakePrefix struct {
+	Prefix *gnmipb.Path
+}
+
+// IsFindOpt - AddFakePrefix is a FindOption.
+func (f *AddFakePrefix) IsFindOpt() {}
+
+func hasAddFakePrefix(opts []FindOption) *gnmipb.Path {
+	for _, o := range opts {
+		switch v := o.(type) {
+		case *AddFakePrefix:
+			return v.Prefix
+		}
+	}
+	return nil
+}
+
+func replaceAddFakePrefix(opts []FindOption, opt FindOption) []FindOption {
+	var ok bool
+	for i, o := range opts {
+		_, ok := o.(*AddFakePrefix)
+		if ok {
+			opts[i] = opt
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		opts = append(opts, opt)
+	}
+	return opts
+}
+
+// FindAndSort is used to sort the found result.
+type FindAndSort struct{}
+
+// IsFindOpt - FindAndSort is a FindOption.
+func (f *FindAndSort) IsFindOpt() {}
+
+func hasFindAndSort(opts []FindOption) bool {
+	for _, o := range opts {
+		switch o.(type) {
+		case *FindAndSort:
+			return true
+		}
+	}
+	return false
+}
+
+// Get - Get all values and paths (XPath, Value) from the root
+func (mo *MO) Get(path *gnmipb.Path) ([]*DataAndPath, bool) {
+	return mo.Find(mo.GetRoot(), path)
+}
+
+// Find - Find all values and paths (XPath, Value) from the base ygot.GoStruct
+func (mo *MO) Find(base interface{}, path *gnmipb.Path, opts ...FindOption) ([]*DataAndPath, bool) {
+	t := reflect.TypeOf(base)
+	entry := mo.FindSchemaByType(t)
+	if entry == nil {
+		return []*DataAndPath{}, false
+	}
+	fprefix := hasAddFakePrefix(opts)
+	if fprefix == nil {
+		fprefix = xpath.EmptyGNMIPath
+	}
+	prefix := xpath.ToXPath(fprefix)
+
+	elems := path.GetElem()
+	if len(elems) <= 0 {
+		dataAndGNMIPath := &DataAndPath{
+			Value: base, Path: prefix,
+		}
+		return []*DataAndPath{dataAndGNMIPath}, true
+	}
+	for _, e := range elems {
+		if e.Name == "*" || e.Name == "..." {
+			break
+		}
+		entry = entry.Dir[e.Name]
+		if entry == nil {
+			return []*DataAndPath{}, false
+		}
+		if e.Key != nil {
+			for kname := range e.Key {
+				if !strings.Contains(entry.Key, kname) {
+					return []*DataAndPath{}, false
+				}
+			}
+		}
+	}
+	v := reflect.ValueOf(base)
+	datapath := &dataAndPath{Value: v, Key: []string{""}}
+	founds := findAllData(datapath, elems, opts...)
+	// fmt.Println(founds)
+	num := len(founds)
+	if num <= 0 {
+		return []*DataAndPath{}, false
+	}
+
+	rvalues := make([]*DataAndPath, 0, num)
+	for _, each := range founds {
+		if each.Value.CanInterface() {
+			var p string
+			if prefix == "/" {
+				p = strings.Join(each.Key, "/")
+			} else {
+				p = prefix + strings.Join(each.Key, "/")
+			}
+			dataAndGNMIPath := &DataAndPath{
+				Value: each.Value.Interface(),
+				Path:  p,
+			}
+			rvalues = append(rvalues, dataAndGNMIPath)
+		}
+	}
+	if hasFindAndSort(opts) {
+		sort.Slice(rvalues, func(i, j int) bool {
+			return rvalues[i].Path < rvalues[j].Path
+		})
+	}
+	return rvalues, true
+}
+
+// ListAll find and list all child values.
+func (mo *MO) ListAll(base interface{}, path *gnmipb.Path, opts ...FindOption) []*DataAndPath {
+	var targetNodes []*DataAndPath
+	var children []*DataAndPath
+	if path == nil {
+		targetNodes, _ = mo.Find(base, xpath.WildcardGNMIPathDot3, opts...)
+		return targetNodes
+	}
+
+	targetNodes, _ = mo.Find(base, path, opts...)
+	for _, targetNode := range targetNodes {
+		switch v := targetNode.Value.(type) {
+		case ygot.GoStruct:
+			tpath, _ := xpath.ToGNMIPath(targetNode.Path)
+			opts = replaceAddFakePrefix(opts, &AddFakePrefix{Prefix: tpath})
+			allNodes, _ := mo.Find(v, xpath.WildcardGNMIPathDot3, opts...)
+			for _, node := range allNodes {
+				children = append(children, node)
+			}
+		default:
+			children = append(children, targetNode)
+		}
+	}
+	return children
+}
+
 // NewRoot returns new MO (ModeledObject)
 func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 	vgs := reflect.New(mo.GetRootType()).Interface()
@@ -147,7 +305,6 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 		// 	return nil, err
 		// }
 
-		// [FIXME] - SetCommit
 	}
 
 	return newMO, nil

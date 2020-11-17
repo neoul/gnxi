@@ -135,8 +135,8 @@ func hasSetCallback(opts []Option) model.StateConfig {
 }
 
 // GetCallback includes a callback interface to get the config state data
-// from the system. The callback interface consists of a following function
-// that must be implemented by the system.
+// from the system immediately. The callback interface consists of
+// a following function that must be implemented by the system.
 //
 // 	UpdateSync(path ...string) error
 type GetCallback struct {
@@ -172,7 +172,7 @@ func NewServer(opts ...Option) (*Server, error) {
 	}
 	s.Model = m
 	if startup := hasStartup(opts); startup != nil {
-		m.Load(startup)
+		m.Load(startup, true)
 	}
 	return s, nil
 }
@@ -194,7 +194,7 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 	}
 	s.Model = m
 	if startup := hasStartup(opts); startup != nil {
-		m.Load(startup)
+		m.Load(startup, true)
 	}
 	return s, nil
 }
@@ -254,7 +254,6 @@ func (s *Server) Capabilities(ctx context.Context, req *gnmipb.CapabilityRequest
 
 // Get implements the Get RPC in gNMI spec.
 func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetResponse, error) {
-
 	if req.GetType() != gnmipb.GetRequest_ALL {
 		return nil, status.Errorf(codes.Unimplemented, "unsupported request type: %s",
 			gnmipb.GetRequest_DataType_name[int32(req.GetType())])
