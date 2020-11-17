@@ -115,8 +115,8 @@ func (tcb *telemetryCtrl) updateTelemetryCtrl(datapath string, gpath *gnmipb.Pat
 				if telesub.IsPolling {
 					continue
 				}
-				glog.Infof("telemetry[%d][%d].onchange(created).matched.path(%s)",
-					telesub.SessionID, telesub.ID, path)
+				glog.Infof("telemetry[%d][%d].onchange(%c).matched.path(%s)",
+					telesub.SessionID, telesub.ID, op, path)
 				tcb.readyToUpdate[telesub.ID] = telesub
 				if targetList[telesub.ID] == nil {
 					targetList[telesub.ID] = pathSet{datapath: &present{duplicates: 1}}
@@ -136,7 +136,7 @@ func (tcb *telemetryCtrl) updateTelemetryCtrl(datapath string, gpath *gnmipb.Pat
 func (tcb *telemetryCtrl) ChangeCreated(datapath string, changes ygot.GoStruct) {
 	tcb.mutex.RLock()
 	defer tcb.mutex.RUnlock()
-	glog.Infof("telectrl.onchange(created).path(%s)", datapath)
+	glog.Infof("telectrl.onchange(C).path(%s)", datapath)
 	gpath, err := xpath.ToGNMIPath(datapath)
 	if err != nil {
 		return
@@ -151,7 +151,7 @@ func (tcb *telemetryCtrl) ChangeCreated(datapath string, changes ygot.GoStruct) 
 func (tcb *telemetryCtrl) ChangeReplaced(datapath string, changes ygot.GoStruct) {
 	tcb.mutex.RLock()
 	defer tcb.mutex.RUnlock()
-	glog.Infof("telectrl.onchange(replaced).path(%s)", datapath)
+	glog.Infof("telectrl.onchange(R).path(%s)", datapath)
 	gpath, err := xpath.ToGNMIPath(datapath)
 	if err != nil {
 		return
@@ -166,7 +166,7 @@ func (tcb *telemetryCtrl) ChangeReplaced(datapath string, changes ygot.GoStruct)
 func (tcb *telemetryCtrl) ChangeDeleted(datapath string) {
 	tcb.mutex.RLock()
 	defer tcb.mutex.RUnlock()
-	glog.Infof("telectrl.onchange(created).path(%s)", datapath)
+	glog.Infof("telectrl.onchange(D).path(%s)", datapath)
 	gpath, err := xpath.ToGNMIPath(datapath)
 	if err != nil {
 		return
@@ -257,8 +257,7 @@ func newTelemetrySession(ctx context.Context, s *Server) *TelemetrySession {
 }
 
 func (teleses *TelemetrySession) stopTelemetrySession() {
-	// block := teleses.server.Model.GetYDB()
-	// delDynamicTeleSubscriptionInfo(block, teleses)
+	delDynamicTeleSub(teleses.server.Model, teleses)
 	teleses.lock()
 	defer teleses.unlock()
 	for _, telesub := range teleses.Telesub {
@@ -914,8 +913,8 @@ func processSR(teleses *TelemetrySession, req *gnmipb.SubscribeRequest) error {
 			startingList = append(startingList, telesub)
 		}
 	}
-	// block := teleses.server.Model.GetYDB()
-	// addDynamicTeleSubscriptionInfo(block, startingList)
+
+	addDynamicTeleSub(teleses.server.Model, startingList)
 	for _, telesub := range startingList {
 		err = teleses.StartTelmetryUpdate(telesub)
 		if err != nil {
@@ -947,40 +946,46 @@ var dynamicTeleSubInfoPathFormat string = `
       state:
        path: %s`
 
-func addDynamicTeleSubscriptionInfo(targetDataBlock *ydb.YDB, telesubs []*TelemetrySubscription) {
-	s := ""
-	for _, telesub := range telesubs {
-		s += fmt.Sprintf(dynamicTeleSubInfoFormat,
-			telesub.ID, telesub.ID, telesub.ID,
-			telesub.session.Address,
-			telesub.session.Port,
-			telesub.Configured.SampleInterval,
-			telesub.Configured.HeartbeatInterval,
-			telesub.Configured.SuppressRedundant,
-			"STREAM_GRPC",
-			telesub.Encoding,
-		)
-		for i := range telesub.Paths {
-			p := xpath.ToXPath(telesub.Paths[i])
-			s += fmt.Sprintf(dynamicTeleSubInfoPathFormat, p, p)
+func addDynamicTeleSub(m *model.Model, telesubs []*TelemetrySubscription) {
+	switch y := m.StateSync.(type) {
+	case *ydb.YDB:
+		s := ""
+		for _, telesub := range telesubs {
+			s += fmt.Sprintf(dynamicTeleSubInfoFormat,
+				telesub.ID, telesub.ID, telesub.ID,
+				telesub.session.Address,
+				telesub.session.Port,
+				telesub.Configured.SampleInterval,
+				telesub.Configured.HeartbeatInterval,
+				telesub.Configured.SuppressRedundant,
+				"STREAM_GRPC",
+				telesub.Encoding,
+			)
+			for i := range telesub.Paths {
+				p := xpath.ToXPath(telesub.Paths[i])
+				s += fmt.Sprintf(dynamicTeleSubInfoPathFormat, p, p)
+			}
 		}
-	}
-	if s != "" {
-		targetDataBlock.Write([]byte(s))
+		if s != "" {
+			y.Write([]byte(s))
+		}
 	}
 }
 
-func delDynamicTeleSubscriptionInfo(targetDataBlock *ydb.YDB, teleses *TelemetrySession) {
-	s := ""
-	for _, telesub := range teleses.Telesub {
-		s += fmt.Sprintf(`
+func delDynamicTeleSub(m *model.Model, teleses *TelemetrySession) {
+	switch y := m.StateSync.(type) {
+	case *ydb.YDB:
+		s := ""
+		for _, telesub := range teleses.Telesub {
+			s += fmt.Sprintf(`
 telemetry-system:
  subscriptions:
   dynamic-subscriptions:
    dynamic-subscription[id=%d]:
 `, telesub.ID)
-	}
-	if s != "" {
-		targetDataBlock.Delete([]byte(s))
+		}
+		if s != "" {
+			y.Delete([]byte(s))
+		}
 	}
 }

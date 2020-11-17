@@ -1,19 +1,5 @@
-/* Copyright 2017 Google Inc.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    https://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
-// Binary gnmi_target implements a gNMI Target with in-memory configuration and telemetry.
+// gNMI Target implement
+// Binary gnmid implements a gNMI Target with in-memory configuration and telemetry.
 package main
 
 import (
@@ -44,7 +30,7 @@ var (
 	startup           = pflag.String("startup", "", "IETF JSON or YAML file for target startup data")
 	disableBundling   = pflag.Bool("disable-update-bundling", false, "disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1")
 	disableYdbChannel = flag.Bool("disable-ydb", false, "disable YAML Datablock interface")
-	help              = pflag.BoolP("help", "h", false, "help for gnmi_target")
+	help              = pflag.BoolP("help", "h", false, "help for gnmid")
 )
 
 type server struct {
@@ -73,7 +59,7 @@ func loadConfig() (*configuration, error) {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
 	if *help {
-		fmt.Fprintf(os.Stderr, "gnmi_target:\n")
+		fmt.Fprintf(os.Stderr, "gnmid:\n")
 		fmt.Fprintf(os.Stderr, "  gRPC Network Management Interface (gNMI) server\n")
 		fmt.Fprintf(os.Stderr, "\n")
 		fmt.Fprintf(os.Stderr, "Usage:\n")
@@ -176,7 +162,8 @@ func newServer() (*server, func(), error) {
 	if s.config.DisableBundling {
 		opts = append(opts, gnmiserver.DisableBundling{})
 	}
-	opts = append(opts, gnmiserver.GetCallback{StateSync: db})
+	opts = append(opts, gnmiserver.GetCallback{StateSync: db},
+		gnmiserver.SetCallback{StateConfig: db})
 	s.Server, err = gnmiserver.NewServer(opts...)
 	if err != nil {
 		close()

@@ -313,7 +313,7 @@ func TestFindAllNodes(t *testing.T) {
 	}
 
 	model, err := NewModel(nil, nil, nil)
-	model.Load(b)
+	model.Load(b, false)
 	root := model.GetRoot().(*gostruct.Device)
 
 	type args struct {

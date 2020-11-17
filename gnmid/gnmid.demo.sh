@@ -1,15 +1,15 @@
 #!/bin/bash
 
-killall sub.system -q
+killall subsystem -q
 
-cd sub.system
+cd subsystem
 go build
-./sub.system &
+./subsystem &
 SUBSYS=$!
 
 cd ..
 go build
-./gnmi_target \
+./gnmid \
   --v 2 \
   --cheat-code admin \
   --bind-address :10161 \
