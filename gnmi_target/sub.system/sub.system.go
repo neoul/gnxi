@@ -45,8 +45,8 @@ type IfInfo struct {
 	Ifstats map[string]*IfStats
 }
 
-// SyncUpdate - updates datablock
-func (sinfo *IfInfo) SyncUpdate(keys []string, key string) []byte {
+// SyncResponse - updates datablock
+func (sinfo *IfInfo) SyncResponse(keys []string, key string) []byte {
 	// fmt.Println(keys, key)
 	sname, klist, err := ydb.ExtractStrKeyNameAndValue(key)
 	if err != nil || sname != "interface" {
@@ -200,7 +200,7 @@ func (sinfo *IfInfo) pollStats(db *ydb.YDB, ticker *time.Ticker, done chan bool)
 	for _, s := range stats {
 		sinfo.Ifstats[s.Name] = s
 		syncPath := fmt.Sprintf("/interfaces/interface[name=%s]", s.Name)
-		db.AddSyncUpdatePath(syncPath)
+		db.AddSyncResponse(syncPath)
 	}
 	for {
 		select {

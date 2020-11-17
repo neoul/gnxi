@@ -225,7 +225,7 @@ func (sc *emptySource) UpdateDelete(path string) error {
 func (sc *emptySource) UpdateEnd() {
 	// fmt.Println("emptySource.UpdateEnd")
 }
-func (sc *emptySource) UpdateSync(path string) error {
+func (sc *emptySource) UpdateSync(path ...string) error {
 	// fmt.Println("emptySource.UpdateSync", path)
 	return nil
 }

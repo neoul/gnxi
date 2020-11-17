@@ -34,8 +34,8 @@ type StateUpdate interface {
 	StateCallback
 }
 
-// StateSync interface is used to request the sync of the modeled data.
+// StateSync interface is used to request the sync of the modeled data immediately.
 // The external system must update the data requested by the path if it is invoked.
 type StateSync interface {
-	UpdateSync(path string) error
+	UpdateSync(path ...string) error
 }

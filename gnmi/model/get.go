@@ -100,12 +100,9 @@ func (m *Model) RequestStateSync(prefix *gnmipb.Path, paths []*gnmipb.Path) {
 	}
 	for _, sp := range spaths {
 		glog.Infof("sync-update %s", sp)
-		// syncIgnoreTime := time.Second * 3
-		if m.StateSync != nil {
-			m.StateSync.UpdateSync(sp)
-		}
 	}
 	if m.StateSync != nil {
+		m.StateSync.UpdateSync(spaths...)
 		// syncIgnoreTime := time.Second * 3
 		// m.UpdateSync(syncIgnoreTime, true, spaths...)
 		// m.UpdateSync(spaths...)

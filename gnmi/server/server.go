@@ -138,7 +138,7 @@ func hasSetCallback(opts []Option) model.StateConfig {
 // from the system. The callback interface consists of a following function
 // that must be implemented by the system.
 //
-// 	UpdateSync(path string) error
+// 	UpdateSync(path ...string) error
 type GetCallback struct {
 	model.StateSync
 }
