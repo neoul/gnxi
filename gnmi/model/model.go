@@ -452,10 +452,12 @@ func (m *Model) UpdateCreate(path string, value string) error {
 	schema := m.RootSchema()
 	err := ValWrite(schema, m.GetRoot(), path, value)
 	if err == nil {
-		fakeRoot := m.updatedroot.GetRoot()
-		ValWrite(schema, fakeRoot, path, value)
-		if m.ChangeNotification != nil {
-			m.ChangeNotification.ChangeCreated(path, fakeRoot)
+		if m.updatedroot != nil {
+			fakeRoot := m.updatedroot.GetRoot()
+			ValWrite(schema, fakeRoot, path, value)
+			if m.ChangeNotification != nil {
+				m.ChangeNotification.ChangeCreated(path, fakeRoot)
+			}
 		}
 	} else {
 		glog.Errorf("%v", err)
@@ -470,10 +472,12 @@ func (m *Model) UpdateReplace(path string, value string) error {
 	schema := m.RootSchema()
 	err := ValWrite(schema, m.GetRoot(), path, value)
 	if err == nil {
-		fakeRoot := m.updatedroot.GetRoot()
-		ValWrite(schema, fakeRoot, path, value)
-		if m.ChangeNotification != nil {
-			m.ChangeNotification.ChangeReplaced(path, fakeRoot)
+		if m.updatedroot != nil {
+			fakeRoot := m.updatedroot.GetRoot()
+			ValWrite(schema, fakeRoot, path, value)
+			if m.ChangeNotification != nil {
+				m.ChangeNotification.ChangeReplaced(path, fakeRoot)
+			}
 		}
 	} else {
 		glog.Errorf("%v", err)

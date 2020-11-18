@@ -8,18 +8,22 @@ The `gnmid` supports gNMI RPC services as follows.
 - Get RPC
 - Set RPC
 
-In this sample implementation, `gnmid` receives and updates NIC statistics and syslog messages from subsystem to provide the gNMI RPC service for openconfig-interfaces and openconfig-messages models.
-To enable and receive the syslog messages from subsystem, you have to configure the syslog redirection to `localhost:11514`.
+In this sample implementation, `gnmid` receives and updates NIC (Network Interface Card) statistics and syslog messages from subsystem to provide the gNMI RPC service for openconfig-interfaces and openconfig-messages models.
+The subsystem collects the NIC statistics and then transfer it to `gnmid` via YDB communication channel. The subsystem also runs as a syslog server to collect the syslog messages from the system. So, you have to configure the syslog remote server (`localhost:11514`) in your syslog system.
 
 ```bash
+# rsyslog configuration to send the syslog messages to the subsystem
 cat '*.*     @@localhost:11514` >> /etc/rsyslog.conf
 ```
 
 ```text
+# Overview of the sample implementation.
 
 +-----------+             +--------------------+              +-------------+
 | subsystem | <--[YDB]--> | gnmid (gNMI Target)| <--[gRPC]--> | gNMI client |
 +-----------+             +--------------------+              +-------------+
+
+YDB: uss://gnmi channel
 
 ```
 

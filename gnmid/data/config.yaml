@@ -2,14 +2,14 @@
 # gnmi server configuration
 bind-address: ":10161"
 startup: "../gnmi/model/data/sample.yaml"
-tls:
-  ca-cert: "../pki/ca.crt"
-  server-cert: "../pki/server.crt"
-  server-key: "../pki/server.key"
+ca-cert: "../pki/ca.crt"
+server-cert: "../pki/server.crt"
+server-key: "../pki/server.key"
 sync-path:
   - "/interfaces/interface/state/counters"
   - "/interfaces/interface/time-sensitive-networking/state/statistics"
   - "/interfaces/interface/radio-over-ethernet/state/statistics"
 disable-update-bundling: true
-disable-ydb: false
 cheat-code: admin
+alsologtostderr: true
+stderrthreshold: 0

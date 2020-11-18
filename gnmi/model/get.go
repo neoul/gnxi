@@ -38,7 +38,7 @@ func init() {
 
 func (m *Model) initStateSync() {
 	for _, p := range srpaths {
-		// glog.Infof("sync-path %s", p)
+		glog.Infof("sync-path %s", p)
 		entry := m.FindSchemaByXPath(p)
 		if entry == nil {
 			continue
