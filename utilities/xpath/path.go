@@ -80,6 +80,28 @@ func ValidateGNMIFullPath(prefix, path *gnmipb.Path) error {
 	return nil
 }
 
+// mergePaths returns a single merged path
+func mergePaths(absPathElem, relativePathElem []*gnmipb.PathElem) []*gnmipb.PathElem {
+	abslen := len(absPathElem)
+	mergedPath := make([]*gnmipb.PathElem, abslen, abslen+len(relativePathElem))
+	copy(mergedPath, absPathElem)
+	for _, elem := range relativePathElem {
+		switch {
+		case elem.Name == ".":
+			// do nothing
+		case elem.Name == "..":
+			max := len(mergedPath)
+			if max < 0 {
+				return nil
+			}
+			mergedPath = mergedPath[:max-1]
+		default:
+			mergedPath = append(mergedPath, elem)
+		}
+	}
+	return mergedPath
+}
+
 // GNMIFullPath builds the full path from the prefix and path.
 func GNMIFullPath(prefix, path *gnmipb.Path) *gnmipb.Path {
 	if prefix == nil {
@@ -93,7 +115,11 @@ func GNMIFullPath(prefix, path *gnmipb.Path) *gnmipb.Path {
 		fullPath.Element = append(prefix.GetElement(), path.GetElement()...)
 	}
 	if path.GetElem() != nil {
-		fullPath.Elem = append(prefix.GetElem(), path.GetElem()...)
+		fullPath.Elem = mergePaths(prefix.GetElem(), path.GetElem())
+		if fullPath.Elem == nil {
+			return nil
+		}
+		// fullPath.Elem = append(prefix.GetElem(), path.GetElem()...)
 	}
 	return fullPath
 }

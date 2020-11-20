@@ -19,6 +19,7 @@ import (
 	"reflect"
 	"testing"
 
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
@@ -127,5 +128,79 @@ func TestToGNMIPath(t *testing.T) {
 			t.Errorf("%s: ToGNMIPath(%q) got error: %v, wanted error: %v",
 				test.desc, test.path, err, !test.expectOK)
 		}
+	}
+}
+
+func TestGNMIFullPath(t *testing.T) {
+	type args struct {
+		prefix *gnmipb.Path
+		path   *gnmipb.Path
+	}
+	tests := []struct {
+		name string
+		args args
+		want *gnmipb.Path
+	}{
+		{
+			name: "GNMIFullPath",
+			args: args{
+				prefix: &pb.Path{
+					Elem: []*pb.PathElem{
+						{Name: "a"},
+						{Name: "b", Key: map[string]string{"k1": "10", "k2": "10.10.10.10/24"}},
+						{Name: "c"},
+					},
+				},
+				path: &pb.Path{
+					Elem: []*pb.PathElem{
+						{Name: "e"},
+						{Name: "f"},
+					},
+				},
+			},
+			want: &pb.Path{
+				Elem: []*pb.PathElem{
+					{Name: "a"},
+					{Name: "b", Key: map[string]string{"k1": "10", "k2": "10.10.10.10/24"}},
+					{Name: "c"},
+					{Name: "e"},
+					{Name: "f"},
+				},
+			},
+		},
+		{
+			name: "GNMIFullPath",
+			args: args{
+				prefix: &pb.Path{
+					Elem: []*pb.PathElem{
+						{Name: "a"},
+						{Name: "b", Key: map[string]string{"k1": "10", "k2": "10.10.10.10/24"}},
+						{Name: "c"},
+					},
+				},
+				path: &pb.Path{
+					Elem: []*pb.PathElem{
+						{Name: ".."},
+						{Name: "e"},
+						{Name: "f"},
+					},
+				},
+			},
+			want: &pb.Path{
+				Elem: []*pb.PathElem{
+					{Name: "a"},
+					{Name: "b", Key: map[string]string{"k1": "10", "k2": "10.10.10.10/24"}},
+					{Name: "e"},
+					{Name: "f"},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := GNMIFullPath(tt.args.prefix, tt.args.path); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GNMIFullPath() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
