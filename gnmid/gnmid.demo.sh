@@ -18,5 +18,4 @@ go build
   --server-cert ../pki/server.crt \
   --ca-cert ../pki/ca.crt \
   --alsologtostderr \
-  --stderrthreshold 0 \
-  --cheat-code admin
+  --stderrthreshold 0

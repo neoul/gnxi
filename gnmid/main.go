@@ -113,6 +113,9 @@ func LoadConfig() (*Config, error) {
 	if f := flag.Lookup("stderrthreshold"); f != nil && f.Value.String() == f.DefValue {
 		f.Value.Set(viper.GetString("stderrthreshold"))
 	}
+	if f := flag.Lookup("cheat-code"); f != nil && f.Value.String() == f.DefValue {
+		f.Value.Set(viper.GetString("cheat-code"))
+	}
 	return &config, nil
 }
 
