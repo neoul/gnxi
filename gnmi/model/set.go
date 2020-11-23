@@ -66,7 +66,11 @@ func (m *Model) SetCommit() error {
 		m.transaction = nil
 		return fmt.Errorf("no StateConfig interface configured")
 	}
-	m.StateConfig.UpdateStart()
+	if err := m.StateConfig.UpdateStart(); err != nil {
+		m.StateConfig.UpdateEnd()
+		m.transaction = nil
+		return err
+	}
 	// delete
 	for _, opinfo := range m.transaction.delete {
 		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath}, &FindAndSort{})
@@ -114,9 +118,9 @@ func (m *Model) SetCommit() error {
 			}
 		}
 	}
-	m.StateConfig.UpdateEnd()
+	err := m.StateConfig.UpdateEnd()
 	m.transaction = nil
-	return nil
+	return err
 }
 
 // SetDelete deletes the path from root if the path exists.
@@ -207,8 +211,9 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 
 type emptyStateConfig struct{}
 
-func (sc *emptyStateConfig) UpdateStart() {
+func (sc *emptyStateConfig) UpdateStart() error {
 	fmt.Println("emptyStateConfig.UpdateStart")
+	return nil
 }
 func (sc *emptyStateConfig) UpdateCreate(path string, value string) error {
 	fmt.Println("emptyStateConfig.UpdateCreate", "C", path, value)
@@ -222,8 +227,9 @@ func (sc *emptyStateConfig) UpdateDelete(path string) error {
 	fmt.Println("emptyStateConfig.UpdateDelete", "D", path)
 	return nil
 }
-func (sc *emptyStateConfig) UpdateEnd() {
+func (sc *emptyStateConfig) UpdateEnd() error {
 	fmt.Println("emptyStateConfig.UpdateEnd")
+	return nil
 }
 func (sc *emptyStateConfig) UpdateSync(path ...string) error {
 	fmt.Println("emptyStateConfig.UpdateSync", path)

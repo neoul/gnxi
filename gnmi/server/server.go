@@ -112,11 +112,11 @@ func hasStartup(opts []Option) []byte {
 // gNMI Set to the system. The callback interface consists of a set of
 // the following functions that must be implemented by the system.
 //
-// 	UpdateStart() // Set starts.
+// 	UpdateStart() error // Set starts.
 // 	UpdateCreate(path string, value string) error // Set creates new config data.
 // 	UpdateReplace(path string, value string) error // Set replaces config data.
 // 	UpdateDelete(path string) error // Set deletes config data.
-// 	UpdateEnd() // Set ends.
+// 	UpdateEnd() error // Set ends.
 type SetCallback struct {
 	model.StateConfig
 }

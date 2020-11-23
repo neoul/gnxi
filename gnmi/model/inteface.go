@@ -6,11 +6,11 @@ import (
 
 // StateCallback is the default interface called back or called to, in order to update all modeled data.
 type StateCallback interface {
-	UpdateStart()
+	UpdateStart() error
 	UpdateCreate(path string, value string) error
 	UpdateReplace(path string, value string) error
 	UpdateDelete(path string) error
-	UpdateEnd()
+	UpdateEnd() error
 }
 
 // ChangeNotification is an interface to be invoked upon the model data changes

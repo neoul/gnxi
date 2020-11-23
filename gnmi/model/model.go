@@ -503,24 +503,26 @@ func (m *Model) UpdateDelete(path string) error {
 }
 
 // UpdateStart indicates the start of the Model instance update
-func (m *Model) UpdateStart() {
+func (m *Model) UpdateStart() error {
 	m.Lock()
 	// updatedroot is used to save the changes of the model data.
 	updatedroot, err := m.NewRoot(nil)
 	if err != nil {
-		return
+		return err
 	}
 	m.updatedroot = updatedroot
 	if m.ChangeNotification != nil {
 		m.ChangeNotification.ChangeStarted(m.updatedroot.GetRoot())
 	}
+	return nil
 }
 
 // UpdateEnd indicates the end of the Model instance update
-func (m *Model) UpdateEnd() {
+func (m *Model) UpdateEnd() error {
 	if m.ChangeNotification != nil {
 		m.ChangeNotification.ChangeFinished(m.updatedroot.GetRoot())
 	}
 	m.updatedroot = nil
 	m.Unlock()
+	return nil
 }
