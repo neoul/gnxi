@@ -23,6 +23,9 @@ type DataAndPath struct {
 
 // GetValueString returns DataAndPath string
 func (dap *DataAndPath) GetValueString() string {
+	if dap.Value == nil {
+		return ""
+	}
 	t := reflect.TypeOf(dap.Value)
 	if ydb.IsTypeScalar(t) {
 		if dap.Value == nil {
