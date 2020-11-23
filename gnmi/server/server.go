@@ -332,6 +332,7 @@ func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 	utilities.PrintProto(req)
 	prefix := req.GetPrefix()
 
+	var index int
 	var err error
 	result := make([]*gnmipb.UpdateResult, 0, 6)
 	s.Model.SetInit()
@@ -345,30 +346,33 @@ func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 	}
 	for _, r := range req.GetReplace() {
 		path := r.GetPath()
-		typedvalue := r.GetVal()
 		if err != nil {
 			result = append(result, buildUpdateResultAborted(gnmipb.UpdateResult_REPLACE, path))
 			continue
 		}
-		err = s.Model.SetReplace(prefix, path, typedvalue)
+		err = s.Model.SetReplace(prefix, path, r.GetVal())
 		result = append(result, buildUpdateResult(gnmipb.UpdateResult_REPLACE, path, err))
 	}
 	for _, u := range req.GetUpdate() {
 		path := u.GetPath()
-		typedvalue := u.GetVal()
 		if err != nil {
 			result = append(result, buildUpdateResultAborted(gnmipb.UpdateResult_UPDATE, path))
 			continue
 		}
-		err = s.Model.SetUpdate(prefix, path, typedvalue)
+		err = s.Model.SetUpdate(prefix, path, u.GetVal())
 		result = append(result, buildUpdateResult(gnmipb.UpdateResult_UPDATE, path, err))
 	}
 	if err == nil {
-		err = s.Model.SetCommit()
+		index, err = s.Model.SetCommit()
 	}
 	if err != nil {
+		// update error
+		if index < -1 {
+			result[index] = buildUpdateResult(result[index].Op, result[index].Path, err)
+		}
 		s.Model.SetRollback()
 	}
+	s.Model.SetDone()
 	resp := &gnmipb.SetResponse{
 		Prefix:   req.GetPrefix(),
 		Response: result,

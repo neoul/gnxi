@@ -1,8 +1,6 @@
 package model
 
 import (
-	"fmt"
-
 	"github.com/neoul/gnxi/utilities/xpath"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
@@ -33,9 +31,6 @@ func (m *Model) WriteTypedValue(path *gnmipb.Path, typedValue *gnmipb.TypedValue
 
 // SetInit initializes the Set transaction.
 func (m *Model) SetInit() error {
-	if m.transaction != nil {
-		return status.Errorf(codes.Unavailable, "Already running")
-	}
 	m.transaction = startTransaction()
 	return nil
 }
@@ -60,79 +55,100 @@ func newDataAndPathMap(in []*DataAndPath) map[string]*DataAndPath {
 	return m
 }
 
-// SetCommit commit the changed configuration.
-func (m *Model) SetCommit() error {
+// SetCommit commit the changed configuration. it returns an error with error index.
+func (m *Model) SetCommit() (int, error) {
+	var err error
+	var opseq int
 	if m.StateConfig == nil {
-		m.transaction = nil
-		return fmt.Errorf("no StateConfig interface configured")
+		return -1, status.Errorf(codes.Internal, "no StateConfig interface")
 	}
 	if err := m.StateConfig.UpdateStart(); err != nil {
 		m.StateConfig.UpdateEnd()
-		m.transaction = nil
-		return err
+		return -1, status.Errorf(codes.Internal, "%s", err)
 	}
 	// delete
 	for _, opinfo := range m.transaction.delete {
-		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath}, &FindAndSort{})
+		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath})
 		for p := range newDataAndPathMap(curlist) {
-			m.StateConfig.UpdateDelete(p)
+			err = m.StateConfig.UpdateDelete(p)
+			if err != nil {
+				opseq = opinfo.opseq
+				break
+			}
 		}
 	}
 	// replace (delete and then update)
 	for _, opinfo := range m.transaction.replace {
-		newlist := m.ListAll(m.GetRoot(), opinfo.gpath, &FindAndSort{})
-		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath}, &FindAndSort{})
+		newlist := m.ListAll(m.GetRoot(), opinfo.gpath)
+		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath})
 		cur := newDataAndPathMap(curlist)
 		new := newDataAndPathMap(newlist)
 		// Get difference between cur and new for C/R/D operations
 		for p := range cur {
 			if _, exists := new[p]; !exists {
-				m.StateConfig.UpdateDelete(p)
+				err = m.StateConfig.UpdateDelete(p)
+				if err != nil {
+					opseq = opinfo.opseq
+					break
+				}
 			}
 		}
 		for p, entry := range new {
 			if _, exists := cur[p]; exists {
-				m.StateConfig.UpdateReplace(p, entry.GetValueString())
+				err = m.StateConfig.UpdateReplace(p, entry.GetValueString())
 			} else {
-				m.StateConfig.UpdateCreate(p, entry.GetValueString())
+				err = m.StateConfig.UpdateCreate(p, entry.GetValueString())
+			}
+			if err != nil {
+				opseq = opinfo.opseq
+				break
 			}
 		}
 	}
 	// update
 	for _, opinfo := range m.transaction.update {
-		newlist := m.ListAll(m.GetRoot(), opinfo.gpath, &FindAndSort{})
-		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath}, &FindAndSort{})
+		newlist := m.ListAll(m.GetRoot(), opinfo.gpath)
+		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath})
 		cur := newDataAndPathMap(curlist)
 		new := newDataAndPathMap(newlist)
 		// Get difference between cur and new for C/R/D operations
 		for p := range cur {
 			if _, exists := new[p]; !exists {
-				m.StateConfig.UpdateDelete(p)
+				err = m.StateConfig.UpdateDelete(p)
+				if err != nil {
+					opseq = opinfo.opseq
+					break
+				}
 			}
 		}
 		for p, entry := range new {
 			if _, exists := cur[p]; exists {
-				m.StateConfig.UpdateReplace(p, entry.GetValueString())
+				err = m.StateConfig.UpdateReplace(p, entry.GetValueString())
 			} else {
-				m.StateConfig.UpdateCreate(p, entry.GetValueString())
+				err = m.StateConfig.UpdateCreate(p, entry.GetValueString())
+			}
+			if err != nil {
+				opseq = opinfo.opseq
+				break
 			}
 		}
 	}
-	err := m.StateConfig.UpdateEnd()
+	err = m.StateConfig.UpdateEnd()
 	m.transaction = nil
-	return err
+	return opseq, err
 }
 
 // SetDelete deletes the path from root if the path exists.
 func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 	fullpath := xpath.GNMIFullPath(prefix, path)
 	targets, _ := m.Get(fullpath)
+	m.transaction.setSequnce(fullpath)
 	for _, target := range targets {
 		targetPath, err := xpath.ToGNMIPath(target.Path)
 		if err != nil {
 			return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
 		}
-		m.transaction.add(opDelete, &target.Path, targetPath, target.Value)
+		m.transaction.addOperation(opDelete, &target.Path, targetPath, target.Value)
 		if len(targetPath.GetElem()) == 0 {
 			// root deletion
 			if mo, err := m.NewRoot(nil); err == nil {
@@ -153,6 +169,7 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	var err error
 	fullpath := xpath.GNMIFullPath(prefix, path)
+	m.transaction.setSequnce(fullpath)
 	targets, ok := m.Get(fullpath)
 	if ok {
 		for _, target := range targets {
@@ -160,7 +177,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 			if err != nil {
 				return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
 			}
-			m.transaction.add(opReplace, &target.Path, targetPath, target.Value)
+			m.transaction.addOperation(opReplace, &target.Path, targetPath, target.Value)
 			err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath)
 			if err != nil {
 				return err
@@ -173,7 +190,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 		return nil
 	}
 	tpath := xpath.ToXPath(fullpath)
-	m.transaction.add(opReplace, &tpath, fullpath, nil)
+	m.transaction.addOperation(opReplace, &tpath, fullpath, nil)
 	err = m.WriteTypedValue(fullpath, typedValue)
 	if err != nil {
 		return err
@@ -185,6 +202,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	var err error
 	fullpath := xpath.GNMIFullPath(prefix, path)
+	m.transaction.setSequnce(fullpath)
 	targets, ok := m.Get(fullpath)
 	if ok {
 		for _, target := range targets {
@@ -192,7 +210,7 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 			if err != nil {
 				return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
 			}
-			m.transaction.add(opUpdate, &target.Path, targetPath, target.Value)
+			m.transaction.addOperation(opUpdate, &target.Path, targetPath, target.Value)
 			err = m.WriteTypedValue(targetPath, typedValue)
 			if err != nil {
 				return err
@@ -201,7 +219,7 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 		return nil
 	}
 	tpath := xpath.ToXPath(fullpath)
-	m.transaction.add(opUpdate, &tpath, fullpath, nil)
+	m.transaction.addOperation(opUpdate, &tpath, fullpath, nil)
 	err = m.WriteTypedValue(fullpath, typedValue)
 	if err != nil {
 		return err
@@ -212,26 +230,26 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 type emptyStateConfig struct{}
 
 func (sc *emptyStateConfig) UpdateStart() error {
-	fmt.Println("emptyStateConfig.UpdateStart")
+	// fmt.Println("emptyStateConfig.UpdateStart")
 	return nil
 }
 func (sc *emptyStateConfig) UpdateCreate(path string, value string) error {
-	fmt.Println("emptyStateConfig.UpdateCreate", "C", path, value)
+	// fmt.Println("emptyStateConfig.UpdateCreate", "C", path, value)
 	return nil
 }
 func (sc *emptyStateConfig) UpdateReplace(path string, value string) error {
-	fmt.Println("emptyStateConfig.UpdateReplace", "R", path, value)
+	// fmt.Println("emptyStateConfig.UpdateReplace", "R", path, value)
 	return nil
 }
 func (sc *emptyStateConfig) UpdateDelete(path string) error {
-	fmt.Println("emptyStateConfig.UpdateDelete", "D", path)
+	// fmt.Println("emptyStateConfig.UpdateDelete", "D", path)
 	return nil
 }
 func (sc *emptyStateConfig) UpdateEnd() error {
-	fmt.Println("emptyStateConfig.UpdateEnd")
+	// fmt.Println("emptyStateConfig.UpdateEnd")
 	return nil
 }
 func (sc *emptyStateConfig) UpdateSync(path ...string) error {
-	fmt.Println("emptyStateConfig.UpdateSync", path)
+	// fmt.Println("emptyStateConfig.UpdateSync", path)
 	return nil
 }

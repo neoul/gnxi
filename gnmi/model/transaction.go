@@ -1,8 +1,7 @@
 package model
 
 import (
-	"fmt"
-
+	"github.com/neoul/gnxi/utilities/xpath"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
@@ -31,50 +30,58 @@ func (op opType) String() string {
 }
 
 type opInfo struct {
-	optype  opType
-	xpath   *string
-	gpath   *gnmipb.Path
-	curval  interface{}
-	created bool
-}
-
-func (opinfo *opInfo) getKey() string {
-	return fmt.Sprintf("%s%s", opinfo.optype, *opinfo.xpath)
+	optype opType
+	opseq  int
+	xpath  *string
+	gpath  *gnmipb.Path
+	curval interface{}
 }
 
 var setTranID int
 
 type setTransaction struct {
 	id      int
-	delete  map[string]*opInfo
-	replace map[string]*opInfo
-	update  map[string]*opInfo
+	seq     int
+	opseqs  map[string]int
+	delete  []*opInfo
+	replace []*opInfo
+	update  []*opInfo
 }
 
 // start the setTransaction for modeldata
 func startTransaction() *setTransaction {
 	setTranID++
-	t := &setTransaction{id: setTranID,
-		delete:  map[string]*opInfo{},
-		replace: map[string]*opInfo{},
-		update:  map[string]*opInfo{},
+	set := &setTransaction{
+		id:      setTranID,
+		seq:     -1,
+		opseqs:  map[string]int{},
+		delete:  []*opInfo{},
+		replace: []*opInfo{},
+		update:  []*opInfo{},
 	}
-	return t
+	return set
 }
 
-func (t *setTransaction) add(optype opType, xpath *string, gpath *gnmipb.Path, curval interface{}) {
+func (set *setTransaction) setSequnce(gpath *gnmipb.Path) {
+	set.seq++
+	path := xpath.ToXPath(gpath)
+	set.opseqs[path] = set.seq
+}
+
+func (set *setTransaction) addOperation(optype opType, xpath *string, gpath *gnmipb.Path, curval interface{}) {
 	opinfo := &opInfo{
 		optype: optype,
+		opseq:  set.seq,
 		xpath:  xpath,
 		gpath:  gpath,
 		curval: curval,
 	}
 	switch optype {
 	case opDelete:
-		t.delete[opinfo.getKey()] = opinfo
+		set.delete = append(set.delete, opinfo)
 	case opReplace:
-		t.replace[opinfo.getKey()] = opinfo
+		set.replace = append(set.replace, opinfo)
 	case opUpdate:
-		t.update[opinfo.getKey()] = opinfo
+		set.update = append(set.update, opinfo)
 	}
 }

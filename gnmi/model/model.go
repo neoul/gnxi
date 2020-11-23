@@ -463,7 +463,7 @@ func (m *Model) UpdateCreate(path string, value string) error {
 		glog.Errorf("%v", err)
 	}
 	// fmt.Println("}")
-	return err
+	return nil
 }
 
 // UpdateReplace is a function of StateUpdate Interface to replace the value in the path of the Model.
@@ -483,7 +483,7 @@ func (m *Model) UpdateReplace(path string, value string) error {
 		glog.Errorf("%v", err)
 	}
 	// fmt.Println("}")
-	return err
+	return nil
 }
 
 // UpdateDelete is a function of StateUpdate Interface to delete the value in the path of the Model.
@@ -499,7 +499,7 @@ func (m *Model) UpdateDelete(path string) error {
 		glog.Errorf("%v", err)
 	}
 	// fmt.Println("}")
-	return err
+	return nil
 }
 
 // UpdateStart indicates the start of the Model instance update
@@ -508,7 +508,7 @@ func (m *Model) UpdateStart() error {
 	// updatedroot is used to save the changes of the model data.
 	updatedroot, err := m.NewRoot(nil)
 	if err != nil {
-		return err
+		glog.Errorf("%v", err)
 	}
 	m.updatedroot = updatedroot
 	if m.ChangeNotification != nil {

@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/golang/glog"
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
@@ -312,15 +313,27 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 
 // UpdateCreate is a function of StateUpdate Interface to add a new value to the path of the MO.
 func (mo *MO) UpdateCreate(path string, value string) error {
-	return ValWrite(mo.RootSchema(), mo.Root, path, value)
+	err := ValWrite(mo.RootSchema(), mo.Root, path, value)
+	if err != nil {
+		glog.Errorf("%v", err)
+	}
+	return nil
 }
 
 // UpdateReplace is a function of StateUpdate Interface to replace the value in the path of the MO.
 func (mo *MO) UpdateReplace(path string, value string) error {
-	return ValWrite(mo.RootSchema(), mo.Root, path, value)
+	err := ValWrite(mo.RootSchema(), mo.Root, path, value)
+	if err != nil {
+		glog.Errorf("%v", err)
+	}
+	return nil
 }
 
 // UpdateDelete is a function of StateUpdate Interface to delete the value in the path of the MO.
 func (mo *MO) UpdateDelete(path string) error {
-	return ValDelete(mo.RootSchema(), mo.Root, path)
+	err := ValDelete(mo.RootSchema(), mo.Root, path)
+	if err != nil {
+		glog.Errorf("%v", err)
+	}
+	return nil
 }
