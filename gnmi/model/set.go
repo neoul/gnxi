@@ -72,11 +72,12 @@ func (m *Model) SetCommit() (int, error) {
 		for p := range newDataAndPathMap(curlist) {
 			err = m.StateConfig.UpdateDelete(p)
 			if err != nil {
-				opseq = opinfo.opseq
-				break
+				m.StateConfig.UpdateEnd()
+				return opinfo.opseq, err
 			}
 		}
 	}
+
 	// replace (delete and then update)
 	for _, opinfo := range m.transaction.replace {
 		newlist := m.ListAll(m.GetRoot(), opinfo.gpath)
@@ -88,8 +89,8 @@ func (m *Model) SetCommit() (int, error) {
 			if _, exists := new[p]; !exists {
 				err = m.StateConfig.UpdateDelete(p)
 				if err != nil {
-					opseq = opinfo.opseq
-					break
+					m.StateConfig.UpdateEnd()
+					return opinfo.opseq, err
 				}
 			}
 		}
@@ -100,8 +101,8 @@ func (m *Model) SetCommit() (int, error) {
 				err = m.StateConfig.UpdateCreate(p, entry.GetValueString())
 			}
 			if err != nil {
-				opseq = opinfo.opseq
-				break
+				m.StateConfig.UpdateEnd()
+				return opinfo.opseq, err
 			}
 		}
 	}
@@ -116,8 +117,8 @@ func (m *Model) SetCommit() (int, error) {
 			if _, exists := new[p]; !exists {
 				err = m.StateConfig.UpdateDelete(p)
 				if err != nil {
-					opseq = opinfo.opseq
-					break
+					m.StateConfig.UpdateEnd()
+					return opinfo.opseq, err
 				}
 			}
 		}
@@ -128,13 +129,12 @@ func (m *Model) SetCommit() (int, error) {
 				err = m.StateConfig.UpdateCreate(p, entry.GetValueString())
 			}
 			if err != nil {
-				opseq = opinfo.opseq
-				break
+				m.StateConfig.UpdateEnd()
+				return opinfo.opseq, err
 			}
 		}
 	}
 	err = m.StateConfig.UpdateEnd()
-	m.transaction = nil
 	return opseq, err
 }
 
