@@ -63,7 +63,7 @@ var (
 // }
 type Server struct {
 	Model *model.Model
-	*telemetryCtrl
+	*telemCtrl
 	disableBundling bool
 	sessions        map[string]*Session
 	alias           map[string]*gnmipb.Alias
@@ -164,7 +164,7 @@ func NewServer(opts ...Option) (*Server, error) {
 		disableBundling: hasDisableBundling(opts),
 		alias:           map[string]*gnmipb.Alias{},
 		sessions:        map[string]*Session{},
-		telemetryCtrl:   newTelemetryCB(),
+		telemCtrl:       newTeleCtrl(),
 	}
 	m, err = model.NewModel(s, hasSetCallback(opts), hasGetCallback(opts))
 	if err != nil {
@@ -185,7 +185,7 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 		disableBundling: hasDisableBundling(opts),
 		alias:           map[string]*gnmipb.Alias{},
 		sessions:        map[string]*Session{},
-		telemetryCtrl:   newTelemetryCB(),
+		telemCtrl:       newTeleCtrl(),
 	}
 
 	m, err = model.NewCustomModel(schema, supportedModels, s, hasSetCallback(opts), hasGetCallback(opts))

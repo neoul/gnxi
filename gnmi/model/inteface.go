@@ -19,7 +19,7 @@ type ChangeNotification interface {
 	ChangeCreated(path string, changes ygot.GoStruct)
 	ChangeReplaced(path string, changes ygot.GoStruct)
 	ChangeDeleted(path string)
-	ChangeFinished(changes ygot.GoStruct)
+	ChangeCompleted(changes ygot.GoStruct)
 }
 
 // StateConfig is an interface that must be implemented to the external system.
