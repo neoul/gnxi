@@ -307,7 +307,6 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 		// }
 
 	}
-
 	return newMO, nil
 }
 
