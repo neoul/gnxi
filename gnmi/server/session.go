@@ -55,11 +55,8 @@ type Session struct {
 	DestinationPort    uint16         `json:"destination-port,omitempty"`
 	Protocol           StreamProtocol `json:"protocol,omitempty"`
 
-	// telechan chan *gnmipb.SubscribeResponse // The channel to send telemetry updates
-	// teledone chan bool                  // The channel to signal telemetry updates complete
-	alias  map[string]*gnmipb.Alias
-	server *Server
-	valid  bool
+	alias map[string]*gnmipb.Alias
+	valid bool
 }
 
 var (
@@ -81,12 +78,12 @@ func (s *Server) Started(local, remote net.Addr) {
 	destinationPort, _ := strconv.ParseUint(remoteaddr[index+1:], 0, 16)
 	session := &Session{
 		ID:                 sessionID,
+		SID:                remoteaddr,
 		LoginTime:          time.Now(),
 		DestinationAddress: destinationAddress,
 		DestinationPort:    uint16(destinationPort),
 		Protocol:           StreamGRPC,
 		alias:              map[string]*gnmipb.Alias{},
-		server:             s, SID: remoteaddr,
 	}
 	s.sessions[remoteaddr] = session
 }
@@ -118,29 +115,5 @@ func (s *Server) updateSession(ctx context.Context, SID string) (*Session, error
 	session.ContentType = contentType
 	session.Protocol = StreamGRPC
 	session.valid = true
-	return session, nil
-}
-
-// getSession - Updated and Validate the session user
-func (s *Server) getSession(ctx context.Context) (*Session, error) {
-	peer, ok := utilities.QueryMetadata(ctx, "peer")
-	if !ok {
-		return nil, errMissingMetadata
-	}
-	session, ok := s.sessions[peer]
-	if !ok {
-		localaddr, remoteaddr, ok := utilities.QueryAddr(ctx)
-		if !ok {
-			return nil, errMissingMetadata
-		}
-		s.Started(localaddr, remoteaddr)
-		s.updateSession(ctx, peer)
-		session, ok = s.sessions[peer]
-		if !ok {
-			return nil, errInvalidSession
-		}
-	} else if !session.valid {
-		s.updateSession(ctx, peer)
-	}
 	return session, nil
 }
