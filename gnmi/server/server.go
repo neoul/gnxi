@@ -62,7 +62,7 @@ var (
 //		// Do something ...
 // }
 type Server struct {
-	Model *model.Model
+	*model.Model
 	*telemCtrl
 	disableBundling bool
 	sessions        map[string]*Session
@@ -397,7 +397,7 @@ func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 			select {
 			case resp, ok := <-telemetrychannel:
 				if ok {
-					fmt.Println(proto.MarshalTextString(resp))
+					// fmt.Println(proto.MarshalTextString(resp))
 					stream.Send(resp)
 				} else {
 					return

@@ -47,8 +47,8 @@ func (m *Model) initStateSync() {
 	}
 }
 
-// RequestStateSync - synchronizes the data in the path
-func (m *Model) RequestStateSync(prefix *gnmipb.Path, paths []*gnmipb.Path) {
+// RequestStateSync requests the data sync to the system before read.
+func (m *Model) RequestStateSync(prefix *gnmipb.Path, paths []*gnmipb.Path) bool {
 	spaths := make([]string, 0, 8)
 	for _, path := range paths {
 		fullpath := xpath.GNMIFullPath(prefix, path)
@@ -69,7 +69,9 @@ func (m *Model) RequestStateSync(prefix *gnmipb.Path, paths []*gnmipb.Path) {
 	for _, sp := range spaths {
 		glog.Infof("StateSync %s", sp)
 	}
-	if m.StateSync != nil {
+	if m.StateSync != nil && len(spaths) > 0 {
 		m.StateSync.UpdateSync(spaths...)
+		return true
 	}
+	return false
 }
