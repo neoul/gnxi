@@ -115,6 +115,16 @@ func (m *Model) SupportedModels() []string {
 	return mDesc
 }
 
+// FindModel finds a model.
+func (m *Model) FindModel(name string) (*gnmipb.ModelData, bool) {
+	for _, m := range m.modelData {
+		if m.GetName() == name {
+			return m, true
+		}
+	}
+	return nil, false
+}
+
 // CheckModels checks whether models are supported by the model. Return error if anything is unsupported.
 func (m *Model) CheckModels(models []*gnmipb.ModelData) error {
 	for _, mo := range models {

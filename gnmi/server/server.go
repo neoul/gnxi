@@ -31,8 +31,10 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/neoul/gnxi/gnmi/model"
+	"github.com/neoul/gnxi/gnmi/model/gostruct"
 	"github.com/neoul/gnxi/utilities"
 	"github.com/neoul/gnxi/utilities/xpath"
+	"github.com/neoul/libydb/go/ydb"
 	"github.com/openconfig/ygot/ygot"
 	"github.com/openconfig/ygot/ytypes"
 
@@ -68,6 +70,7 @@ type Server struct {
 	sessions        map[string]*Session
 	alias           map[string]*gnmipb.Alias
 	useAliases      bool
+	idb             *ydb.YDB // internal datablock
 }
 
 // Option is an interface used in the gNMI Server configuration
@@ -158,23 +161,7 @@ func hasGetCallback(opts []Option) model.StateSync {
 
 // NewServer creates an instance of Server with given json config.
 func NewServer(opts ...Option) (*Server, error) {
-	var err error
-	var m *model.Model
-	s := &Server{
-		disableBundling: hasDisableBundling(opts),
-		alias:           map[string]*gnmipb.Alias{},
-		sessions:        map[string]*Session{},
-		telemCtrl:       newTeleCtrl(),
-	}
-	m, err = model.NewModel(s, hasSetCallback(opts), hasGetCallback(opts))
-	if err != nil {
-		return nil, err
-	}
-	s.Model = m
-	if startup := hasStartup(opts); startup != nil {
-		m.Load(startup, true)
-	}
-	return s, nil
+	return NewCustomServer(gostruct.Schema, gostruct.ΓModelData, opts...)
 }
 
 // NewCustomServer creates an instance of Server with given json config.
@@ -186,6 +173,7 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 		alias:           map[string]*gnmipb.Alias{},
 		sessions:        map[string]*Session{},
 		telemCtrl:       newTeleCtrl(),
+		idb:             ydb.New("gnmi.idb"),
 	}
 
 	m, err = model.NewCustomModel(schema, supportedModels, s, hasSetCallback(opts), hasGetCallback(opts))
@@ -196,6 +184,7 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 	if startup := hasStartup(opts); startup != nil {
 		m.Load(startup, true)
 	}
+	s.idb.SetTarget(m, false)
 	return s, nil
 }
 

@@ -12,7 +12,6 @@ import (
 	"github.com/neoul/gnxi/utilities"
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/gtrie"
-	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
 	"golang.org/x/net/context"
@@ -39,6 +38,7 @@ type telemCtrl struct {
 }
 
 func newTeleCtrl() *telemCtrl {
+
 	return &telemCtrl{
 		lookup: gtrie.New(),
 		ready:  make(map[TelemID]*telemEvent),
@@ -230,7 +230,7 @@ func newTelemetrySession(ctx context.Context, s *Server) *TelemetrySession {
 }
 
 func (teleses *TelemetrySession) stopTelemetrySession() {
-	delDynamicTeleSub(teleses.Model, teleses)
+	teleses.deleteDynamicTeleInfo(teleses)
 	for _, telesub := range teleses.Telesub {
 		teleses.unregister(telesub)
 	}
@@ -868,75 +868,9 @@ func processSR(teleses *TelemetrySession, req *gnmipb.SubscribeRequest) error {
 		startingList = append(startingList, telesub)
 	}
 
-	addDynamicTeleSub(teleses.Model, startingList)
+	teleses.addDynamicTeleInfo(startingList)
 	for _, telesub := range startingList {
 		teleses.StartTelmetryUpdate(telesub)
 	}
 	return nil
-}
-
-var dynamicTeleSubInfoFormat string = `
-telemetry-system:
- subscriptions:
-  dynamic-subscriptions:
-   dynamic-subscription[id=%d]:
-    id: %d
-    state:
-     id: %d
-     destination-address: %s
-     destination-port: %d
-     sample-interval: %d
-     heartbeat-interval: %d
-     suppress-redundant: %v
-     protocol: %s
-     encoding: ENC_%s
-    sensor-paths:`
-
-var dynamicTeleSubInfoPathFormat string = `
-     sensor-path[path=%s]:
-      state:
-       path: %s`
-
-func addDynamicTeleSub(m *model.Model, telesubs []*TelemetrySubscription) {
-	switch y := m.StateSync.(type) {
-	case *ydb.YDB:
-		s := ""
-		for _, telesub := range telesubs {
-			s += fmt.Sprintf(dynamicTeleSubInfoFormat,
-				telesub.ID, telesub.ID, telesub.ID,
-				telesub.session.Address,
-				telesub.session.Port,
-				telesub.Configured.SampleInterval,
-				telesub.Configured.HeartbeatInterval,
-				telesub.Configured.SuppressRedundant,
-				"STREAM_GRPC",
-				telesub.Encoding,
-			)
-			for i := range telesub.Paths {
-				p := xpath.ToXPath(telesub.Paths[i])
-				s += fmt.Sprintf(dynamicTeleSubInfoPathFormat, p, p)
-			}
-		}
-		if s != "" {
-			y.Write([]byte(s))
-		}
-	}
-}
-
-func delDynamicTeleSub(m *model.Model, teleses *TelemetrySession) {
-	switch y := m.StateSync.(type) {
-	case *ydb.YDB:
-		s := ""
-		for _, telesub := range teleses.Telesub {
-			s += fmt.Sprintf(`
-telemetry-system:
- subscriptions:
-  dynamic-subscriptions:
-   dynamic-subscription[id=%d]:
-`, telesub.ID)
-		}
-		if s != "" {
-			y.Delete([]byte(s))
-		}
-	}
 }
