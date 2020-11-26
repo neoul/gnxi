@@ -52,7 +52,7 @@ func (m *Model) RequestStateSync(prefix *gnmipb.Path, paths []*gnmipb.Path) {
 	spaths := make([]string, 0, 8)
 	for _, path := range paths {
 		fullpath := xpath.GNMIFullPath(prefix, path)
-		glog.Infof("check StateSync %s", xpath.ToXPath(fullpath))
+		// glog.Infof("StateSync check %s", xpath.ToXPath(fullpath))
 		if len(fullpath.GetElem()) > 0 {
 			schemaPaths, _ := m.FindSchemaPaths(fullpath)
 			for _, spath := range schemaPaths {
