@@ -397,7 +397,7 @@ func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 			select {
 			case resp, ok := <-telemetrychannel:
 				if ok {
-					// fmt.Println(proto.MarshalTextString(resp))
+					fmt.Println(proto.MarshalTextString(resp))
 					stream.Send(resp)
 				} else {
 					return

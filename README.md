@@ -82,4 +82,5 @@ gnmic -a 192.168.0.77:10161 -u neoul -p admin --tls-ca pki/ca.crt --tls-cert pki
 gnmic -a 192.168.0.77:10161 -u neoul -p admin --tls-ca pki/ca.crt --tls-cert pki/client.crt --tls-key pki/client.key get --path "/interfaces/interface[name=lo]"
 gnmic -a 192.168.0.77:10161 -u neoul -p admin --tls-ca pki/ca.crt --tls-cert pki/client.crt --tls-key pki/client.key set --delete "/interfaces/interface[name=lo]"
 
+gnmic -a 192.168.0.77:10161 -u neoul -p admin --tls-ca pki/ca.crt --tls-cert pki/client.crt --tls-key pki/client.key sub --path "openconfig-interfaces:interfaces/interface/state/counters" --sample-interval 10s --heartbeat-interval 20s --stream-mode sample --suppress-redundant --log
 ```
