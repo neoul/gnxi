@@ -48,6 +48,17 @@ var (
 	}
 )
 
+// GNMIAliasPath returns Alias gNMI Path.
+func GNMIAliasPath(name string) *gnmipb.Path {
+	return &gnmipb.Path{
+		Elem: []*gnmipb.PathElem{
+			&gnmipb.PathElem{
+				Name: name,
+			},
+		},
+	}
+}
+
 // ValidateGNMIPath - checks the validation of the gNMI path.
 func ValidateGNMIPath(path *gnmipb.Path) error {
 	if path.GetElem() == nil && path.GetElement() != nil {

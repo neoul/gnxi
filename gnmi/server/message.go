@@ -8,14 +8,31 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func buildSubscribeResponse(prefix *gnmipb.Path, alias string, update []*gnmipb.Update, delete []*gnmipb.Path) []*gnmipb.SubscribeResponse {
-	if update == nil && delete == nil {
-		return []*gnmipb.SubscribeResponse{}
+// SubscriberResponse message for the target-defined aliases (server aliases)
+func buildAliasResponse(prefix *gnmipb.Path, alias string) []*gnmipb.SubscribeResponse {
+	if prefix == nil || alias == "" {
+		return nil
 	}
 	notification := gnmipb.Notification{
 		Timestamp: time.Now().UnixNano(),
 		Prefix:    prefix,
 		Alias:     alias,
+	}
+	subscribeResponse := []*gnmipb.SubscribeResponse{
+		{Response: &gnmipb.SubscribeResponse_Update{
+			Update: &notification,
+		}},
+	}
+	return subscribeResponse
+}
+
+func buildSubscribeResponse(prefix *gnmipb.Path, update []*gnmipb.Update, delete []*gnmipb.Path) []*gnmipb.SubscribeResponse {
+	if update == nil && delete == nil {
+		return nil
+	}
+	notification := gnmipb.Notification{
+		Timestamp: time.Now().UnixNano(),
+		Prefix:    prefix,
 		Update:    update,
 		Delete:    delete,
 	}

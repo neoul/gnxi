@@ -192,7 +192,7 @@ type TelemetrySession struct {
 	respchan  chan *gnmipb.SubscribeResponse
 	shutdown  chan struct{}
 	waitgroup *sync.WaitGroup
-	alias     map[string]*gnmipb.Alias
+	*clientAliases
 	*Server
 }
 
@@ -217,15 +217,15 @@ func newTelemetrySession(ctx context.Context, s *Server) *TelemetrySession {
 		port, _ = strconv.Atoi(addr[end+1:])
 	}
 	return &TelemetrySession{
-		ID:        sessID,
-		Address:   address,
-		Port:      uint16(port),
-		Telesub:   map[string]*TelemetrySubscription{},
-		respchan:  make(chan *gnmipb.SubscribeResponse, 256),
-		shutdown:  make(chan struct{}),
-		waitgroup: new(sync.WaitGroup),
-		alias:     map[string]*gnmipb.Alias{},
-		Server:    s,
+		ID:            sessID,
+		Address:       address,
+		Port:          uint16(port),
+		Telesub:       map[string]*TelemetrySubscription{},
+		respchan:      make(chan *gnmipb.SubscribeResponse, 256),
+		shutdown:      make(chan struct{}),
+		waitgroup:     new(sync.WaitGroup),
+		clientAliases: newClientAliases(),
+		Server:        s,
 	}
 }
 
@@ -460,8 +460,12 @@ func getUpdates(telesub *TelemetrySubscription, data *model.DataAndPath, encodin
 	return &gnmipb.Update{Path: datapath, Val: typedValue, Duplicates: duplicates}, nil
 }
 
-func (teleses *TelemetrySession) requestStateSync(prefix *gnmipb.Path, paths []*gnmipb.Path) bool {
-	return teleses.Model.RequestStateSync(prefix, paths)
+func (teleses *TelemetrySession) aliasesUpdate() {
+	aliases := teleses.UpdateAliases(teleses.serverAliases, true)
+	for _, alias := range aliases {
+		teleses.sendTelemetryUpdate(
+			buildAliasResponse(teleses.ToPath(alias, true).(*gnmipb.Path), alias))
+	}
 }
 
 // initTelemetryUpdate - Process and generate responses for a init update.
@@ -475,20 +479,12 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *gnmipb.SubscribeReques
 	}
 	prefix := subscriptionList.GetPrefix()
 	encoding := subscriptionList.GetEncoding()
-	useAliases := subscriptionList.GetUseAliases()
 	mode := subscriptionList.GetMode()
-	alias := ""
 	// [FIXME] Are they different?
 	switch mode {
 	case gnmipb.SubscriptionList_POLL:
 	case gnmipb.SubscriptionList_ONCE:
 	case gnmipb.SubscriptionList_STREAM:
-	}
-	if useAliases {
-		// 1. lookup the prefix in the session.alias for client.alias.
-		// 1. lookup the prefix in the server.alias for server.alias.
-		// prefix = nil
-		// alias = xxx
 	}
 
 	teleses.RLock()
@@ -535,8 +531,9 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *gnmipb.SubscribeReques
 					if bundling {
 						updates = append(updates, u)
 					} else {
+						aliasPrefix := teleses.ToAlias(prefix, false).(*gnmipb.Path)
 						err = teleses.sendTelemetryUpdate(
-							buildSubscribeResponse(prefix, alias, []*gnmipb.Update{u}, nil))
+							buildSubscribeResponse(aliasPrefix, []*gnmipb.Update{u}, nil))
 						if err != nil {
 							return err
 						}
@@ -546,7 +543,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *gnmipb.SubscribeReques
 		}
 		if bundling && len(updates) > 0 {
 			err = teleses.sendTelemetryUpdate(
-				buildSubscribeResponse(prefix, alias, updates, nil))
+				buildSubscribeResponse(prefix, updates, nil))
 			if err != nil {
 				return err
 			}
@@ -560,20 +557,13 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 	bundling := !teleses.disableBundling
 	prefix := telesub.Prefix
 	encoding := telesub.Encoding
-	useAliases := telesub.UseAliases
 	mode := telesub.StreamingMode
-	alias := ""
+
 	// [FIXME] Are they different?
 	switch mode {
 	case gnmipb.SubscriptionList_POLL:
 	case gnmipb.SubscriptionList_ONCE:
 	case gnmipb.SubscriptionList_STREAM:
-	}
-	if useAliases {
-		// 1. lookup the prefix in the session.alias for client.alias.
-		// 2. lookup the prefix in the server.alias for server.alias.
-		// prefix = nil
-		// alias = xxx
 	}
 
 	teleses.RLock()
@@ -636,8 +626,9 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 						if err != nil {
 							return status.Error(codes.Internal, err.Error())
 						}
+						aliasPrefix := teleses.ToAlias(prefix, false).(*gnmipb.Path)
 						err = teleses.sendTelemetryUpdate(
-							buildSubscribeResponse(prefix, alias, []*gnmipb.Update{u}, nil))
+							buildSubscribeResponse(aliasPrefix, []*gnmipb.Update{u}, nil))
 						if err != nil {
 							return err
 						}
@@ -646,8 +637,9 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 			}
 		}
 		if bundling {
+			aliasPrefix := teleses.ToAlias(prefix, false).(*gnmipb.Path)
 			err = teleses.sendTelemetryUpdate(
-				buildSubscribeResponse(prefix, alias, updates, deletes))
+				buildSubscribeResponse(aliasPrefix, updates, deletes))
 			if err != nil {
 				return err
 			}
@@ -657,8 +649,9 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 				return status.Error(codes.Internal, err.Error())
 			}
 			for _, d := range deletes {
+				aliasPrefix := teleses.ToAlias(prefix, false).(*gnmipb.Path)
 				err = teleses.sendTelemetryUpdate(
-					buildSubscribeResponse(prefix, alias, nil, []*gnmipb.Path{d}))
+					buildSubscribeResponse(aliasPrefix, nil, []*gnmipb.Path{d}))
 				if err != nil {
 					return err
 				}
@@ -783,19 +776,7 @@ func (teleses *TelemetrySession) addPollSubscription() error {
 	return nil
 }
 
-func (teleses *TelemetrySession) updateAliases(aliaslist []*gnmipb.Alias) error {
-	for _, alias := range aliaslist {
-		name := alias.GetAlias()
-		if !strings.HasPrefix(name, "#") {
-			msg := fmt.Sprintf("invalid alias(Alias): Alias must start with '#'")
-			return status.Error(codes.InvalidArgument, msg)
-		}
-		teleses.alias[name] = alias
-	}
-	return nil
-}
-
-func processSR(teleses *TelemetrySession, req *gnmipb.SubscribeRequest) error {
+func (teleses *TelemetrySession) processSubReq(req *gnmipb.SubscribeRequest) error {
 	// SubscribeRequest for poll Subscription indication
 	pollMode := req.GetPoll()
 	if pollMode != nil {
@@ -804,15 +785,20 @@ func processSR(teleses *TelemetrySession, req *gnmipb.SubscribeRequest) error {
 	// SubscribeRequest for aliases update
 	aliases := req.GetAliases()
 	if aliases != nil {
-		// process client aliases
-		aliaslist := aliases.GetAlias()
-		return teleses.updateAliases(aliaslist)
+		return teleses.SetAliases(aliases.GetAlias())
 	}
+
 	// extension := req.GetExtension()
 	subscriptionList := req.GetSubscribe()
 	if subscriptionList == nil {
 		return status.Errorf(codes.InvalidArgument, "no subscribe(SubscriptionList)")
 	}
+	// check & update the server aliases and use_aliases
+	useAliases := subscriptionList.GetUseAliases()
+	if useAliases {
+		teleses.aliasesUpdate()
+	}
+
 	subList := subscriptionList.GetSubscription()
 	subListLength := len(subList)
 	if subList == nil || subListLength <= 0 {
@@ -828,11 +814,12 @@ func processSR(teleses *TelemetrySession, req *gnmipb.SubscribeRequest) error {
 	if err := teleses.checkEncoding(encoding); err != nil {
 		return err
 	}
+	prefix := subscriptionList.GetPrefix()
 	paths := make([]*gnmipb.Path, 0, subListLength)
 	for _, updateEntry := range subList {
 		paths = append(paths, updateEntry.Path)
 	}
-	stateSync := teleses.RequestStateSync(subscriptionList.Prefix, paths)
+	stateSync := teleses.RequestStateSync(prefix, paths)
 
 	err := teleses.initTelemetryUpdate(req)
 	mode := subscriptionList.GetMode()
@@ -842,8 +829,6 @@ func processSR(teleses *TelemetrySession, req *gnmipb.SubscribeRequest) error {
 		return err
 	}
 
-	prefix := subscriptionList.GetPrefix()
-	useAliases := subscriptionList.GetUseAliases()
 	allowAggregation := subscriptionList.GetAllowAggregation()
 	startingList := make([]*TelemetrySubscription, 0, subListLength)
 	for _, updateEntry := range subList {

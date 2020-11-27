@@ -46,31 +46,16 @@ var (
 	supportedEncodings = []gnmipb.Encoding{gnmipb.Encoding_JSON, gnmipb.Encoding_JSON_IETF}
 )
 
-// Server struct maintains the data structure for device config and implements the interface of gnmi server. It supports Capabilities, Get, and Set APIs.
-// Typical usage:
-//	g := grpc.NewServer()
-//	s, err := Server.NewServer(model, config, callback)
-//	gnmipb.NewServer(g, s)
-//	reflection.Register(g)
-//	listen, err := net.Listen("tcp", ":8080")
-//	g.Serve(listen)
-//
-// For a real device, apply the config changes to the hardware in the callback function.
-// Arguments:
-//		newRoot: new root config to be applied on the device.
-// func callback(newRoot ygot.ValidatedGoStruct) error {
-//		// Apply the config to your device and return nil if success. return error if fails.
-//		//
-//		// Do something ...
-// }
+// Server struct maintains the data structure for device state and config and implements
+// the interface of gNMI server. It supports Capabilities, Get, Set and Subscribe RPCs.
 type Server struct {
 	*model.Model
 	*telemCtrl
 	disableBundling bool
 	sessions        map[string]*Session
-	alias           map[string]*gnmipb.Alias
-	useAliases      bool
-	idb             *ydb.YDB // internal datablock
+	serverAliases   map[string]string // target-defined aliases (server aliases)
+	enabledAliases  bool              // whether server aliases is enabled
+	idb             *ydb.YDB          // internal datablock
 }
 
 // Option is an interface used in the gNMI Server configuration
@@ -170,7 +155,7 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 	var m *model.Model
 	s := &Server{
 		disableBundling: hasDisableBundling(opts),
-		alias:           map[string]*gnmipb.Alias{},
+		serverAliases:   map[string]string{},
 		sessions:        map[string]*Session{},
 		telemCtrl:       newTeleCtrl(),
 		idb:             ydb.New("gnmi.idb"),
@@ -409,8 +394,7 @@ func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 			return err
 		}
 		// fmt.Println(proto.MarshalTextString(req))
-		err = processSR(teleses, req)
-		if err != nil {
+		if err = teleses.processSubReq(req); err != nil {
 			return err
 		}
 	}
