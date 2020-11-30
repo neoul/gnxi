@@ -15,11 +15,11 @@ import (
 )
 
 var (
-	caCert     = flag.String("ca-cert", "", "CA certificate file")
-	serverCert = flag.String("server-cert", "", "Server certificate file")
-	serverKey  = flag.String("server-key", "", "Server private key file")
-	skipVerify = flag.Bool("skip-verify", false, "Skip TLS connection verfication")
-	notls      = flag.Bool("no-tls", false, "Disable TLS (Transport Layer Security) for gRPC insecure mode")
+	caCert     = flag.String("ca-cert", "", "ca certificate file")
+	serverCert = flag.String("server-cert", "", "server certificate file")
+	serverKey  = flag.String("server-key", "", "server private key file")
+	skipVerify = flag.Bool("skip-verify", false, "skip tls connection verfication")
+	notls      = flag.Bool("no-tls", false, "disable tls (transport layer security) for grpc insecure mode")
 )
 
 // LoadCertificates loads certificates from file.
