@@ -88,7 +88,7 @@ func (m *Model) Load(startup []byte, sync bool) error {
 	if err != nil {
 		return err
 	}
-	if sync {
+	if sync && m.StateConfig != nil {
 		newlist := mo.ListAll(mo.GetRoot(), nil)
 		curlist := m.ListAll(m.GetRoot(), nil)
 		cur := newDataAndPathMap(curlist)
