@@ -213,6 +213,16 @@ func parseElement(elem string) ([]interface{}, error) {
 	i := strings.Index(elem, "[")
 	if i < 0 {
 		if !idRe.MatchString(elem) {
+			// ignore the value specified at the path suffix.
+			//   e.g. /abc/efg=VALUE ==> []interface{}{abc, efg}
+			// ignore `.` and `..` for relative path.
+			if elem == "." {
+				return []interface{}{elem}, nil
+			} else if elem == ".." {
+				return []interface{}{elem}, nil
+			} else if i = strings.Index(elem, "="); i > 0 {
+				return []interface{}{elem}, nil
+			}
 			return nil, fmt.Errorf("invalid node name: %q", elem)
 		}
 		return []interface{}{elem}, nil
