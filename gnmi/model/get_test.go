@@ -1,7 +1,6 @@
 package model
 
 import (
-	"flag"
 	"testing"
 
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
@@ -11,8 +10,12 @@ type testStateSync struct {
 	path []string
 }
 
-func newTestStateSync() *testStateSync {
-	return &testStateSync{path: make([]string, 0)}
+func newTestStateSync(path ...string) *testStateSync {
+	tss := &testStateSync{path: make([]string, 0, len(path))}
+	for i := range path {
+		tss.path = append(tss.path, path[i])
+	}
+	return tss
 }
 
 func (tss *testStateSync) UpdateSync(path ...string) error {
@@ -20,11 +23,20 @@ func (tss *testStateSync) UpdateSync(path ...string) error {
 	return nil
 }
 
+func (tss *testStateSync) UpdateSyncPath() []string {
+	return tss.path
+}
+
 func TestModel_RequestStateSync(t *testing.T) {
-	tss := newTestStateSync()
-	flag.Set("sync-path", "/interfaces/interface/state/counters")
-	flag.Set("sync-path", "/interfaces/interface/state/enabled")
-	flag.Set("sync-path", "/interfaces/interface/config/enabled")
+	syncRequestedPath := []string{
+		"/interfaces/interface/state/counters",
+		"/interfaces/interface/state/enabled",
+		"/interfaces/interface/config/enabled",
+	}
+	tss := newTestStateSync(syncRequestedPath...)
+	// flag.Set("sync-path", "/interfaces/interface/state/counters")
+	// flag.Set("sync-path", "/interfaces/interface/state/enabled")
+	// flag.Set("sync-path", "/interfaces/interface/config/enabled")
 	m, err := NewModel(nil, nil, tss)
 	if err != nil {
 		t.Error("failed to create a model")

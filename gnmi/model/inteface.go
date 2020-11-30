@@ -4,7 +4,8 @@ import (
 	"github.com/openconfig/ygot/ygot"
 )
 
-// StateCallback is the default interface called back or called to, in order to update all modeled data.
+// StateCallback is the default interface called back or called to,
+// in order to update all modeled data.
 type StateCallback interface {
 	UpdateStart() error
 	UpdateCreate(path string, value string) error
@@ -23,7 +24,8 @@ type ChangeNotification interface {
 }
 
 // StateConfig is an interface that must be implemented to the external system.
-// The external system must configure the configuration changes and then update the modeled data via StateUpdate interface.
+// The external system must configure the configuration changes and then
+// update the modeled data via StateUpdate interface.
 type StateConfig interface {
 	StateCallback
 }
@@ -37,5 +39,11 @@ type StateUpdate interface {
 // StateSync interface is used to request the sync of the modeled data immediately.
 // The external system must update the data requested by the path if it is invoked.
 type StateSync interface {
+	// The callback interface invoked when a gNMI Get RPC is issued
+	// about the asynchronized data to retrieve the device state.
+	// The path of the asynchronized data must be provided by UpdateSyncPath.
 	UpdateSync(path ...string) error
+
+	// UpdateSyncPath returns the paths that the synchronization is requested.
+	UpdateSyncPath() []string
 }
