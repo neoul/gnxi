@@ -48,7 +48,7 @@ func LoadCertificates(cafile, certfile, keyfile string) ([]tls.Certificate, *x50
 
 // ServerCredentials generates gRPC ServerOptions for existing credentials.
 func ServerCredentials(cafile, certfile, keyfile string, skipVerifyTLS, noTLS bool) []grpc.ServerOption {
-	if *notls || skipVerifyTLS {
+	if *notls || noTLS {
 		return []grpc.ServerOption{}
 	}
 	if cafile == "" {

@@ -84,3 +84,11 @@ gnmic -a 192.168.0.77:10161 -u neoul -p admin --tls-ca pki/ca.crt --tls-cert pki
 
 gnmic -a 192.168.0.77:10161 -u neoul -p admin --tls-ca pki/ca.crt --tls-cert pki/client.crt --tls-key pki/client.key sub --path "openconfig-interfaces:interfaces/interface/state/counters" --sample-interval 10s --heartbeat-interval 20s --stream-mode sample --suppress-redundant --log
 ```
+
+## To Do
+
+* Path Aliases processing
+  * Add and delete path aliases
+  * Client-defined Aliases
+  * Target-defined Aliases
+* Target and Origin in gNMI Path
