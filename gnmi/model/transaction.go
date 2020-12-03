@@ -1,6 +1,8 @@
 package model
 
 import (
+	"fmt"
+
 	"github.com/neoul/gnxi/utilities/xpath"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
@@ -9,8 +11,9 @@ import (
 type opType int
 
 const (
+	opNone opType = iota
 	// opUpdate - opType of SetPathData (Merge)
-	opUpdate opType = iota
+	opUpdate
 	// opReplace - opType of SetPathData
 	opReplace
 	// opDelete - opType of SetPathData
@@ -62,10 +65,11 @@ func startTransaction() *setTransaction {
 	return set
 }
 
-func (set *setTransaction) setSequnce(gpath *gnmipb.Path) {
+func (set *setTransaction) setSequnce(optype opType, gpath *gnmipb.Path) {
 	set.seq++
 	path := xpath.ToXPath(gpath)
-	set.opseqs[path] = set.seq
+	opXPath := fmt.Sprintf("%s%s", optype, path)
+	set.opseqs[opXPath] = set.seq
 }
 
 func (set *setTransaction) addOperation(optype opType, xpath *string, gpath *gnmipb.Path, curval interface{}) {
@@ -76,6 +80,8 @@ func (set *setTransaction) addOperation(optype opType, xpath *string, gpath *gnm
 		gpath:  gpath,
 		curval: curval,
 	}
+	opXPath := fmt.Sprintf("%s%s", optype, *xpath)
+	set.opseqs[opXPath] = set.seq
 	switch optype {
 	case opDelete:
 		set.delete = append(set.delete, opinfo)
@@ -84,4 +90,13 @@ func (set *setTransaction) addOperation(optype opType, xpath *string, gpath *gnm
 	case opUpdate:
 		set.update = append(set.update, opinfo)
 	}
+}
+
+func (set *setTransaction) returnSetErr(optype opType, seq int, err error) (int, error) {
+	if serr, ok := err.(SetError); ok {
+		path := fmt.Sprintf("%s%s", optype, serr.ErrorPath())
+		foundseq := set.opseqs[path]
+		return foundseq, err
+	}
+	return seq, err
 }

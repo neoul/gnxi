@@ -342,6 +342,10 @@ func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 	if err != nil {
 		// update error
 		if index < -1 {
+			resultlen := len(result)
+			for i := index; i < resultlen; i++ {
+				result[i] = buildUpdateResultAborted(result[i].Op, result[i].Path)
+			}
 			result[index] = buildUpdateResult(result[index].Op, result[index].Path, err)
 		}
 		s.Model.SetRollback()
