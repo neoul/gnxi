@@ -354,7 +354,7 @@ func runTestGet(t *testing.T, s *Server, textPbPath string, wantRetCode codes.Co
 	}
 }
 
-func TestGetWithYdb(t *testing.T) {
+func TestGetWithYaml(t *testing.T) {
 	yamlData, err := ioutil.ReadFile("../model/data/sample.yaml")
 	if err != nil {
 		glog.Exitf("error in reading config file: %v", err)

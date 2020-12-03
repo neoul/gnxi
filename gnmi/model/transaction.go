@@ -3,7 +3,7 @@ package model
 import (
 	"fmt"
 
-	"github.com/neoul/gnxi/utilities/xpath"
+	"github.com/neoul/gtrie"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
@@ -40,12 +40,12 @@ type opInfo struct {
 	curval interface{}
 }
 
-var setTranID int
+var setTranID uint
 
 type setTransaction struct {
-	id      int
+	id      uint
 	seq     int
-	opseqs  map[string]int
+	opseqs  *gtrie.Trie
 	delete  []*opInfo
 	replace []*opInfo
 	update  []*opInfo
@@ -57,7 +57,7 @@ func startTransaction() *setTransaction {
 	set := &setTransaction{
 		id:      setTranID,
 		seq:     -1,
-		opseqs:  map[string]int{},
+		opseqs:  gtrie.New(),
 		delete:  []*opInfo{},
 		replace: []*opInfo{},
 		update:  []*opInfo{},
@@ -65,11 +65,8 @@ func startTransaction() *setTransaction {
 	return set
 }
 
-func (set *setTransaction) setSequnce(optype opType, gpath *gnmipb.Path) {
+func (set *setTransaction) setSequnce() {
 	set.seq++
-	path := xpath.ToXPath(gpath)
-	opXPath := fmt.Sprintf("%s%s", optype, path)
-	set.opseqs[opXPath] = set.seq
 }
 
 func (set *setTransaction) addOperation(optype opType, xpath *string, gpath *gnmipb.Path, curval interface{}) {
@@ -80,8 +77,8 @@ func (set *setTransaction) addOperation(optype opType, xpath *string, gpath *gnm
 		gpath:  gpath,
 		curval: curval,
 	}
-	opXPath := fmt.Sprintf("%s%s", optype, *xpath)
-	set.opseqs[opXPath] = set.seq
+	opath := fmt.Sprintf("%s%s", optype, *xpath)
+	set.opseqs.Add(opath, set.seq)
 	switch optype {
 	case opDelete:
 		set.delete = append(set.delete, opinfo)
@@ -92,11 +89,12 @@ func (set *setTransaction) addOperation(optype opType, xpath *string, gpath *gnm
 	}
 }
 
-func (set *setTransaction) returnSetErr(optype opType, seq int, err error) (int, error) {
+func (set *setTransaction) returnSetError(optype opType, seq int, err error) (int, error) {
 	if serr, ok := err.(SetError); ok {
-		path := fmt.Sprintf("%s%s", optype, serr.ErrorPath())
-		foundseq := set.opseqs[path]
-		return foundseq, err
+		opath := fmt.Sprintf("%s%s", optype, serr.ErrorPath())
+		if _, fvalue, ok := set.opseqs.FindLongestMatchedPrefix(opath); ok {
+			return fvalue.(int), err
+		}
 	}
 	return seq, err
 }

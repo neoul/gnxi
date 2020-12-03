@@ -58,16 +58,15 @@ func newDataAndPathMap(in []*DataAndPath) map[string]*DataAndPath {
 // SetCommit commit the changed configuration. it returns an error with error index.
 func (m *Model) SetCommit() (int, error) {
 	var err error
-	var opseq int = -1
 	if m.StateConfig == nil {
-		return m.transaction.returnSetErr(
-			opNone, opseq, status.Errorf(codes.Internal, "no StateConfig interface"))
+		return m.transaction.returnSetError(
+			opNone, -1, status.Errorf(codes.Internal, "no StateConfig interface"))
 	}
 
 	// delete
 	if err = m.StateConfig.UpdateStart(); err != nil {
 		m.StateConfig.UpdateEnd()
-		return m.transaction.returnSetErr(opDelete, opseq, err)
+		return m.transaction.returnSetError(opDelete, -1, err)
 	}
 	for _, opinfo := range m.transaction.delete {
 		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath})
@@ -75,18 +74,18 @@ func (m *Model) SetCommit() (int, error) {
 			err = m.StateConfig.UpdateDelete(p)
 			if err != nil {
 				m.StateConfig.UpdateEnd()
-				return m.transaction.returnSetErr(opDelete, opinfo.opseq, err)
+				return m.transaction.returnSetError(opDelete, opinfo.opseq, err)
 			}
 		}
 	}
 	if err = m.StateConfig.UpdateEnd(); err != nil {
-		return m.transaction.returnSetErr(opDelete, opseq, err)
+		return m.transaction.returnSetError(opDelete, -1, err)
 	}
 
 	// replace (delete and then update)
 	if err = m.StateConfig.UpdateStart(); err != nil {
 		m.StateConfig.UpdateEnd()
-		return m.transaction.returnSetErr(opReplace, opseq, err)
+		return m.transaction.returnSetError(opReplace, -1, err)
 	}
 	for _, opinfo := range m.transaction.replace {
 		newlist := m.ListAll(m.GetRoot(), opinfo.gpath)
@@ -99,7 +98,7 @@ func (m *Model) SetCommit() (int, error) {
 				err = m.StateConfig.UpdateDelete(p)
 				if err != nil {
 					m.StateConfig.UpdateEnd()
-					return m.transaction.returnSetErr(opReplace, opinfo.opseq, err)
+					return m.transaction.returnSetError(opReplace, opinfo.opseq, err)
 				}
 			}
 		}
@@ -111,17 +110,17 @@ func (m *Model) SetCommit() (int, error) {
 			}
 			if err != nil {
 				m.StateConfig.UpdateEnd()
-				return m.transaction.returnSetErr(opReplace, opinfo.opseq, err)
+				return m.transaction.returnSetError(opReplace, opinfo.opseq, err)
 			}
 		}
 	}
 	if err = m.StateConfig.UpdateEnd(); err != nil {
-		return m.transaction.returnSetErr(opReplace, opseq, err)
+		return m.transaction.returnSetError(opReplace, -1, err)
 	}
 	// update
 	if err = m.StateConfig.UpdateStart(); err != nil {
 		m.StateConfig.UpdateEnd()
-		return m.transaction.returnSetErr(opUpdate, opseq, err)
+		return m.transaction.returnSetError(opUpdate, -1, err)
 	}
 	for _, opinfo := range m.transaction.update {
 		newlist := m.ListAll(m.GetRoot(), opinfo.gpath)
@@ -134,7 +133,7 @@ func (m *Model) SetCommit() (int, error) {
 				err = m.StateConfig.UpdateDelete(p)
 				if err != nil {
 					m.StateConfig.UpdateEnd()
-					return m.transaction.returnSetErr(opUpdate, opinfo.opseq, err)
+					return m.transaction.returnSetError(opUpdate, opinfo.opseq, err)
 				}
 			}
 		}
@@ -146,21 +145,21 @@ func (m *Model) SetCommit() (int, error) {
 			}
 			if err != nil {
 				m.StateConfig.UpdateEnd()
-				return m.transaction.returnSetErr(opUpdate, opinfo.opseq, err)
+				return m.transaction.returnSetError(opUpdate, opinfo.opseq, err)
 			}
 		}
 	}
 	if err = m.StateConfig.UpdateEnd(); err != nil {
-		return m.transaction.returnSetErr(opUpdate, opseq, err)
+		return m.transaction.returnSetError(opUpdate, -1, err)
 	}
-	return opseq, err
+	return -1, err
 }
 
 // SetDelete deletes the path from root if the path exists.
 func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 	fullpath := xpath.GNMIFullPath(prefix, path)
 	targets, _ := m.Get(fullpath)
-	m.transaction.setSequnce(opDelete, fullpath)
+	m.transaction.setSequnce()
 	for _, target := range targets {
 		targetPath, err := xpath.ToGNMIPath(target.Path)
 		if err != nil {
@@ -187,7 +186,7 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	var err error
 	fullpath := xpath.GNMIFullPath(prefix, path)
-	m.transaction.setSequnce(opReplace, fullpath)
+	m.transaction.setSequnce()
 	targets, ok := m.Get(fullpath)
 	if ok {
 		for _, target := range targets {
@@ -220,7 +219,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	var err error
 	fullpath := xpath.GNMIFullPath(prefix, path)
-	m.transaction.setSequnce(opUpdate, fullpath)
+	m.transaction.setSequnce()
 	targets, ok := m.Get(fullpath)
 	if ok {
 		for _, target := range targets {
