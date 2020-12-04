@@ -173,6 +173,12 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 	return s, nil
 }
 
+// Load loads the startup state of the Server Model.
+// startup is YAML or JSON startup data to populate the creating structure (gostruct).
+func (s *Server) Load(startup []byte) error {
+	return s.Model.Load(startup, true)
+}
+
 // checkEncoding checks whether encoding and models are supported by the server. Return error if anything is unsupported.
 func (s *Server) checkEncoding(encoding gnmipb.Encoding) error {
 	hasSupportedEncoding := false
