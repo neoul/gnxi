@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"reflect"
 	"sort"
 	"strings"
@@ -308,6 +309,33 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 
 	}
 	return newMO, nil
+}
+
+// ExportToJSON returns json bytes of the MO
+func (mo *MO) ExportToJSON(rfc7951json bool) ([]byte, error) {
+	var err error
+	var jm map[string]interface{}
+	if rfc7951json {
+		jm, err = ygot.ConstructIETFJSON(mo.GetRoot(), &ygot.RFC7951JSONConfig{AppendModuleName: true})
+	} else {
+		jm, err = ygot.ConstructInternalJSON(mo.GetRoot())
+	}
+	if err != nil {
+		return nil, err
+	}
+	return json.MarshalIndent(jm, "", " ")
+}
+
+// Export returns json map[string]interface{} of the MO
+func (mo *MO) Export(rfc7951json bool) (map[string]interface{}, error) {
+	var err error
+	var jm map[string]interface{}
+	if rfc7951json {
+		jm, err = ygot.ConstructIETFJSON(mo.GetRoot(), &ygot.RFC7951JSONConfig{AppendModuleName: true})
+	} else {
+		jm, err = ygot.ConstructInternalJSON(mo.GetRoot())
+	}
+	return jm, err
 }
 
 // UpdateCreate is a function of StateUpdate Interface to add a new value to the path of the MO.
