@@ -371,23 +371,25 @@ func TestGetWithYaml(t *testing.T) {
 		modelData   []*gnmipb.ModelData
 		wantRetCode codes.Code
 		wantRespVal interface{}
-	}{{
-		desc: "get valid but non-existing node",
-		textPbPath: `
+	}{
+		{
+			desc: "get valid but non-existing node",
+			textPbPath: `
 			elem: <name: "system" >
 		`,
-		wantRetCode: codes.OK, // [CHECK] codes.NotFound?
-	}, {
-		desc: "node with attribute",
-		textPbPath: `
+			wantRetCode: codes.OK, // [CHECK] codes.NotFound?
+		},
+		{
+			desc: "node with attribute",
+			textPbPath: `
 								elem: <name: "interfaces" >
 								elem: <
 									name: "interface"
 									key: <key: "name" value: "eth1" >
 								>
 								elem: <name: "config" >`,
-		wantRetCode: codes.OK,
-		wantRespVal: `{
+			wantRetCode: codes.OK,
+			wantRespVal: `{
 				"openconfig-interfaces:name": "eth1",
 				"openconfig-interfaces:type": "iana-if-type:ethernetCsmacd",
 				"openconfig-interfaces:mtu": 1516,
@@ -395,9 +397,10 @@ func TestGetWithYaml(t *testing.T) {
 				"openconfig-interfaces:description": "ethernet card #2",
 				"openconfig-interfaces:enabled": true
 			}`,
-	}, {
-		desc: "node with attribute in its parent",
-		textPbPath: `
+		},
+		{
+			desc: "node with attribute in its parent",
+			textPbPath: `
 								elem: <name: "interfaces" >
 								elem: <
 									name: "interface"
@@ -405,22 +408,24 @@ func TestGetWithYaml(t *testing.T) {
 								>
 								elem: <name: "config" >
 								elem: <name: "type" >`,
-		wantRetCode: codes.OK,
-		wantRespVal: `ethernetCsmacd`,
-	}, {
-		desc: "ref leaf node",
-		textPbPath: `
+			wantRetCode: codes.OK,
+			wantRespVal: `ethernetCsmacd`,
+		},
+		{
+			desc: "ref leaf node",
+			textPbPath: `
 								elem: <name: "interfaces" >
 								elem: <
 									name: "interface"
 									key: <key: "name" value: "eth0" >
 								>
 								elem: <name: "name" >`,
-		wantRetCode: codes.OK,
-		wantRespVal: "eth0",
-	}, {
-		desc: "regular leaf node",
-		textPbPath: `
+			wantRetCode: codes.OK,
+			wantRespVal: "eth0",
+		},
+		{
+			desc: "regular leaf node",
+			textPbPath: `
 								elem: <name: "interfaces" >
 								elem: <
 									name: "interface"
@@ -428,33 +433,37 @@ func TestGetWithYaml(t *testing.T) {
 								>
 								elem: <name: "config" >
 								elem: <name: "name" >`,
-		wantRetCode: codes.OK,
-		wantRespVal: "eth0",
-	}, {
-		desc: "non-existing node: wrong path name",
-		textPbPath: `
+			wantRetCode: codes.OK,
+			wantRespVal: "eth0",
+		},
+		{
+			desc: "non-existing node: wrong path name",
+			textPbPath: `
 								elem: <name: "interfaces" >
 								elem: <
 									name: "interface"
 									key: <key: "name" value: "eth0" >
 								>
 								elem: <name: "bar" >`,
-		wantRetCode: codes.NotFound,
-	}, {
-		desc: "non-existing node: wrong path attribute",
-		textPbPath: `
+			wantRetCode: codes.NotFound,
+		},
+		{
+			desc: "non-existing node: wrong path attribute",
+			textPbPath: `
 								elem: <name: "interfaces" >
 								elem: <
 									name: "interface"
 									key: <key: "foo" value: "eth0" >
 								>
 								elem: <name: "name" >`,
-		wantRetCode: codes.NotFound,
-	}, {
-		desc:        "use of model data not supported",
-		modelData:   []*gnmipb.ModelData{&gnmipb.ModelData{}},
-		wantRetCode: codes.Unimplemented,
-	}}
+			wantRetCode: codes.NotFound,
+		},
+		{
+			desc:        "use of model data not supported",
+			modelData:   []*gnmipb.ModelData{&gnmipb.ModelData{}},
+			wantRetCode: codes.Unimplemented,
+		},
+	}
 
 	for _, td := range tds {
 		t.Run(td.desc, func(t *testing.T) {

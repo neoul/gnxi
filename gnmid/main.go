@@ -90,7 +90,7 @@ func (db *datablock) UpdateEnd() error {
 
 // UpdateSync requests the update to remote datablock instances in order to refresh the data nodes.
 func (db *datablock) UpdateSync(path ...string) error {
-	return db.SyncTo(time.Second*3, true, path...)
+	return db.EnhansedSyncTo(time.Second*3, true, path...)
 }
 
 // UpdateSyncPath requests the update to remote datablock instances in order to refresh the data nodes.
