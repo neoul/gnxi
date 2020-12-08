@@ -16,7 +16,7 @@ func (m *Model) WriteTypedValue(path *gnmipb.Path, typedValue *gnmipb.TypedValue
 	base := m.GetRoot()
 	tValue, tSchema, err := ytypes.GetOrCreateNode(schema, base, path)
 	if err != nil {
-		return err
+		return status.Error(codes.Internal, err)
 	}
 	if tSchema.IsDir() {
 		target := tValue.(ygot.GoStruct)
@@ -26,7 +26,7 @@ func (m *Model) WriteTypedValue(path *gnmipb.Path, typedValue *gnmipb.TypedValue
 	} else { // (schema.IsLeaf() || schema.IsLeafList())
 		err = ytypes.SetNode(schema, base, path, typedValue, &ytypes.InitMissingElements{})
 	}
-	return err
+	return status.Error(codes.Internal, err)
 }
 
 // SetInit initializes the Set transaction.
@@ -152,7 +152,7 @@ func (m *Model) SetCommit() (int, error) {
 	if err = m.StateConfig.UpdateEnd(); err != nil {
 		return m.transaction.returnSetError(opUpdate, -1, err)
 	}
-	return -1, err
+	return -1, status.Error(codes.Internal, err)
 }
 
 // SetDelete deletes the path from root if the path exists.
@@ -171,11 +171,11 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 			if mo, err := m.NewRoot(nil); err == nil {
 				m.MO = mo
 			} else {
-				return err
+				return status.Error(codes.Internal, err)
 			}
 		} else {
 			if err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath); err != nil {
-				return err
+				return status.Error(codes.Internal, err)
 			}
 		}
 	}
@@ -197,20 +197,20 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 			m.transaction.addOperation(opReplace, &target.Path, targetPath, target.Value)
 			err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath)
 			if err != nil {
-				return err
+				return status.Error(codes.Internal, err)
 			}
 			err = m.WriteTypedValue(targetPath, typedValue)
 			if err != nil {
-				return err
+				return status.Error(codes.Internal, err)
 			}
 		}
-		return nil
+		return status.Error(codes.Internal, err)
 	}
 	tpath := xpath.ToXPath(fullpath)
 	m.transaction.addOperation(opReplace, &tpath, fullpath, nil)
 	err = m.WriteTypedValue(fullpath, typedValue)
 	if err != nil {
-		return err
+		return status.Error(codes.Internal, err)
 	}
 	return nil
 }
@@ -230,7 +230,7 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 			m.transaction.addOperation(opUpdate, &target.Path, targetPath, target.Value)
 			err = m.WriteTypedValue(targetPath, typedValue)
 			if err != nil {
-				return err
+				return status.Error(codes.Internal, err)
 			}
 		}
 		return nil
@@ -239,7 +239,7 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 	m.transaction.addOperation(opUpdate, &tpath, fullpath, nil)
 	err = m.WriteTypedValue(fullpath, typedValue)
 	if err != nil {
-		return err
+		return status.Error(codes.Internal, err)
 	}
 	return nil
 }

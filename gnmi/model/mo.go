@@ -7,12 +7,14 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
+	"github.com/neoul/gnxi/utilities/status"
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/goyang/pkg/yang"
 	"github.com/openconfig/ygot/ygot"
 	"github.com/openconfig/ygot/ytypes"
+	"google.golang.org/grpc/codes"
 )
 
 // MO (ModeledObject) for wrapping ygot.GoStruct and schema
@@ -292,14 +294,14 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 		Unmarshal:  mo.Unmarshal,
 	}
 	if startup != nil {
-		if err := newMO.Unmarshal(startup, newMO.GetRoot()); err != nil {
+		if jerr := newMO.Unmarshal(startup, newMO.GetRoot()); jerr != nil {
 			datablock, close := ydb.Open("NewRoot")
 			defer close()
-			if err := datablock.Parse(startup); err != nil {
-				return nil, err
+			if yerr := datablock.Parse(startup); yerr != nil {
+				return nil, status.Errorf(codes.Internal, "json: %v, yaml: %v", jerr, yerr)
 			}
-			if err := datablock.Convert(newMO); err != nil {
-				return nil, err
+			if yerr := datablock.Convert(newMO); yerr != nil {
+				return nil, status.Errorf(codes.Internal, "json: %v, yaml: %v", jerr, yerr)
 			}
 		}
 		// [FIXME] - error in creating gnmid: /device/interfaces: /device/interfaces/interface: list interface contains more than max allowed elements: 2 > 0
@@ -321,9 +323,12 @@ func (mo *MO) ExportToJSON(rfc7951json bool) ([]byte, error) {
 		jm, err = ygot.ConstructInternalJSON(mo.GetRoot())
 	}
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Internal, err)
 	}
-	return json.MarshalIndent(jm, "", " ")
+	if b, err := json.MarshalIndent(jm, "", " "); err != nil {
+		return b, nil
+	}
+	return nil, status.Error(codes.Internal, err)
 }
 
 // Export returns json map[string]interface{} of the MO
@@ -335,7 +340,10 @@ func (mo *MO) Export(rfc7951json bool) (map[string]interface{}, error) {
 	} else {
 		jm, err = ygot.ConstructInternalJSON(mo.GetRoot())
 	}
-	return jm, err
+	if err != nil {
+		return nil, status.Error(codes.Internal, err)
+	}
+	return jm, nil
 }
 
 // UpdateCreate is a function of StateUpdate Interface to add a new value to the path of the MO.

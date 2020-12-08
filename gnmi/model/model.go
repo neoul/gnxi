@@ -86,7 +86,7 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 func (m *Model) Load(startup []byte, sync bool) error {
 	mo, err := m.NewRoot(startup)
 	if err != nil {
-		return err
+		return status.Error(codes.Internal, err)
 	}
 	if sync && m.StateConfig != nil {
 		newlist := mo.ListAll(mo.GetRoot(), nil)
@@ -142,7 +142,7 @@ func (m *Model) CheckModels(models []*gnmipb.ModelData) error {
 			}
 		}
 		if !isSupported {
-			return fmt.Errorf("unsupported model: %v", m)
+			return status.Error(codes.Internal, fmt.Errorf("unsupported model: %v", m))
 		}
 	}
 	return nil
@@ -479,6 +479,7 @@ func (m *Model) UpdateCreate(path string, value string) error {
 		glog.Errorf("%v", err)
 	}
 	// fmt.Println("}")
+	// ignore StateUpdate error
 	return nil
 }
 
@@ -499,6 +500,7 @@ func (m *Model) UpdateReplace(path string, value string) error {
 		glog.Errorf("%v", err)
 	}
 	// fmt.Println("}")
+	// ignore StateUpdate error
 	return nil
 }
 
@@ -515,6 +517,7 @@ func (m *Model) UpdateDelete(path string) error {
 		glog.Errorf("%v", err)
 	}
 	// fmt.Println("}")
+	// ignore StateUpdate error
 	return nil
 }
 
@@ -530,6 +533,7 @@ func (m *Model) UpdateStart() error {
 	if m.ChangeNotification != nil {
 		m.ChangeNotification.ChangeStarted(m.updatedroot.GetRoot())
 	}
+	// ignore StateUpdate error
 	return nil
 }
 
@@ -540,5 +544,6 @@ func (m *Model) UpdateEnd() error {
 	}
 	m.updatedroot = nil
 	m.Unlock()
+	// ignore StateUpdate error
 	return nil
 }
