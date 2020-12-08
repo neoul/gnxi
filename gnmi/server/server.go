@@ -25,9 +25,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/neoul/gnxi/utilities/status"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/neoul/gnxi/gnmi/model"
@@ -190,7 +190,7 @@ func (s *Server) checkEncoding(encoding gnmipb.Encoding) error {
 	}
 	if !hasSupportedEncoding {
 		err := fmt.Errorf("unsupported encoding: %s", gnmipb.Encoding_name[int32(encoding)])
-		return status.Error(codes.Unimplemented, err.Error())
+		return status.Error(codes.Unimplemented, err)
 	}
 	return nil
 }
@@ -256,14 +256,14 @@ func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 
 	// each prefix + path ==> one notification message
 	if err := xpath.ValidateGNMIPath(prefix); err != nil {
-		return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
+		return nil, status.Errorf(codes.Unimplemented, "invalid-path: %s", err.Error())
 	}
 	toplist, ok := s.Model.Find(s.Model.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
 		if ok = s.Model.ValidatePathSchema(prefix); ok {
-			return nil, status.Errorf(codes.NotFound, "data-missing(%v)", xpath.ToXPath(prefix))
+			return nil, status.Errorf(codes.NotFound, "data-missing: %v", xpath.ToXPath(prefix))
 		}
-		return nil, status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPath(prefix))
+		return nil, status.Errorf(codes.NotFound, "unknown-schema: %s", xpath.ToXPath(prefix))
 	}
 	notifications := []*gnmipb.Notification{}
 	for _, top := range toplist {

@@ -5,10 +5,10 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
+	"github.com/neoul/gnxi/utilities/status"
 	"github.com/neoul/gnxi/utilities/xpath"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type aliasEntry struct {

@@ -10,12 +10,12 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
+	"github.com/neoul/gnxi/utilities/status"
 	"github.com/neoul/gtrie"
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/openconfig/goyang/pkg/yang"
 	"github.com/openconfig/ygot/ytypes"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
@@ -63,7 +63,7 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 	cn ChangeNotification, sc StateConfig, ss StateSync) (*Model, error) {
 	s, err := schema()
 	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, status.Error(codes.Internal, err)
 	}
 	m := &Model{
 		MO:                 (*MO)(s),

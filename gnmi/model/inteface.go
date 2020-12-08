@@ -48,11 +48,8 @@ type StateSync interface {
 	UpdateSyncPath() []string
 }
 
-// SetError interface is used for the detail error description on Set operation
+// SetError interface is used to find the error path on Set
 type SetError interface {
-	Error() string     // standard error interface
+	error
 	ErrorPath() string // The error path
-	// ErrorValue() string // The error data
-	// ErrorDesciption() string
-	// GRPCStatus() *status.Status // gRPC error code interface
 }

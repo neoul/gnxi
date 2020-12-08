@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/neoul/gnxi/utilities/status"
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
@@ -12,7 +13,6 @@ import (
 	"github.com/openconfig/ygot/ygot"
 	"github.com/openconfig/ygot/ytypes"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // DataAndPath - used to retrieve of the data and gNMI path from ygot go structure.

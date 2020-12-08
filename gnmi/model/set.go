@@ -1,12 +1,12 @@
 package model
 
 import (
+	"github.com/neoul/gnxi/utilities/status"
 	"github.com/neoul/gnxi/utilities/xpath"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
 	"github.com/openconfig/ygot/ytypes"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // WriteTypedValue - Write the TypedValue to the model instance

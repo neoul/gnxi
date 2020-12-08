@@ -10,13 +10,13 @@ import (
 	"github.com/golang/glog"
 	"github.com/neoul/gnxi/gnmi/model"
 	"github.com/neoul/gnxi/utilities"
+	"github.com/neoul/gnxi/utilities/status"
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/gtrie"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // TelemID - Telemetry Session ID
@@ -38,7 +38,6 @@ type telemCtrl struct {
 }
 
 func newTeleCtrl() *telemCtrl {
-
 	return &telemCtrl{
 		lookup: gtrie.New(),
 		ready:  make(map[TelemID]*telemEvent),
@@ -525,7 +524,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *gnmipb.SubscribeReques
 			for _, data := range datalist {
 				u, err := getUpdates(nil, data, encoding)
 				if err != nil {
-					return status.Error(codes.Internal, err.Error())
+					return status.Error(codes.Internal, err)
 				}
 				if u != nil {
 					if bundling {
@@ -600,7 +599,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 			// get all replaced, deleted paths relative to the prefix
 			deletes, err = getDeletes(telesub, &bpath, false)
 			if err != nil {
-				return status.Error(codes.Internal, err.Error())
+				return status.Error(codes.Internal, err)
 			}
 		}
 
@@ -615,7 +614,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 			for _, data := range datalist {
 				u, err := getUpdates(telesub, data, encoding)
 				if err != nil {
-					return status.Error(codes.Internal, err.Error())
+					return status.Error(codes.Internal, err)
 				}
 				if u != nil {
 					if bundling {
@@ -624,7 +623,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 						fullpath := bpath + data.Path
 						deletes, err = getDeletes(telesub, &fullpath, false)
 						if err != nil {
-							return status.Error(codes.Internal, err.Error())
+							return status.Error(codes.Internal, err)
 						}
 						aliasPrefix := teleses.ToAlias(prefix, false).(*gnmipb.Path)
 						err = teleses.sendTelemetryUpdate(
@@ -646,7 +645,7 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 		} else {
 			deletes, err = getDeletes(telesub, &bpath, true)
 			if err != nil {
-				return status.Error(codes.Internal, err.Error())
+				return status.Error(codes.Internal, err)
 			}
 			for _, d := range deletes {
 				aliasPrefix := teleses.ToAlias(prefix, false).(*gnmipb.Path)
@@ -803,7 +802,7 @@ func (teleses *TelemetrySession) processSubReq(req *gnmipb.SubscribeRequest) err
 	subListLength := len(subList)
 	if subList == nil || subListLength <= 0 {
 		err := fmt.Errorf("no subscription field(Subscription)")
-		return status.Error(codes.InvalidArgument, err.Error())
+		return status.Error(codes.InvalidArgument, err)
 	}
 	encoding := subscriptionList.GetEncoding()
 	useModules := subscriptionList.GetUseModels()

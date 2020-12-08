@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/neoul/gnxi/utilities"
+	"github.com/neoul/gnxi/utilities/status"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // StreamProtocol - The type of the subscription protocol
@@ -60,9 +60,7 @@ type Session struct {
 }
 
 var (
-	sessionID          uint64
-	errMissingMetadata = status.Errorf(codes.InvalidArgument, "missing metadata")
-	errInvalidSession  = status.Errorf(codes.InvalidArgument, "invalid session")
+	sessionID uint64
 )
 
 // Started - netsession interface to receive the session started event
@@ -98,11 +96,11 @@ func (s *Server) Closed(local, remote net.Addr) {
 func (s *Server) updateSession(ctx context.Context, SID string) (*Session, error) {
 	session, ok := s.sessions[SID]
 	if !ok {
-		return nil, errInvalidSession
+		return nil, status.Errorf(codes.Internal, "unknown session: %s", SID)
 	}
 	m, ok := utilities.GetMetadata(ctx)
 	if !ok {
-		return nil, errMissingMetadata
+		return nil, status.Errorf(codes.Internal, "missing metadata")
 	}
 
 	username, _ := m["username"]
