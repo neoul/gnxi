@@ -84,30 +84,43 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 // Load loads the startup state of the Model.
 //  - startup: The YAML or JSON startup data to populate the creating structure (gostruct).
 func (m *Model) Load(startup []byte, sync bool) error {
-	mo, err := m.NewRoot(startup)
+	newMO, err := m.NewRoot(startup)
 	if err != nil {
 		return status.Error(codes.Internal, err)
 	}
 	if sync && m.StateConfig != nil {
-		newlist := mo.ListAll(mo.GetRoot(), nil)
+		newlist := newMO.ListAll(newMO.GetRoot(), nil)
 		curlist := m.ListAll(m.GetRoot(), nil)
 		cur := newDataAndPathMap(curlist)
 		new := newDataAndPathMap(newlist)
 		// Get difference between cur and new for C/R/D operations
+		if err = m.StateConfig.UpdateStart(); err != nil {
+			m.StateConfig.UpdateEnd()
+			return err
+		}
 		for p := range cur {
 			if _, exists := new[p]; !exists {
-				m.StateConfig.UpdateDelete(p)
+				if err := m.StateConfig.UpdateDelete(p); err != nil {
+					return err
+				}
 			}
 		}
 		for p, entry := range new {
 			if _, exists := cur[p]; exists {
-				m.StateConfig.UpdateReplace(p, entry.GetValueString())
+				if err := m.StateConfig.UpdateReplace(p, entry.GetValueString()); err != nil {
+					return err
+				}
 			} else {
-				m.StateConfig.UpdateCreate(p, entry.GetValueString())
+				if err := m.StateConfig.UpdateCreate(p, entry.GetValueString()); err != nil {
+					return err
+				}
 			}
 		}
+		if err = m.StateConfig.UpdateEnd(); err != nil {
+			return err
+		}
 	}
-	m.MO = mo
+	m.MO = newMO
 	return nil
 }
 

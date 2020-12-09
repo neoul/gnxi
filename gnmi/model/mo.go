@@ -295,12 +295,12 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 	}
 	if startup != nil {
 		if jerr := newMO.Unmarshal(startup, newMO.GetRoot()); jerr != nil {
-			datablock, close := ydb.Open("NewRoot")
+			db, close := ydb.Open("_startup")
 			defer close()
-			if yerr := datablock.Parse(startup); yerr != nil {
+			if yerr := db.Parse(startup); yerr != nil {
 				return nil, status.Errorf(codes.Internal, "json: %v, yaml: %v", jerr, yerr)
 			}
-			if yerr := datablock.Convert(newMO); yerr != nil {
+			if yerr := db.Convert(newMO); yerr != nil {
 				return nil, status.Errorf(codes.Internal, "json: %v, yaml: %v", jerr, yerr)
 			}
 		}
