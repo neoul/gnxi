@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Status for gNMI error
+// Status for rich gNMI error description
 type Status struct {
 	*status.Status
 }

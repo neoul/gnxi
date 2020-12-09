@@ -19,60 +19,60 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-// TelemID - Telemetry Session ID
-type TelemID uint64
+// TeleID - Telemetry Session ID
+type TeleID uint64
 
-type telemEvent struct {
-	telesub     *TelemetrySubscription
+type teleEvent struct {
+	sub         *Subscription
 	updatedroot ygot.GoStruct
 	updatedPath []*string
 	deletedPath []*string
 }
 
 // gNMI Telemetry Control Block
-type telemCtrl struct {
-	// lookup map[TelemID]*TelemetrySubscription using a path
+type teleCtrl struct {
+	// lookup map[TeleID]*Subscription using a path
 	lookup *gtrie.Trie
-	ready  map[TelemID]*telemEvent
+	ready  map[TeleID]*teleEvent
 	mutex  *sync.Mutex
 }
 
-func newTeleCtrl() *telemCtrl {
-	return &telemCtrl{
+func newTeleCtrl() *teleCtrl {
+	return &teleCtrl{
 		lookup: gtrie.New(),
-		ready:  make(map[TelemID]*telemEvent),
+		ready:  make(map[TeleID]*teleEvent),
 		mutex:  &sync.Mutex{},
 	}
 }
 
-func (tcb *telemCtrl) register(m *model.Model, telesub *TelemetrySubscription) error {
+func (tcb *teleCtrl) register(m *model.Model, sub *Subscription) error {
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
-	for _, path := range telesub.Paths {
-		fullpath := xpath.GNMIFullPath(telesub.Prefix, path)
+	for _, path := range sub.Paths {
+		fullpath := xpath.GNMIFullPath(sub.Prefix, path)
 		targetpaths, _ := m.FindAllPaths(fullpath)
 		for _, p := range targetpaths {
 			if subgroup, ok := tcb.lookup.Find(p); ok {
-				subgroup.(map[TelemID]*TelemetrySubscription)[telesub.ID] = telesub
+				subgroup.(map[TeleID]*Subscription)[sub.ID] = sub
 			} else {
-				tcb.lookup.Add(p, map[TelemID]*TelemetrySubscription{telesub.ID: telesub})
+				tcb.lookup.Add(p, map[TeleID]*Subscription{sub.ID: sub})
 			}
-			glog.Infof("telemCtrl.telesub[%d][%d].subscribe(%v)", telesub.SessionID, telesub.ID, p)
+			glog.Infof("teleCtrl.sub[%d][%d].subscribe(%v)", sub.SessionID, sub.ID, p)
 		}
 	}
 	return nil
 }
 
-func (tcb *telemCtrl) unregister(telesub *TelemetrySubscription) {
+func (tcb *teleCtrl) unregister(sub *Subscription) {
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
 	lookup := tcb.lookup.All("")
 	for p, subgroup := range lookup {
-		subscriber := subgroup.(map[TelemID]*TelemetrySubscription)
-		_, ok := subscriber[telesub.ID]
+		subscriber := subgroup.(map[TeleID]*Subscription)
+		_, ok := subscriber[sub.ID]
 		if ok {
-			glog.Infof("telemCtrl.telesub[%d][%d].unsubscribe(%v)", telesub.SessionID, telesub.ID, p)
-			delete(subscriber, telesub.ID)
+			glog.Infof("teleCtrl.sub[%d][%d].unsubscribe(%v)", sub.SessionID, sub.ID, p)
+			delete(subscriber, sub.ID)
 			if len(subscriber) == 0 {
 				tcb.lookup.Remove(p)
 			}
@@ -81,30 +81,30 @@ func (tcb *telemCtrl) unregister(telesub *TelemetrySubscription) {
 }
 
 // ChangeNotification.ChangeStarted - callback for Telemetry subscription on data changes
-func (tcb *telemCtrl) ChangeStarted(changes ygot.GoStruct) {
+func (tcb *teleCtrl) ChangeStarted(changes ygot.GoStruct) {
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
-	tcb.ready = make(map[TelemID]*telemEvent)
-	// glog.Infof("telemCtrl.ChangeStarted")
+	tcb.ready = make(map[TeleID]*teleEvent)
+	// glog.Infof("teleCtrl.ChangeStarted")
 }
 
-func (tcb *telemCtrl) updateTelemEvent(op int, datapath, searchpath string) {
+func (tcb *teleCtrl) updateTeleEvent(op int, datapath, searchpath string) {
 	for _, subgroup := range tcb.lookup.FindAll(searchpath) {
-		subscribers := subgroup.(map[TelemID]*TelemetrySubscription)
-		for _, telesub := range subscribers {
-			if telesub.IsPolling {
+		subscribers := subgroup.(map[TeleID]*Subscription)
+		for _, sub := range subscribers {
+			if sub.IsPolling {
 				continue
 			}
-			// glog.Infof("telemCtrl.%c.path(%s).telesub[%d][%d]",
-			// 	op, subscribedpath, telesub.SessionID, telesub.ID)
-			event, ok := tcb.ready[telesub.ID]
+			// glog.Infof("teleCtrl.%c.path(%s).sub[%d][%d]",
+			// 	op, subscribedpath, sub.SessionID, sub.ID)
+			event, ok := tcb.ready[sub.ID]
 			if !ok {
-				event = &telemEvent{
-					telesub:     telesub,
+				event = &teleEvent{
+					sub:         sub,
 					updatedPath: make([]*string, 0, 64),
 					deletedPath: make([]*string, 0, 64),
 				}
-				tcb.ready[telesub.ID] = event
+				tcb.ready[sub.ID] = event
 			}
 			switch op {
 			case 'C':
@@ -122,72 +122,72 @@ func (tcb *telemCtrl) updateTelemEvent(op int, datapath, searchpath string) {
 }
 
 // ChangeNotification.ChangeCreated - callback for Telemetry subscription on data changes
-func (tcb *telemCtrl) ChangeCreated(datapath string, changes ygot.GoStruct) {
+func (tcb *teleCtrl) ChangeCreated(datapath string, changes ygot.GoStruct) {
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
-	glog.Infof("telemCtrl.ChangeCreated.path(%s)", datapath)
+	glog.Infof("teleCtrl.ChangeCreated.path(%s)", datapath)
 	gpath, err := xpath.ToGNMIPath(datapath)
 	if err != nil {
 		return
 	}
-	tcb.updateTelemEvent('C', datapath, datapath)
+	tcb.updateTeleEvent('C', datapath, datapath)
 	if !xpath.IsSchemaPath(gpath) {
-		tcb.updateTelemEvent('C', datapath, xpath.PathElemToXPATH(gpath.GetElem(), true))
+		tcb.updateTeleEvent('C', datapath, xpath.PathElemToXPATH(gpath.GetElem(), true))
 	}
 }
 
 // ChangeNotification.ChangeReplaced - callback for Telemetry subscription on data changes
-func (tcb *telemCtrl) ChangeReplaced(datapath string, changes ygot.GoStruct) {
+func (tcb *teleCtrl) ChangeReplaced(datapath string, changes ygot.GoStruct) {
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
-	glog.Infof("telemCtrl.ChangeReplaced.path(%s)", datapath)
+	glog.Infof("teleCtrl.ChangeReplaced.path(%s)", datapath)
 	gpath, err := xpath.ToGNMIPath(datapath)
 	if err != nil {
 		return
 	}
-	tcb.updateTelemEvent('R', datapath, datapath)
+	tcb.updateTeleEvent('R', datapath, datapath)
 	if !xpath.IsSchemaPath(gpath) {
-		tcb.updateTelemEvent('R', datapath, xpath.PathElemToXPATH(gpath.GetElem(), true))
+		tcb.updateTeleEvent('R', datapath, xpath.PathElemToXPATH(gpath.GetElem(), true))
 	}
 }
 
 // ChangeNotification.ChangeDeleted - callback for Telemetry subscription on data changes
-func (tcb *telemCtrl) ChangeDeleted(datapath string) {
+func (tcb *teleCtrl) ChangeDeleted(datapath string) {
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
-	glog.Infof("telemCtrl.ChangeDeleted.path(%s)", datapath)
+	glog.Infof("teleCtrl.ChangeDeleted.path(%s)", datapath)
 	gpath, err := xpath.ToGNMIPath(datapath)
 	if err != nil {
 		return
 	}
-	tcb.updateTelemEvent('D', datapath, datapath)
+	tcb.updateTeleEvent('D', datapath, datapath)
 	if !xpath.IsSchemaPath(gpath) {
-		tcb.updateTelemEvent('D', datapath, xpath.PathElemToXPATH(gpath.GetElem(), true))
+		tcb.updateTeleEvent('D', datapath, xpath.PathElemToXPATH(gpath.GetElem(), true))
 	}
 }
 
 // ChangeNotification.ChangeCompleted - callback for Telemetry subscription on data changes
-func (tcb *telemCtrl) ChangeCompleted(changes ygot.GoStruct) {
+func (tcb *teleCtrl) ChangeCompleted(changes ygot.GoStruct) {
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
 	for telesubid, event := range tcb.ready {
-		telesub := event.telesub
-		if telesub.eventque != nil {
+		sub := event.sub
+		if sub.eventque != nil {
 			event.updatedroot = changes
-			telesub.eventque <- event
-			glog.Infof("telemCtrl.send.event.to.telesub[%d][%d]", telesub.SessionID, telesub.ID)
+			sub.eventque <- event
+			glog.Infof("teleCtrl.send.event.to.sub[%d][%d]", sub.SessionID, sub.ID)
 		}
 		delete(tcb.ready, telesubid)
 	}
-	// glog.Infof("telemCtrl.ChangeCompleted")
+	// glog.Infof("teleCtrl.ChangeCompleted")
 }
 
-// TelemetrySession - gNMI gRPC Subscribe RPC (Telemetry) session information managed by server
-type TelemetrySession struct {
-	ID        TelemID
+// SubSession - gNMI gRPC Subscribe RPC (Telemetry) session information managed by server
+type SubSession struct {
+	ID        TeleID
 	Address   string
 	Port      uint16
-	Telesub   map[string]*TelemetrySubscription
+	SubList   map[string]*Subscription
 	respchan  chan *gnmipb.SubscribeResponse
 	shutdown  chan struct{}
 	waitgroup *sync.WaitGroup
@@ -196,15 +196,15 @@ type TelemetrySession struct {
 }
 
 var (
-	sessID TelemID
-	subID  TelemID
+	sessID TeleID
+	subID  TeleID
 )
 
-func (teleses *TelemetrySession) String() string {
-	return fmt.Sprintf("%s:%d", teleses.Address, teleses.Port)
+func (subses *SubSession) String() string {
+	return fmt.Sprintf("%s:%d", subses.Address, subses.Port)
 }
 
-func newTelemetrySession(ctx context.Context, s *Server) *TelemetrySession {
+func newSubSession(ctx context.Context, s *Server) *SubSession {
 	var address string
 	var port int
 	sessID++
@@ -215,11 +215,11 @@ func newTelemetrySession(ctx context.Context, s *Server) *TelemetrySession {
 		address = addr[:end]
 		port, _ = strconv.Atoi(addr[end+1:])
 	}
-	return &TelemetrySession{
+	return &SubSession{
 		ID:            sessID,
 		Address:       address,
 		Port:          uint16(port),
-		Telesub:       map[string]*TelemetrySubscription{},
+		SubList:       map[string]*Subscription{},
 		respchan:      make(chan *gnmipb.SubscribeResponse, 256),
 		shutdown:      make(chan struct{}),
 		waitgroup:     new(sync.WaitGroup),
@@ -228,19 +228,19 @@ func newTelemetrySession(ctx context.Context, s *Server) *TelemetrySession {
 	}
 }
 
-func (teleses *TelemetrySession) stopTelemetrySession() {
-	teleses.deleteDynamicTeleInfo(teleses)
-	for _, telesub := range teleses.Telesub {
-		teleses.unregister(telesub)
+func (subses *SubSession) stopSubSession() {
+	subses.deleteDynamicSubscriptionInfo(subses)
+	for _, sub := range subses.SubList {
+		subses.unregister(sub)
 	}
-	close(teleses.shutdown)
-	teleses.waitgroup.Wait()
+	close(subses.shutdown)
+	subses.waitgroup.Wait()
 }
 
-// TelemetrySubscription - Default structure for Telemetry Update Subscription
-type TelemetrySubscription struct {
-	ID                TelemID
-	SessionID         TelemID
+// Subscription - Default structure for Telemetry Update Subscription
+type Subscription struct {
+	ID                TeleID
+	SessionID         TeleID
 	key               *string
 	Prefix            *gnmipb.Path                 `json:"prefix,omitempty"`
 	UseAliases        bool                         `json:"use_aliases,omitempty"`
@@ -262,9 +262,9 @@ type TelemetrySubscription struct {
 	IsPolling bool
 
 	// internal data
-	session     *TelemetrySession
+	session     *SubSession
 	stateSync   bool // StateSync is required before telemetry update?
-	eventque    chan *telemEvent
+	eventque    chan *teleEvent
 	updatedList *gtrie.Trie
 	deletedList *gtrie.Trie
 	started     bool
@@ -281,26 +281,26 @@ type TelemetrySubscription struct {
 	// 2. keys (The path to the subscription data)
 }
 
-func (telesub *TelemetrySubscription) run(teleses *TelemetrySession) {
+func (sub *Subscription) run(subses *SubSession) {
 	var samplingTimer *time.Ticker
 	var heartbeatTimer *time.Ticker
-	shutdown := teleses.shutdown
-	waitgroup := teleses.waitgroup
+	shutdown := subses.shutdown
+	waitgroup := subses.waitgroup
 	defer func() {
-		glog.Warningf("telesub[%d][%d].quit", telesub.SessionID, telesub.ID)
-		telesub.started = false
+		glog.Warningf("sub[%d][%d].quit", sub.SessionID, sub.ID)
+		sub.started = false
 		waitgroup.Done()
 	}()
-	if telesub.Configured.SampleInterval > 0 {
-		tick := time.Duration(telesub.Configured.SampleInterval)
+	if sub.Configured.SampleInterval > 0 {
+		tick := time.Duration(sub.Configured.SampleInterval)
 		samplingTimer = time.NewTicker(tick * time.Nanosecond)
 	} else {
 		tick := time.Duration(defaultInterval)
 		samplingTimer = time.NewTicker(tick * time.Nanosecond)
 		samplingTimer.Stop() // stop
 	}
-	if telesub.Configured.HeartbeatInterval > 0 {
-		tick := time.Duration(telesub.Configured.HeartbeatInterval)
+	if sub.Configured.HeartbeatInterval > 0 {
+		tick := time.Duration(sub.Configured.HeartbeatInterval)
 		heartbeatTimer = time.NewTicker(tick * time.Nanosecond)
 	} else {
 		tick := time.Duration(defaultInterval)
@@ -308,124 +308,124 @@ func (telesub *TelemetrySubscription) run(teleses *TelemetrySession) {
 		heartbeatTimer.Stop() // stop
 	}
 	if samplingTimer == nil || heartbeatTimer == nil {
-		glog.Errorf("telesub[%d][%d].timer-failed", telesub.SessionID, telesub.ID)
+		glog.Errorf("sub[%d][%d].timer-failed", sub.SessionID, sub.ID)
 		return
 	}
 	timerExpired := make(chan bool, 2)
 
 	for {
 		select {
-		case event, ok := <-telesub.eventque:
+		case event, ok := <-sub.eventque:
 			if !ok {
-				glog.Errorf("telesub[%d][%d].event-queue-closed", telesub.SessionID, telesub.ID)
+				glog.Errorf("sub[%d][%d].event-queue-closed", sub.SessionID, sub.ID)
 				return
 			}
-			glog.Infof("telesub[%d][%d].event-received", telesub.SessionID, telesub.ID)
-			switch telesub.Configured.SubscriptionMode {
+			glog.Infof("sub[%d][%d].event-received", sub.SessionID, sub.ID)
+			switch sub.Configured.SubscriptionMode {
 			case gnmipb.SubscriptionMode_ON_CHANGE, gnmipb.SubscriptionMode_SAMPLE:
 				for _, p := range event.updatedPath {
 					duplicates := uint32(1)
-					if v, ok := telesub.updatedList.Find(*p); ok {
+					if v, ok := sub.updatedList.Find(*p); ok {
 						duplicates = v.(uint32)
 						duplicates++
 					}
-					telesub.updatedList.Add(*p, duplicates)
+					sub.updatedList.Add(*p, duplicates)
 				}
 				for _, p := range event.deletedPath {
 					duplicates := uint32(1)
-					if v, ok := telesub.deletedList.Find(*p); ok {
+					if v, ok := sub.deletedList.Find(*p); ok {
 						duplicates = v.(uint32)
 						duplicates++
 					}
-					telesub.deletedList.Add(*p, duplicates)
+					sub.deletedList.Add(*p, duplicates)
 				}
-				if telesub.Configured.SubscriptionMode == gnmipb.SubscriptionMode_ON_CHANGE {
-					err := teleses.telemetryUpdate(telesub, event.updatedroot)
+				if sub.Configured.SubscriptionMode == gnmipb.SubscriptionMode_ON_CHANGE {
+					err := subses.telemetryUpdate(sub, event.updatedroot)
 					if err != nil {
-						glog.Errorf("telesub[%d][%d].failed(%v)", telesub.SessionID, telesub.ID, err)
+						glog.Errorf("sub[%d][%d].failed(%v)", sub.SessionID, sub.ID, err)
 						return
 					}
-					telesub.updatedList = gtrie.New()
-					telesub.deletedList = gtrie.New()
+					sub.updatedList = gtrie.New()
+					sub.deletedList = gtrie.New()
 				}
 			}
 		case <-samplingTimer.C:
-			glog.Infof("telesub[%d][%d].sampling-timer-expired", telesub.SessionID, telesub.ID)
-			if telesub.stateSync {
-				telesub.mutex.Lock()
-				telesub.session.RequestStateSync(telesub.Prefix, telesub.Paths)
-				telesub.mutex.Unlock()
+			glog.Infof("sub[%d][%d].sampling-timer-expired", sub.SessionID, sub.ID)
+			if sub.stateSync {
+				sub.mutex.Lock()
+				sub.session.RequestStateSync(sub.Prefix, sub.Paths)
+				sub.mutex.Unlock()
 			}
 			timerExpired <- false
 		case <-heartbeatTimer.C:
-			glog.Infof("telesub[%d][%d].heartbeat-timer-expired", telesub.SessionID, telesub.ID)
+			glog.Infof("sub[%d][%d].heartbeat-timer-expired", sub.SessionID, sub.ID)
 			timerExpired <- true
 		case sendUpdate := <-timerExpired:
 			if !sendUpdate {
 				// suppress_redundant - skips the telemetry update if no changes
-				if !telesub.Configured.SuppressRedundant ||
-					telesub.updatedList.Size() > 0 ||
-					telesub.deletedList.Size() > 0 {
+				if !sub.Configured.SuppressRedundant ||
+					sub.updatedList.Size() > 0 ||
+					sub.deletedList.Size() > 0 {
 					sendUpdate = true
 				}
 			}
 			if sendUpdate {
-				glog.Infof("telesub[%d][%d].send.telemetry-update.to.%v",
-					telesub.SessionID, telesub.ID, telesub.session)
-				telesub.mutex.Lock() // block to modify telesub.Path
-				err := teleses.telemetryUpdate(telesub, nil)
-				telesub.mutex.Unlock()
+				glog.Infof("sub[%d][%d].send.telemetry-update.to.%v",
+					sub.SessionID, sub.ID, sub.session)
+				sub.mutex.Lock() // block to modify sub.Path
+				err := subses.telemetryUpdate(sub, nil)
+				sub.mutex.Unlock()
 				if err != nil {
-					glog.Errorf("telesub[%d][%d].failed(%v)", telesub.SessionID, telesub.ID, err)
+					glog.Errorf("sub[%d][%d].failed(%v)", sub.SessionID, sub.ID, err)
 					return
 				}
-				telesub.updatedList = gtrie.New()
-				telesub.deletedList = gtrie.New()
+				sub.updatedList = gtrie.New()
+				sub.deletedList = gtrie.New()
 			}
 		case <-shutdown:
-			glog.Infof("telesub[%d][%d].shutdown", teleses.ID, telesub.ID)
+			glog.Infof("sub[%d][%d].shutdown", subses.ID, sub.ID)
 			return
-		case <-telesub.stop:
-			glog.Infof("telesub[%d][%d].stopped", teleses.ID, telesub.ID)
+		case <-sub.stop:
+			glog.Infof("sub[%d][%d].stopped", subses.ID, sub.ID)
 			return
 		}
 	}
 }
 
 // StartTelmetryUpdate - returns a key for telemetry comparison
-func (teleses *TelemetrySession) StartTelmetryUpdate(telesub *TelemetrySubscription) error {
-	teleses.Server.telemCtrl.register(teleses.Model, telesub)
-	if !telesub.started {
-		telesub.started = true
-		teleses.waitgroup.Add(1)
-		go telesub.run(teleses)
+func (subses *SubSession) StartTelmetryUpdate(sub *Subscription) error {
+	subses.Server.teleCtrl.register(subses.Model, sub)
+	if !sub.started {
+		sub.started = true
+		subses.waitgroup.Add(1)
+		go sub.run(subses)
 	}
 	return nil
 }
 
 // StopTelemetryUpdate - returns a key for telemetry comparison
-func (teleses *TelemetrySession) StopTelemetryUpdate(telesub *TelemetrySubscription) error {
-	teleses.Server.telemCtrl.unregister(telesub)
-	close(telesub.stop)
-	if telesub.eventque != nil {
-		close(telesub.eventque)
+func (subses *SubSession) StopTelemetryUpdate(sub *Subscription) error {
+	subses.Server.teleCtrl.unregister(sub)
+	close(sub.stop)
+	if sub.eventque != nil {
+		close(sub.eventque)
 	}
 	return nil
 }
 
-func (teleses *TelemetrySession) sendTelemetryUpdate(responses []*gnmipb.SubscribeResponse) error {
+func (subses *SubSession) sendTelemetryUpdate(responses []*gnmipb.SubscribeResponse) error {
 	for _, response := range responses {
-		teleses.respchan <- response
+		subses.respchan <- response
 	}
 	return nil
 }
 
-func getDeletes(telesub *TelemetrySubscription, path *string, deleteOnly bool) ([]*gnmipb.Path, error) {
-	deletes := make([]*gnmipb.Path, 0, telesub.deletedList.Size())
-	dpaths := telesub.deletedList.PrefixSearch(*path)
+func getDeletes(sub *Subscription, path *string, deleteOnly bool) ([]*gnmipb.Path, error) {
+	deletes := make([]*gnmipb.Path, 0, sub.deletedList.Size())
+	dpaths := sub.deletedList.PrefixSearch(*path)
 	for _, dpath := range dpaths {
 		if deleteOnly {
-			if _, ok := telesub.updatedList.Find(dpath); ok {
+			if _, ok := sub.updatedList.Find(dpath); ok {
 				continue
 			}
 		}
@@ -438,7 +438,7 @@ func getDeletes(telesub *TelemetrySubscription, path *string, deleteOnly bool) (
 	return deletes, nil
 }
 
-func getUpdates(telesub *TelemetrySubscription, data *model.DataAndPath, encoding gnmipb.Encoding) (*gnmipb.Update, error) {
+func getUpdates(sub *Subscription, data *model.DataAndPath, encoding gnmipb.Encoding) (*gnmipb.Update, error) {
 	typedValue, err := ygot.EncodeTypedValue(data.Value, encoding)
 	if err != nil {
 		return nil, fmt.Errorf("encoding-error(%s)", err.Error())
@@ -451,30 +451,30 @@ func getUpdates(telesub *TelemetrySubscription, data *model.DataAndPath, encodin
 		return nil, fmt.Errorf("update-path-conversion-error(%s)", data.Path)
 	}
 	var duplicates uint32
-	if telesub != nil {
-		for _, v := range telesub.updatedList.All(data.Path) {
+	if sub != nil {
+		for _, v := range sub.updatedList.All(data.Path) {
 			duplicates += v.(uint32)
 		}
 	}
 	return &gnmipb.Update{Path: datapath, Val: typedValue, Duplicates: duplicates}, nil
 }
 
-func (teleses *TelemetrySession) aliasesUpdate() {
-	aliases := teleses.UpdateAliases(teleses.serverAliases, true)
+func (subses *SubSession) aliasesUpdate() {
+	aliases := subses.UpdateAliases(subses.serverAliases, true)
 	for _, alias := range aliases {
-		teleses.sendTelemetryUpdate(
-			buildAliasResponse(teleses.ToPath(alias, true).(*gnmipb.Path), alias))
+		subses.sendTelemetryUpdate(
+			buildAliasResponse(subses.ToPath(alias, true).(*gnmipb.Path), alias))
 	}
 }
 
 // initTelemetryUpdate - Process and generate responses for a init update.
-func (teleses *TelemetrySession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) error {
-	bundling := !teleses.disableBundling
+func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) error {
+	bundling := !subses.disableBundling
 	subscriptionList := req.GetSubscribe()
 	subList := subscriptionList.GetSubscription()
 	updateOnly := subscriptionList.GetUpdatesOnly()
 	if updateOnly {
-		return teleses.sendTelemetryUpdate(buildSyncResponse())
+		return subses.sendTelemetryUpdate(buildSyncResponse())
 	}
 	prefix := subscriptionList.GetPrefix()
 	encoding := subscriptionList.GetEncoding()
@@ -486,17 +486,17 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *gnmipb.SubscribeReques
 	case gnmipb.SubscriptionList_STREAM:
 	}
 
-	teleses.RLock()
-	defer teleses.RUnlock()
+	subses.RLock()
+	defer subses.RUnlock()
 	if err := xpath.ValidateGNMIPath(prefix); err != nil {
 		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := teleses.Find(teleses.GetRoot(), prefix)
+	toplist, ok := subses.Find(subses.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
-		if ok = teleses.ValidatePathSchema(prefix); ok {
+		if ok = subses.ValidatePathSchema(prefix); ok {
 			// data-missing is not an error in SubscribeRPC
 			// doest send any of messages ahead of the sync response.
-			return teleses.sendTelemetryUpdate(buildSyncResponse())
+			return subses.sendTelemetryUpdate(buildSyncResponse())
 		}
 		return status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPath(prefix))
 	}
@@ -517,7 +517,7 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *gnmipb.SubscribeReques
 			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
 				return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-			datalist, ok := teleses.Find(branch, path)
+			datalist, ok := subses.Find(branch, path)
 			if !ok || len(datalist) <= 0 {
 				continue
 			}
@@ -530,8 +530,8 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *gnmipb.SubscribeReques
 					if bundling {
 						updates = append(updates, u)
 					} else {
-						aliasPrefix := teleses.ToAlias(prefix, false).(*gnmipb.Path)
-						err = teleses.sendTelemetryUpdate(
+						aliasPrefix := subses.ToAlias(prefix, false).(*gnmipb.Path)
+						err = subses.sendTelemetryUpdate(
 							buildSubscribeResponse(aliasPrefix, []*gnmipb.Update{u}, nil))
 						if err != nil {
 							return err
@@ -541,22 +541,22 @@ func (teleses *TelemetrySession) initTelemetryUpdate(req *gnmipb.SubscribeReques
 			}
 		}
 		if bundling && len(updates) > 0 {
-			err = teleses.sendTelemetryUpdate(
+			err = subses.sendTelemetryUpdate(
 				buildSubscribeResponse(prefix, updates, nil))
 			if err != nil {
 				return err
 			}
 		}
 	}
-	return teleses.sendTelemetryUpdate(buildSyncResponse())
+	return subses.sendTelemetryUpdate(buildSyncResponse())
 }
 
 // telemetryUpdate - Process and generate responses for a telemetry update.
-func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription, updatedroot ygot.GoStruct) error {
-	bundling := !teleses.disableBundling
-	prefix := telesub.Prefix
-	encoding := telesub.Encoding
-	mode := telesub.StreamingMode
+func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.GoStruct) error {
+	bundling := !subses.disableBundling
+	prefix := sub.Prefix
+	encoding := sub.Encoding
+	mode := sub.StreamingMode
 
 	// [FIXME] Are they different?
 	switch mode {
@@ -565,17 +565,17 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 	case gnmipb.SubscriptionList_STREAM:
 	}
 
-	teleses.RLock()
-	defer teleses.RUnlock()
+	subses.RLock()
+	defer subses.RUnlock()
 	if updatedroot == nil {
-		updatedroot = teleses.GetRoot()
+		updatedroot = subses.GetRoot()
 	}
 	if err := xpath.ValidateGNMIPath(prefix); err != nil {
 		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 	}
-	toplist, ok := teleses.Find(updatedroot, prefix)
+	toplist, ok := subses.Find(updatedroot, prefix)
 	if !ok || len(toplist) <= 0 {
-		if ok = teleses.ValidatePathSchema(prefix); ok {
+		if ok = subses.ValidatePathSchema(prefix); ok {
 			// data-missing is not an error in SubscribeRPC
 			// doest send any of messages.
 			return nil
@@ -597,22 +597,22 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 		if bundling {
 			updates = make([]*gnmipb.Update, 0, 16)
 			// get all replaced, deleted paths relative to the prefix
-			deletes, err = getDeletes(telesub, &bpath, false)
+			deletes, err = getDeletes(sub, &bpath, false)
 			if err != nil {
 				return status.Error(codes.Internal, err)
 			}
 		}
 
-		for _, path := range telesub.Paths {
+		for _, path := range sub.Paths {
 			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
 				return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
 			}
-			datalist, ok := teleses.Find(branch, path)
+			datalist, ok := subses.Find(branch, path)
 			if !ok || len(datalist) <= 0 {
 				continue
 			}
 			for _, data := range datalist {
-				u, err := getUpdates(telesub, data, encoding)
+				u, err := getUpdates(sub, data, encoding)
 				if err != nil {
 					return status.Error(codes.Internal, err)
 				}
@@ -621,12 +621,12 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 						updates = append(updates, u)
 					} else {
 						fullpath := bpath + data.Path
-						deletes, err = getDeletes(telesub, &fullpath, false)
+						deletes, err = getDeletes(sub, &fullpath, false)
 						if err != nil {
 							return status.Error(codes.Internal, err)
 						}
-						aliasPrefix := teleses.ToAlias(prefix, false).(*gnmipb.Path)
-						err = teleses.sendTelemetryUpdate(
+						aliasPrefix := subses.ToAlias(prefix, false).(*gnmipb.Path)
+						err = subses.sendTelemetryUpdate(
 							buildSubscribeResponse(aliasPrefix, []*gnmipb.Update{u}, nil))
 						if err != nil {
 							return err
@@ -636,20 +636,20 @@ func (teleses *TelemetrySession) telemetryUpdate(telesub *TelemetrySubscription,
 			}
 		}
 		if bundling {
-			aliasPrefix := teleses.ToAlias(prefix, false).(*gnmipb.Path)
-			err = teleses.sendTelemetryUpdate(
+			aliasPrefix := subses.ToAlias(prefix, false).(*gnmipb.Path)
+			err = subses.sendTelemetryUpdate(
 				buildSubscribeResponse(aliasPrefix, updates, deletes))
 			if err != nil {
 				return err
 			}
 		} else {
-			deletes, err = getDeletes(telesub, &bpath, true)
+			deletes, err = getDeletes(sub, &bpath, true)
 			if err != nil {
 				return status.Error(codes.Internal, err)
 			}
 			for _, d := range deletes {
-				aliasPrefix := teleses.ToAlias(prefix, false).(*gnmipb.Path)
-				err = teleses.sendTelemetryUpdate(
+				aliasPrefix := subses.ToAlias(prefix, false).(*gnmipb.Path)
+				err = subses.sendTelemetryUpdate(
 					buildSubscribeResponse(aliasPrefix, nil, []*gnmipb.Path{d}))
 				if err != nil {
 					return err
@@ -665,14 +665,14 @@ const (
 	minimumInterval = 1000000000
 )
 
-func (teleses *TelemetrySession) addStreamSubscription(
+func (subses *SubSession) addStreamSubscription(
 	prefix *gnmipb.Path, useAliases bool, streamingMode gnmipb.SubscriptionList_Mode, allowAggregation bool,
 	encoding gnmipb.Encoding, paths []*gnmipb.Path, subscriptionMode gnmipb.SubscriptionMode,
 	sampleInterval uint64, suppressRedundant bool, heartbeatInterval uint64, stateSync bool,
-) (*TelemetrySubscription, error) {
+) (*Subscription, error) {
 
-	telesub := &TelemetrySubscription{
-		SessionID:         teleses.ID,
+	sub := &Subscription{
+		SessionID:         subses.ID,
 		Prefix:            prefix,
 		UseAliases:        useAliases,
 		StreamingMode:     streamingMode,
@@ -693,98 +693,98 @@ func (teleses *TelemetrySession) addStreamSubscription(
 			"poll subscription configured as streaming subscription")
 	}
 	// 3.5.1.5.2 STREAM Subscriptions Must be satisfied for telemetry update starting.
-	switch telesub.SubscriptionMode {
+	switch sub.SubscriptionMode {
 	case gnmipb.SubscriptionMode_TARGET_DEFINED:
 		// vendor specific mode
-		telesub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_SAMPLE
-		telesub.Configured.SampleInterval = defaultInterval / 10
-		telesub.Configured.SuppressRedundant = true
-		telesub.Configured.HeartbeatInterval = 0
+		sub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_SAMPLE
+		sub.Configured.SampleInterval = defaultInterval / 10
+		sub.Configured.SuppressRedundant = true
+		sub.Configured.HeartbeatInterval = 0
 	case gnmipb.SubscriptionMode_ON_CHANGE:
-		if telesub.HeartbeatInterval < minimumInterval && telesub.HeartbeatInterval != 0 {
+		if sub.HeartbeatInterval < minimumInterval && sub.HeartbeatInterval != 0 {
 			return nil, status.Errorf(codes.InvalidArgument,
 				"heartbeat_interval(< 1sec) is not supported")
 		}
-		telesub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_ON_CHANGE
-		telesub.Configured.SampleInterval = 0
-		telesub.Configured.SuppressRedundant = false
-		telesub.Configured.HeartbeatInterval = telesub.HeartbeatInterval
+		sub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_ON_CHANGE
+		sub.Configured.SampleInterval = 0
+		sub.Configured.SuppressRedundant = false
+		sub.Configured.HeartbeatInterval = sub.HeartbeatInterval
 	case gnmipb.SubscriptionMode_SAMPLE:
-		if telesub.SampleInterval < minimumInterval && telesub.SampleInterval != 0 {
+		if sub.SampleInterval < minimumInterval && sub.SampleInterval != 0 {
 			return nil, status.Errorf(codes.InvalidArgument,
 				"sample_interval(< 1sec) is not supported")
 		}
-		if telesub.HeartbeatInterval < minimumInterval && telesub.HeartbeatInterval != 0 {
+		if sub.HeartbeatInterval < minimumInterval && sub.HeartbeatInterval != 0 {
 			return nil, status.Errorf(codes.InvalidArgument,
 				"heartbeat_interval(< 1sec) is not supported")
 		}
-		telesub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_SAMPLE
-		telesub.Configured.SampleInterval = telesub.SampleInterval
-		if telesub.SampleInterval == 0 {
+		sub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_SAMPLE
+		sub.Configured.SampleInterval = sub.SampleInterval
+		if sub.SampleInterval == 0 {
 			// Set minimal sampling interval (1sec)
-			telesub.Configured.SampleInterval = minimumInterval
+			sub.Configured.SampleInterval = minimumInterval
 		}
-		telesub.Configured.SuppressRedundant = telesub.SuppressRedundant
-		telesub.Configured.HeartbeatInterval = telesub.HeartbeatInterval
+		sub.Configured.SuppressRedundant = sub.SuppressRedundant
+		sub.Configured.HeartbeatInterval = sub.HeartbeatInterval
 	}
 	key := fmt.Sprintf("%d-%s-%s-%s-%s-%d-%d-%t-%t-%t",
-		telesub.SessionID,
-		telesub.StreamingMode, telesub.Encoding, telesub.SubscriptionMode,
-		xpath.ToXPath(telesub.Prefix), telesub.SampleInterval, telesub.HeartbeatInterval,
-		telesub.UseAliases, telesub.AllowAggregation, telesub.SuppressRedundant,
+		sub.SessionID,
+		sub.StreamingMode, sub.Encoding, sub.SubscriptionMode,
+		xpath.ToXPath(sub.Prefix), sub.SampleInterval, sub.HeartbeatInterval,
+		sub.UseAliases, sub.AllowAggregation, sub.SuppressRedundant,
 	)
-	telesub.key = &key
-	telesub.eventque = make(chan *telemEvent, 64)
-	if t, ok := teleses.Telesub[key]; ok {
-		// only updates the new path if the telesub exists.
-		telesub = t
-		telesub.mutex.Lock()
-		defer telesub.mutex.Unlock()
-		telesub.Paths = append(telesub.Paths, paths...)
-		if !telesub.stateSync {
-			telesub.stateSync = stateSync
+	sub.key = &key
+	sub.eventque = make(chan *teleEvent, 64)
+	if t, ok := subses.SubList[key]; ok {
+		// only updates the new path if the sub exists.
+		sub = t
+		sub.mutex.Lock()
+		defer sub.mutex.Unlock()
+		sub.Paths = append(sub.Paths, paths...)
+		if !sub.stateSync {
+			sub.stateSync = stateSync
 		}
-		glog.Infof("telemetry[%d][%d].add.path(%s)", teleses.ID, telesub.ID, xpath.ToXPath(paths[0]))
-		return telesub, nil
+		glog.Infof("telemetry[%d][%d].add.path(%s)", subses.ID, sub.ID, xpath.ToXPath(paths[0]))
+		return sub, nil
 	}
 	subID++
 	id := subID
-	telesub.ID = id
-	telesub.session = teleses
-	teleses.Telesub[key] = telesub
-	glog.Infof("telemetry[%d][%d].new(%s)", teleses.ID, telesub.ID, *telesub.key)
-	glog.Infof("telemetry[%d][%d].add.path(%s)", teleses.ID, telesub.ID, xpath.ToXPath(paths[0]))
-	return telesub, nil
+	sub.ID = id
+	sub.session = subses
+	subses.SubList[key] = sub
+	glog.Infof("telemetry[%d][%d].new(%s)", subses.ID, sub.ID, *sub.key)
+	glog.Infof("telemetry[%d][%d].add.path(%s)", subses.ID, sub.ID, xpath.ToXPath(paths[0]))
+	return sub, nil
 }
 
-// addPollSubscription - Create new TelemetrySubscription
-func (teleses *TelemetrySession) addPollSubscription() error {
-	telesub := &TelemetrySubscription{
+// addPollSubscription - Create new Subscription
+func (subses *SubSession) addPollSubscription() error {
+	sub := &Subscription{
 		StreamingMode: gnmipb.SubscriptionList_POLL,
 		Paths:         []*gnmipb.Path{},
 		IsPolling:     true,
-		session:       teleses,
+		session:       subses,
 	}
 	subID++
 	id := subID
-	key := fmt.Sprintf("%s", telesub.StreamingMode)
-	telesub.ID = id
-	telesub.key = &key
-	teleses.Telesub[key] = telesub
-	glog.Infof("telemetry[%d][%d].new(%s)", teleses.ID, telesub.ID, *telesub.key)
+	key := fmt.Sprintf("%s", sub.StreamingMode)
+	sub.ID = id
+	sub.key = &key
+	subses.SubList[key] = sub
+	glog.Infof("telemetry[%d][%d].new(%s)", subses.ID, sub.ID, *sub.key)
 	return nil
 }
 
-func (teleses *TelemetrySession) processSubReq(req *gnmipb.SubscribeRequest) error {
+func (subses *SubSession) processSubscribeRequest(req *gnmipb.SubscribeRequest) error {
 	// SubscribeRequest for poll Subscription indication
 	pollMode := req.GetPoll()
 	if pollMode != nil {
-		return teleses.addPollSubscription()
+		return subses.addPollSubscription()
 	}
 	// SubscribeRequest for aliases update
 	aliases := req.GetAliases()
 	if aliases != nil {
-		return teleses.SetAliases(aliases.GetAlias())
+		return subses.SetAliases(aliases.GetAlias())
 	}
 
 	// extension := req.GetExtension()
@@ -795,7 +795,7 @@ func (teleses *TelemetrySession) processSubReq(req *gnmipb.SubscribeRequest) err
 	// check & update the server aliases and use_aliases
 	useAliases := subscriptionList.GetUseAliases()
 	if useAliases {
-		teleses.aliasesUpdate()
+		subses.aliasesUpdate()
 	}
 
 	subList := subscriptionList.GetSubscription()
@@ -807,10 +807,10 @@ func (teleses *TelemetrySession) processSubReq(req *gnmipb.SubscribeRequest) err
 	encoding := subscriptionList.GetEncoding()
 	useModules := subscriptionList.GetUseModels()
 
-	if err := teleses.CheckModels(useModules); err != nil {
+	if err := subses.CheckModels(useModules); err != nil {
 		return status.Errorf(codes.Unimplemented, err.Error())
 	}
-	if err := teleses.checkEncoding(encoding); err != nil {
+	if err := subses.checkEncoding(encoding); err != nil {
 		return err
 	}
 	prefix := subscriptionList.GetPrefix()
@@ -818,9 +818,9 @@ func (teleses *TelemetrySession) processSubReq(req *gnmipb.SubscribeRequest) err
 	for _, updateEntry := range subList {
 		paths = append(paths, updateEntry.Path)
 	}
-	stateSync := teleses.RequestStateSync(prefix, paths)
+	stateSync := subses.RequestStateSync(prefix, paths)
 
-	err := teleses.initTelemetryUpdate(req)
+	err := subses.initTelemetryUpdate(req)
 	mode := subscriptionList.GetMode()
 	if mode == gnmipb.SubscriptionList_ONCE ||
 		mode == gnmipb.SubscriptionList_POLL ||
@@ -829,7 +829,7 @@ func (teleses *TelemetrySession) processSubReq(req *gnmipb.SubscribeRequest) err
 	}
 
 	allowAggregation := subscriptionList.GetAllowAggregation()
-	startingList := make([]*TelemetrySubscription, 0, subListLength)
+	startingList := make([]*Subscription, 0, subListLength)
 	for _, updateEntry := range subList {
 		path := updateEntry.GetPath()
 		submod := updateEntry.GetMode()
@@ -837,24 +837,24 @@ func (teleses *TelemetrySession) processSubReq(req *gnmipb.SubscribeRequest) err
 		supressRedundant := updateEntry.GetSuppressRedundant()
 		heartBeatInterval := updateEntry.GetHeartbeatInterval()
 		fullpath := xpath.GNMIFullPath(prefix, path)
-		_, ok := teleses.FindAllPaths(fullpath)
+		_, ok := subses.FindAllPaths(fullpath)
 		if !ok {
 			return status.Errorf(codes.InvalidArgument,
 				"schema not found for %s", xpath.ToXPath(fullpath))
 		}
-		telesub, err := teleses.addStreamSubscription(
+		sub, err := subses.addStreamSubscription(
 			prefix, useAliases, gnmipb.SubscriptionList_STREAM,
 			allowAggregation, encoding, []*gnmipb.Path{path}, submod,
 			SampleInterval, supressRedundant, heartBeatInterval, stateSync)
 		if err != nil {
 			return err
 		}
-		startingList = append(startingList, telesub)
+		startingList = append(startingList, sub)
 	}
 
-	teleses.addDynamicTeleInfo(startingList)
-	for _, telesub := range startingList {
-		teleses.StartTelmetryUpdate(telesub)
+	subses.addDynamicSubscriptionInfo(startingList)
+	for _, sub := range startingList {
+		subses.StartTelmetryUpdate(sub)
 	}
 	return nil
 }

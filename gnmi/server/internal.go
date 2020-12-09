@@ -28,40 +28,40 @@ const dynamicTeleSubInfoPathFormat = `
       state:
        path: %s`
 
-func (s *Server) addDynamicTeleInfo(telesubs []*TelemetrySubscription) {
+func (s *Server) addDynamicSubscriptionInfo(subs []*Subscription) {
 	data := ""
-	for _, telesub := range telesubs {
+	for _, sub := range subs {
 		data += fmt.Sprintf(dynamicTeleSubInfoFormat,
-			telesub.ID, telesub.ID, telesub.ID,
-			telesub.session.Address,
-			telesub.session.Port,
-			telesub.Configured.SampleInterval,
-			telesub.Configured.HeartbeatInterval,
-			telesub.Configured.SuppressRedundant,
+			sub.ID, sub.ID, sub.ID,
+			sub.session.Address,
+			sub.session.Port,
+			sub.Configured.SampleInterval,
+			sub.Configured.HeartbeatInterval,
+			sub.Configured.SuppressRedundant,
 			"STREAM_GRPC",
-			telesub.Encoding,
+			sub.Encoding,
 		)
-		telesub.mutex.Lock()
-		for i := range telesub.Paths {
-			p := xpath.ToXPath(telesub.Paths[i])
+		sub.mutex.Lock()
+		for i := range sub.Paths {
+			p := xpath.ToXPath(sub.Paths[i])
 			data += fmt.Sprintf(dynamicTeleSubInfoPathFormat, p, p)
 		}
-		telesub.mutex.Unlock()
+		sub.mutex.Unlock()
 	}
 	if data != "" {
 		s.idb.Write([]byte(data))
 	}
 }
 
-func (s *Server) deleteDynamicTeleInfo(teleses *TelemetrySession) {
+func (s *Server) deleteDynamicSubscriptionInfo(subses *SubSession) {
 	data := ""
-	for _, telesub := range teleses.Telesub {
+	for _, sub := range subses.SubList {
 		data += fmt.Sprintf(`
 telemetry-system:
  subscriptions:
   dynamic-subscriptions:
    dynamic-subscription[id=%d]:
-`, telesub.ID)
+`, sub.ID)
 	}
 	if data != "" {
 		s.idb.Delete([]byte(data))

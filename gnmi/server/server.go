@@ -50,7 +50,7 @@ var (
 // the interface of gNMI server. It supports Capabilities, Get, Set and Subscribe RPCs.
 type Server struct {
 	*model.Model
-	*telemCtrl
+	*teleCtrl
 	disableBundling bool
 	sessions        map[string]*Session
 	serverAliases   map[string]string // target-defined aliases (server aliases)
@@ -157,7 +157,7 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 		disableBundling: hasDisableBundling(opts),
 		serverAliases:   map[string]string{},
 		sessions:        map[string]*Session{},
-		telemCtrl:       newTeleCtrl(),
+		teleCtrl:        newTeleCtrl(),
 		idb:             ydb.New("gnmi.idb"),
 	}
 
@@ -367,9 +367,9 @@ func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 
 // Subscribe implements the Subscribe RPC in gNMI spec.
 func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
-	teleses := newTelemetrySession(stream.Context(), s)
+	subses := newSubSession(stream.Context(), s)
 	// run stream responsor
-	teleses.waitgroup.Add(1)
+	subses.waitgroup.Add(1)
 	go func(
 		stream gnmipb.GNMI_SubscribeServer,
 		telemetrychannel chan *gnmipb.SubscribeResponse,
@@ -390,10 +390,10 @@ func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 				return
 			}
 		}
-	}(stream, teleses.respchan, teleses.shutdown, teleses.waitgroup)
+	}(stream, subses.respchan, subses.shutdown, subses.waitgroup)
 
 	defer func() {
-		teleses.stopTelemetrySession()
+		subses.stopSubSession()
 	}()
 	for {
 		req, err := stream.Recv()
@@ -404,7 +404,7 @@ func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 			return err
 		}
 		// fmt.Println(proto.MarshalTextString(req))
-		if err = teleses.processSubReq(req); err != nil {
+		if err = subses.processSubscribeRequest(req); err != nil {
 			return err
 		}
 	}
