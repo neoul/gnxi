@@ -55,7 +55,7 @@ type Server struct {
 	sessions        map[string]*Session
 	serverAliases   map[string]string // target-defined aliases (server aliases)
 	enabledAliases  bool              // whether server aliases is enabled
-	idb             *ydb.YDB          // internal datablock
+	iStateUpdate    *ydb.YDB          // internal StateUpdate interface
 }
 
 // Option is an interface used in the gNMI Server configuration
@@ -158,7 +158,7 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 		serverAliases:   map[string]string{},
 		sessions:        map[string]*Session{},
 		teleCtrl:        newTeleCtrl(),
-		idb:             ydb.New("gnmi.idb"),
+		iStateUpdate:    ydb.New("gnmi.iStateUpdate"),
 	}
 
 	m, err = model.NewCustomModel(schema, supportedModels, s, hasSetCallback(opts), hasGetCallback(opts))
@@ -169,7 +169,8 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 	if startup := hasStartup(opts); startup != nil {
 		m.Load(startup, true)
 	}
-	s.idb.SetTarget(m, false)
+	s.iStateUpdate.EnableAtomicUpdate(true)
+	s.iStateUpdate.SetTarget(m, false)
 	return s, nil
 }
 

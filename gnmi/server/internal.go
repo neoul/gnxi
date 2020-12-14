@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 
+	"github.com/neoul/gnxi/gnmi/model"
 	"github.com/neoul/gnxi/utilities/xpath"
 )
 
@@ -49,7 +50,7 @@ func (s *Server) addDynamicSubscriptionInfo(subs []*Subscription) {
 		sub.mutex.Unlock()
 	}
 	if data != "" {
-		s.idb.Write([]byte(data))
+		s.iStateUpdate.Write([]byte(data))
 	}
 }
 
@@ -64,6 +65,11 @@ telemetry-system:
 `, sub.ID)
 	}
 	if data != "" {
-		s.idb.Delete([]byte(data))
+		s.iStateUpdate.Delete([]byte(data))
 	}
+}
+
+// GetInternalStateUpdate returns internal StateUpdate channel.
+func (s *Server) GetInternalStateUpdate() model.StateUpdate {
+	return s.iStateUpdate
 }
