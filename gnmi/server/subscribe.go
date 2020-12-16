@@ -808,7 +808,7 @@ func (subses *SubSession) processSubscribeRequest(req *gnmipb.SubscribeRequest) 
 	useModules := subscriptionList.GetUseModels()
 
 	if err := subses.CheckModels(useModules); err != nil {
-		return status.Errorf(codes.Unimplemented, err.Error())
+		return status.Error(codes.Unimplemented, err)
 	}
 	if err := subses.checkEncoding(encoding); err != nil {
 		return err

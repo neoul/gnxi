@@ -155,7 +155,7 @@ func (m *Model) CheckModels(models []*gnmipb.ModelData) error {
 			}
 		}
 		if !isSupported {
-			return status.Error(codes.Internal, fmt.Errorf("unsupported model: %v", m))
+			return status.Error(codes.Unimplemented, fmt.Errorf("unsupported model: %v", m))
 		}
 	}
 	return nil

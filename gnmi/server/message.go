@@ -56,8 +56,7 @@ func newUpdateResultError(err error) *gnmipb.Error {
 	if err == nil {
 		return nil
 	}
-	gerr, _ := status.FromError(err)
-	return gerr.UpdateError()
+	return status.UpdateResultError(err)
 }
 
 var aborted *gnmipb.Error = &gnmipb.Error{Code: uint32(codes.Aborted), Message: "unable to progress by another error"}

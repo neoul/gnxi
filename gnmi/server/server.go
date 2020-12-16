@@ -144,6 +144,22 @@ func hasGetCallback(opts []Option) model.StateSync {
 	return nil
 }
 
+// Aliases (Target-defined aliases configuration within a Subscription)
+type Aliases map[string]string
+
+// IsOption - Aliases is a Option.
+func (o Aliases) IsOption() {}
+
+func hasAliases(opts []Option) map[string]string {
+	for _, o := range opts {
+		switch v := o.(type) {
+		case Aliases:
+			return map[string]string(v)
+		}
+	}
+	return nil
+}
+
 // NewServer creates an instance of Server with given json config.
 func NewServer(opts ...Option) (*Server, error) {
 	return NewCustomServer(gostruct.Schema, gostruct.ΓModelData, opts...)
@@ -155,7 +171,7 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 	var m *model.Model
 	s := &Server{
 		disableBundling: hasDisableBundling(opts),
-		serverAliases:   map[string]string{},
+		serverAliases:   hasAliases(opts),
 		sessions:        map[string]*Session{},
 		teleCtrl:        newTeleCtrl(),
 		iStateUpdate:    ydb.New("gnmi.iStateUpdate"),
@@ -237,13 +253,13 @@ func (s *Server) Capabilities(ctx context.Context, req *gnmipb.CapabilityRequest
 func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetResponse, error) {
 	if req.GetType() != gnmipb.GetRequest_ALL {
 		return nil, status.Errorf(codes.Unimplemented, "unsupported request type: %s",
-			gnmipb.GetRequest_DataType_name[int32(req.GetType())])
+			gnmipb.GetRequest_DataType_name[int32(gnmipb.GetRequest_ALL)])
 	}
 	if err := s.Model.CheckModels(req.GetUseModels()); err != nil {
-		return nil, status.Errorf(codes.Unimplemented, err.Error())
+		return nil, status.Error(codes.Unimplemented, err)
 	}
 	if err := s.checkEncoding(req.GetEncoding()); err != nil {
-		return nil, err
+		return nil, status.Error(codes.Unimplemented, err)
 	}
 
 	// fmt.Println(proto.MarshalTextString(req))
@@ -257,7 +273,7 @@ func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 
 	// each prefix + path ==> one notification message
 	if err := xpath.ValidateGNMIPath(prefix); err != nil {
-		return nil, status.Errorf(codes.Unimplemented, "invalid-path: %s", err.Error())
+		return nil, status.Errorf(codes.Unimplemented, "invalid prefix: %s", err)
 	}
 	toplist, ok := s.Model.Find(s.Model.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {

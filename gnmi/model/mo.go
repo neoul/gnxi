@@ -298,10 +298,10 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 			db, close := ydb.Open("_startup")
 			defer close()
 			if yerr := db.Parse(startup); yerr != nil {
-				return nil, status.Errorf(codes.Internal, "json: %v, yaml: %v", jerr, yerr)
+				return nil, status.Errorf(codes.InvalidArgument, "invalid startup: json: %v, yaml: %v", jerr, yerr)
 			}
 			if yerr := db.Convert(newMO); yerr != nil {
-				return nil, status.Errorf(codes.Internal, "json: %v, yaml: %v", jerr, yerr)
+				return nil, status.Errorf(codes.Internal, "startup converting failed: %v", yerr)
 			}
 		}
 		// [FIXME] - error in creating gnmid: /device/interfaces: /device/interfaces/interface: list interface contains more than max allowed elements: 2 > 0

@@ -308,12 +308,8 @@ func runTestGet(t *testing.T, s *Server, textPbPath string, wantRetCode codes.Co
 	t.Log("resp:", resp)
 
 	// Check return code
-	gotRetStatus, ok := status.FromError(err)
-	if !ok {
-		t.Fatal("got a non-grpc error from grpc call")
-	}
-	if gotRetStatus.Code() != wantRetCode {
-		t.Fatalf("got return code %v, want %v", gotRetStatus.Code(), wantRetCode)
+	if status.Code(err) != wantRetCode {
+		t.Fatalf("got return code %v, want %v", status.Code(err), wantRetCode)
 	}
 
 	// Check response value
@@ -1328,12 +1324,8 @@ func runTestSet(t *testing.T, tc gnmiSetTestCase) {
 	_, err = s.Set(nil, req)
 
 	// Check return code
-	gotRetStatus, ok := status.FromError(err)
-	if !ok {
-		t.Fatal("got a non-grpc error from grpc call")
-	}
-	if gotRetStatus.Code() != tc.wantRetCode {
-		t.Fatalf("got return code %v, want %v\nerror message: %v", gotRetStatus.Code(), tc.wantRetCode, err)
+	if status.Code(err) != tc.wantRetCode {
+		t.Fatalf("got return code %v, want %v\nerror message: %v", status.Code(err), tc.wantRetCode, err)
 	}
 
 	// Check server config

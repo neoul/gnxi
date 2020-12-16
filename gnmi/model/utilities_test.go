@@ -8,46 +8,11 @@ import (
 
 	"github.com/neoul/gdump"
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
+	"github.com/neoul/gnxi/utilities/test"
 	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/ygot/ygot"
 )
-
-func testIsEqualList(d1, d2 interface{}) bool {
-	v1 := reflect.ValueOf(d1)
-	v2 := reflect.ValueOf(d2)
-	if ydb.IsTypeInterface(v1.Type()) {
-		v1 = v1.Elem()
-	}
-	if ydb.IsTypeInterface(v2.Type()) {
-		v2 = v2.Elem()
-	}
-
-	if v1.Kind() != reflect.Slice && v1.Kind() != v2.Kind() {
-		return false
-	}
-
-	for v1.Len() != v2.Len() {
-		return false
-	}
-
-	l := v1.Len()
-	for i := 0; i < l; i++ {
-		eq := false
-		// fmt.Println("v1", v1.Index(i).Interface())
-		for j := 0; j < l; j++ {
-			// fmt.Println("v2", v2.Index(j).Interface())
-			if reflect.DeepEqual(v1.Index(i).Interface(), v2.Index(j).Interface()) {
-				eq = true
-				break
-			}
-		}
-		if !eq {
-			return false
-		}
-	}
-	return true
-}
 
 func testSetDataAndPath(s string, value interface{}) *DataAndPath {
 	return &DataAndPath{
@@ -288,7 +253,7 @@ func TestFindAllData(t *testing.T) {
 			for _, g := range got {
 				t.Log("got::", g)
 			}
-			if !testIsEqualList(got, tt.want) {
+			if !test.IsEqualList(got, tt.want) {
 				t.Errorf("FindAllDataNodes() got = %v, want %v", got, tt.want)
 				for _, g := range tt.want {
 					t.Log("tt.want::", g)
@@ -530,7 +495,7 @@ func TestFindAllNodes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, got1 := FindAllDataNodes(tt.args.vgs, tt.args.path)
-			if !testIsEqualList(got, tt.want) {
+			if !test.IsEqualList(got, tt.want) {
 				t.Errorf("FindAllDataNodes() got = %v, want %v", got, tt.want)
 				gdump.Print(got)
 				gdump.Print(tt.want)
@@ -726,7 +691,7 @@ func TestFindAllSchemaPaths(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, got1 := FindAllSchemaPaths(tt.args.gs, tt.args.path)
-			if !testIsEqualList(got, tt.want) {
+			if !test.IsEqualList(got, tt.want) {
 				t.Errorf("FindAllSchemaPaths() got = %v, want %v", got, tt.want)
 			}
 			if got1 != tt.want1 {
