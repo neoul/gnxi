@@ -298,10 +298,12 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 			db, close := ydb.Open("_startup")
 			defer close()
 			if yerr := db.Parse(startup); yerr != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "invalid startup: json: %v, yaml: %v", jerr, yerr)
+				return nil, status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+					"invalid startup data:: json: %v, yaml: %v", jerr, yerr)
 			}
 			if yerr := db.Convert(newMO); yerr != nil {
-				return nil, status.Errorf(codes.Internal, "startup converting failed: %v", yerr)
+				return nil, status.TaggedErrorf(codes.Internal, status.TagOperationFail,
+					"startup converting error:: %v", yerr)
 			}
 		}
 		// [FIXME] - error in creating gnmid: /device/interfaces: /device/interfaces/interface: list interface contains more than max allowed elements: 2 > 0
@@ -323,12 +325,12 @@ func (mo *MO) ExportToJSON(rfc7951json bool) ([]byte, error) {
 		jm, err = ygot.ConstructInternalJSON(mo.GetRoot())
 	}
 	if err != nil {
-		return nil, status.Error(codes.Internal, err)
+		return nil, status.TaggedErrorf(codes.Internal, status.TagBadData, "json-constructing error:: %v", err)
 	}
 	if b, err := json.MarshalIndent(jm, "", " "); err != nil {
 		return b, nil
 	}
-	return nil, status.Error(codes.Internal, err)
+	return nil, status.TaggedErrorf(codes.Internal, status.TagBadData, "json-marshaling error:: %v", err)
 }
 
 // Export returns json map[string]interface{} of the MO
@@ -341,7 +343,7 @@ func (mo *MO) Export(rfc7951json bool) (map[string]interface{}, error) {
 		jm, err = ygot.ConstructInternalJSON(mo.GetRoot())
 	}
 	if err != nil {
-		return nil, status.Error(codes.Internal, err)
+		return nil, status.TaggedErrorf(codes.Internal, status.TagBadData, "json-constructing error:: %v", err)
 	}
 	return jm, nil
 }

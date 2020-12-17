@@ -3,8 +3,10 @@ package model
 import (
 	"fmt"
 
+	"github.com/neoul/gnxi/utilities/status"
 	"github.com/neoul/gtrie"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
+	"google.golang.org/grpc/codes"
 )
 
 // opType [Update,Replace,Delete]
@@ -90,11 +92,14 @@ func (set *setTransaction) addOperation(optype opType, xpath *string, gpath *gnm
 }
 
 func (set *setTransaction) returnSetError(optype opType, seq int, err error) (int, error) {
+	if err != nil {
+		return -1, nil
+	}
 	if serr, ok := err.(SetError); ok {
 		opath := fmt.Sprintf("%s%s", optype, serr.ErrorPath())
 		if _, fvalue, ok := set.opseqs.FindLongestMatchedPrefix(opath); ok {
-			return fvalue.(int), err
+			return fvalue.(int), status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 		}
 	}
-	return seq, err
+	return seq, status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 }

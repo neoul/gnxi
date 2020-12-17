@@ -632,11 +632,13 @@ func FindSchemaByGNMIPath(baseSchema *yang.Entry, base interface{}, path *gnmipb
 func ValWrite(schema *yang.Entry, base ygot.GoStruct, path string, value string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
-		return err
+		return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
+			"xpath-to-gpath converting error for %s", path)
 	}
 	target, tSchema, err := ytypes.GetOrCreateNode(schema, base, gpath)
 	if err != nil {
-		return err
+		return status.TaggedErrorf(codes.Internal, status.TagOperationFail,
+			"get-or-creat-node error for %s", path)
 	}
 	if !tSchema.IsDir() {
 		// v := reflect.ValueOf(target)
@@ -647,15 +649,18 @@ func ValWrite(schema *yang.Entry, base ygot.GoStruct, path string, value string)
 		}
 		vv, err := ytypes.StringToType(vt, value)
 		if err != nil {
-			return err
+			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+				"string-to-type encoding error in %s:: %v", path, err)
 		}
 		typedValue, err := ygot.EncodeTypedValue(vv.Interface(), gnmipb.Encoding_JSON_IETF)
 		if err != nil {
-			return status.Errorf(codes.Internal, "encoding error(%s)", err.Error())
+			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+				"typed-value encoding error in %s:: %v", path, err)
 		}
 		err = ytypes.SetNode(schema, base, gpath, typedValue, &ytypes.InitMissingElements{})
 		if err != nil {
-			return err
+			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+				"typed-value set error in %s:: %v", path, err)
 		}
 	}
 	return err
@@ -665,11 +670,13 @@ func ValWrite(schema *yang.Entry, base ygot.GoStruct, path string, value string)
 func ValDelete(schema *yang.Entry, base ygot.GoStruct, path string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
-		return err
+		return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
+			"xpath-to-gpath converting error for %s", path)
 	}
 	tSchema := FindSchemaByGNMIPath(schema, base, gpath)
 	if tSchema == nil {
-		return status.Errorf(codes.Internal, "schema (%s) not found", path)
+		return status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
+			"schema finding error for %s", path)
 	}
 	// The key field deletion is not allowed.
 	if pSchema := tSchema.Parent; pSchema != nil {
@@ -678,5 +685,9 @@ func ValDelete(schema *yang.Entry, base ygot.GoStruct, path string) error {
 			return nil
 		}
 	}
-	return ytypes.DeleteNode(schema, base, gpath)
+	if err := ytypes.DeleteNode(schema, base, gpath); err != nil {
+		return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+			"deleting-node error in %s:: %v", path, err)
+	}
+	return nil
 }

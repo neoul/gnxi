@@ -78,10 +78,10 @@ func (cas *clientAliases) SetAlias(alias *gnmipb.Alias) error {
 	defer cas.mutex.Unlock()
 	name := alias.GetAlias()
 	if name == "" {
-		return status.Errorf(codes.InvalidArgument, "no alias name")
+		return status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidAlias, "empty alias")
 	}
 	if !strings.HasPrefix(name, "#") {
-		return status.Errorf(codes.InvalidArgument, "'%s' alias start with '#'", name)
+		return status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidAlias, "alias must start with '#'. e.g. %s", name)
 	}
 	gpath := alias.GetPath()
 	if gpath == nil || len(gpath.GetElem()) == 0 {
@@ -94,13 +94,13 @@ func (cas *clientAliases) SetAlias(alias *gnmipb.Alias) error {
 	}
 	path := xpath.ToXPath(gpath)
 	if err := xpath.ValidateGNMIPath(gpath); err != nil {
-		return status.Errorf(codes.InvalidArgument, "invalid path (%s)", path)
+		return status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidAlias, "invalid path '%s'", path)
 	}
 	if ca, ok := cas.path2alias[path]; ok {
-		return status.Errorf(codes.AlreadyExists, "'%s' alias already defined for '%s'", ca.name, path)
+		return status.TaggedErrorf(codes.AlreadyExists, status.TagInvalidAlias, "'%s'is already defined for '%s'", ca.name, path)
 	}
 	if ca, ok := cas.alias2path[name]; ok {
-		return status.Errorf(codes.AlreadyExists, "'%s' alias already defined for '%s'", name, ca.path)
+		return status.TaggedErrorf(codes.AlreadyExists, status.TagInvalidAlias, "'%s' is already defined for '%s'", name, ca.path)
 	}
 	// add the alias
 	ca := &aliasEntry{
@@ -167,6 +167,7 @@ func (cas *clientAliases) ToPath(alias interface{}, diffFormat bool) interface{}
 		}
 		return a
 	}
+	// must not reach here!!!
 	glog.Fatalf("unknown type inserted to clientAliases.ToPath()")
 	return alias
 }
@@ -203,6 +204,7 @@ func (cas *clientAliases) ToAlias(path interface{}, diffFormat bool) interface{}
 		}
 		return p
 	}
+	// must not reach here!!!
 	glog.Fatalf("unknown type inserted to clientAliases.ToAlias()")
 	return path
 }

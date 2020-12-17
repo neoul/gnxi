@@ -32,7 +32,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/neoul/gnxi/gnmi/model"
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
-	"github.com/neoul/gnxi/utilities"
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/openconfig/ygot/ygot"
@@ -196,8 +195,8 @@ func (s *Server) Load(startup []byte) error {
 	return s.Model.Load(startup, true)
 }
 
-// checkEncoding checks whether encoding and models are supported by the server. Return error if anything is unsupported.
-func (s *Server) checkEncoding(encoding gnmipb.Encoding) error {
+// CheckEncoding checks whether encoding and models are supported by the server. Return error if anything is unsupported.
+func (s *Server) CheckEncoding(encoding gnmipb.Encoding) error {
 	hasSupportedEncoding := false
 	for _, supportedEncoding := range supportedEncodings {
 		if encoding == supportedEncoding {
@@ -206,8 +205,8 @@ func (s *Server) checkEncoding(encoding gnmipb.Encoding) error {
 		}
 	}
 	if !hasSupportedEncoding {
-		err := fmt.Errorf("unsupported encoding: %s", gnmipb.Encoding_name[int32(encoding)])
-		return status.Error(codes.Unimplemented, err)
+		return status.TaggedErrorf(codes.Unimplemented, status.TagNotSupport,
+			"unsupported encoding: %s", gnmipb.Encoding_name[int32(encoding)])
 	}
 	return nil
 }
@@ -240,7 +239,8 @@ func getGNMIServiceVersion() (*string, error) {
 func (s *Server) Capabilities(ctx context.Context, req *gnmipb.CapabilityRequest) (*gnmipb.CapabilityResponse, error) {
 	ver, err := getGNMIServiceVersion()
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "error in getting gnmi service version: %v", err)
+		return nil, status.TaggedErrorf(codes.Internal, status.TagOperationFail,
+			"gnmi service version error: %v", err)
 	}
 	return &gnmipb.CapabilityResponse{
 		SupportedModels:    s.Model.GetModelData(),
@@ -252,14 +252,14 @@ func (s *Server) Capabilities(ctx context.Context, req *gnmipb.CapabilityRequest
 // Get implements the Get RPC in gNMI spec.
 func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetResponse, error) {
 	if req.GetType() != gnmipb.GetRequest_ALL {
-		return nil, status.Errorf(codes.Unimplemented, "unsupported request type: %s",
-			gnmipb.GetRequest_DataType_name[int32(gnmipb.GetRequest_ALL)])
+		return nil, status.TaggedErrorf(codes.Unimplemented, status.TagNotSupport,
+			"unsupported request type: %s", gnmipb.GetRequest_DataType_name[int32(gnmipb.GetRequest_ALL)])
 	}
 	if err := s.Model.CheckModels(req.GetUseModels()); err != nil {
-		return nil, status.Error(codes.Unimplemented, err)
+		return nil, err
 	}
-	if err := s.checkEncoding(req.GetEncoding()); err != nil {
-		return nil, status.Error(codes.Unimplemented, err)
+	if err := s.CheckEncoding(req.GetEncoding()); err != nil {
+		return nil, err
 	}
 
 	// fmt.Println(proto.MarshalTextString(req))
@@ -273,14 +273,17 @@ func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 
 	// each prefix + path ==> one notification message
 	if err := xpath.ValidateGNMIPath(prefix); err != nil {
-		return nil, status.Errorf(codes.Unimplemented, "invalid prefix: %s", err)
+		return nil, status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidPath,
+			"prefix validation failed: %s", err)
 	}
 	toplist, ok := s.Model.Find(s.Model.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
 		if ok = s.Model.ValidatePathSchema(prefix); ok {
-			return nil, status.Errorf(codes.NotFound, "data-missing: %v", xpath.ToXPath(prefix))
+			return nil, status.TaggedErrorf(codes.NotFound, status.TagDataMissing,
+				"no data found in %v", xpath.ToXPath(prefix))
 		}
-		return nil, status.Errorf(codes.NotFound, "unknown-schema: %s", xpath.ToXPath(prefix))
+		return nil, status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
+			"unable to find %s from the schema tree", xpath.ToXPath(prefix))
 	}
 	notifications := []*gnmipb.Notification{}
 	for _, top := range toplist {
@@ -288,25 +291,35 @@ func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 		branch := top.Value.(ygot.GoStruct)
 		bprefix, err := xpath.ToGNMIPath(bpath)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
+			return nil, status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
+				"xpath-to-gpath converting error for %s", bpath)
 		}
 		for _, path := range paths {
 			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
-				return nil, status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
+				return nil, status.TaggedErrorf(codes.Unimplemented, status.TagInvalidPath,
+					"full path (%s + %s) validation failed: %v",
+					xpath.ToXPath(prefix), xpath.ToXPath(path), err)
 			}
 			datalist, ok := s.Model.Find(branch, path)
 			if !ok || len(datalist) <= 0 {
-				continue
+				// [FIXME] Should it be failed?
+				fullpath := xpath.GNMIFullPath(prefix, path)
+				if ok = s.Model.ValidatePathSchema(fullpath); !ok {
+					return nil, status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
+						"unable to find %s from the schema tree", xpath.ToXPath(fullpath))
+				}
 			}
 			update := make([]*gnmipb.Update, len(datalist))
 			for j, data := range datalist {
 				typedValue, err := ygot.EncodeTypedValue(data.Value, req.GetEncoding())
 				if err != nil {
-					return nil, status.Errorf(codes.Internal, "encoding-error(%s)", err.Error())
+					return nil, status.TaggedErrorf(codes.Internal, status.TagBadData,
+						"typed-value encoding error in %s: %v", data.Path, err)
 				}
 				datapath, err := xpath.ToGNMIPath(data.Path)
 				if err != nil {
-					return nil, status.Errorf(codes.Internal, "path-conversion-error(%s)", data.Path)
+					return nil, status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
+						"xpath-to-gpath converting error for %s", data.Path)
 				}
 				update[j] = &gnmipb.Update{Path: datapath, Val: typedValue}
 			}
@@ -319,14 +332,14 @@ func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 		}
 	}
 	if len(notifications) <= 0 {
-		return nil, status.Errorf(codes.NotFound, "data-missing")
+		return nil, status.TaggedErrorf(codes.NotFound, status.TagDataMissing, "no data found")
 	}
 	return &gnmipb.GetResponse{Notification: notifications}, nil
 }
 
 // Set implements the Set RPC in gNMI spec.
 func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetResponse, error) {
-	utilities.PrintProto(req)
+	// utilities.PrintProto(req)
 	prefix := req.GetPrefix()
 
 	var index int
@@ -378,7 +391,7 @@ func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 		Prefix:   req.GetPrefix(),
 		Response: result,
 	}
-	utilities.PrintProto(resp)
+	// utilities.PrintProto(resp)
 	return resp, err
 }
 

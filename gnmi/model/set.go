@@ -16,17 +16,24 @@ func (m *Model) WriteTypedValue(path *gnmipb.Path, typedValue *gnmipb.TypedValue
 	base := m.GetRoot()
 	tValue, tSchema, err := ytypes.GetOrCreateNode(schema, base, path)
 	if err != nil {
-		return status.Error(codes.Internal, err)
+		return status.TaggedErrorf(codes.Internal, status.TagOperationFail,
+			"get-or-creat-node error for %s", xpath.ToXPath(path))
 	}
 	if tSchema.IsDir() {
 		target := tValue.(ygot.GoStruct)
+		// FIXME
 		if err := m.Unmarshal(typedValue.GetJsonIetfVal(), target); err != nil {
-			return status.Errorf(codes.InvalidArgument, "unmarshaling json failed: %v", err)
+			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+				"json-unmarshaling error:: %v", err)
 		}
 	} else { // (schema.IsLeaf() || schema.IsLeafList())
 		err = ytypes.SetNode(schema, base, path, typedValue, &ytypes.InitMissingElements{})
+		if err != nil {
+			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+				"typed-value set error in %s:: %v", xpath.ToXPath(path), err)
+		}
 	}
-	return status.Error(codes.Internal, err)
+	return nil
 }
 
 // SetInit initializes the Set transaction.
@@ -60,7 +67,7 @@ func (m *Model) SetCommit() (int, error) {
 	var err error
 	if m.StateConfig == nil {
 		return m.transaction.returnSetError(
-			opNone, -1, status.Errorf(codes.Internal, "no StateConfig interface"))
+			opNone, -1, status.TaggedErrorf(codes.Internal, status.TagOperationFail, "no state-config interface"))
 	}
 
 	// delete
@@ -152,7 +159,7 @@ func (m *Model) SetCommit() (int, error) {
 	if err = m.StateConfig.UpdateEnd(); err != nil {
 		return m.transaction.returnSetError(opUpdate, -1, err)
 	}
-	return -1, status.Error(codes.Internal, err)
+	return -1, nil
 }
 
 // SetDelete deletes the path from root if the path exists.
@@ -163,7 +170,8 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 	for _, target := range targets {
 		targetPath, err := xpath.ToGNMIPath(target.Path)
 		if err != nil {
-			return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
+			return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
+				"xpath-to-gpath converting error for %s", target.Path)
 		}
 		m.transaction.addOperation(opDelete, &target.Path, targetPath, target.Value)
 		if len(targetPath.GetElem()) == 0 {
@@ -171,11 +179,12 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 			if mo, err := m.NewRoot(nil); err == nil {
 				m.MO = mo
 			} else {
-				return status.Error(codes.Internal, err)
+				return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "deleting-root error:: %v", err)
 			}
 		} else {
 			if err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath); err != nil {
-				return status.Error(codes.Internal, err)
+				return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+					"deleting-node error in %s:: %v", target.Path, err)
 			}
 		}
 	}
@@ -192,25 +201,29 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 		for _, target := range targets {
 			targetPath, err := xpath.ToGNMIPath(target.Path)
 			if err != nil {
-				return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
+				return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
+					"xpath-to-gpath converting error for %s", target.Path)
 			}
 			m.transaction.addOperation(opReplace, &target.Path, targetPath, target.Value)
 			err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath)
 			if err != nil {
-				return status.Error(codes.Internal, err)
+				return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+					"deleting-node error in %s:: %v", target.Path, err)
 			}
 			err = m.WriteTypedValue(targetPath, typedValue)
 			if err != nil {
-				return status.Error(codes.Internal, err)
+				return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+					"writing-node error in %s:: %v", target.Path, err)
 			}
 		}
-		return status.Error(codes.Internal, err)
+		return nil
 	}
 	tpath := xpath.ToXPath(fullpath)
 	m.transaction.addOperation(opReplace, &tpath, fullpath, nil)
 	err = m.WriteTypedValue(fullpath, typedValue)
 	if err != nil {
-		return status.Error(codes.Internal, err)
+		return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+			"writing-node error in %s:: %v", tpath, err)
 	}
 	return nil
 }
@@ -225,12 +238,14 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 		for _, target := range targets {
 			targetPath, err := xpath.ToGNMIPath(target.Path)
 			if err != nil {
-				return status.Errorf(codes.Internal, "conversion-error(%s)", target.Path)
+				return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
+					"xpath-to-gpath converting error for %s", target.Path)
 			}
 			m.transaction.addOperation(opUpdate, &target.Path, targetPath, target.Value)
 			err = m.WriteTypedValue(targetPath, typedValue)
 			if err != nil {
-				return status.Error(codes.Internal, err)
+				return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+					"writing-node error in %s:: %v", target.Path, err)
 			}
 		}
 		return nil
@@ -239,7 +254,8 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 	m.transaction.addOperation(opUpdate, &tpath, fullpath, nil)
 	err = m.WriteTypedValue(fullpath, typedValue)
 	if err != nil {
-		return status.Error(codes.Internal, err)
+		return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+			"writing-node error in %s:: %v", tpath, err)
 	}
 	return nil
 }

@@ -96,11 +96,13 @@ func (s *Server) Closed(local, remote net.Addr) {
 func (s *Server) updateSession(ctx context.Context, SID string) (*Session, error) {
 	session, ok := s.sessions[SID]
 	if !ok {
-		return nil, status.Errorf(codes.Internal, "unknown session: %s", SID)
+		return nil, status.TaggedErrorf(codes.Internal,
+			status.TagInvalidSession, "unknown session: %s", SID)
 	}
 	m, ok := utilities.GetMetadata(ctx)
 	if !ok {
-		return nil, status.Errorf(codes.Internal, "missing metadata")
+		return nil, status.TaggedErrorf(codes.Internal,
+			status.TagInvalidSession, "missing metadata")
 	}
 
 	username, _ := m["username"]

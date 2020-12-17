@@ -431,7 +431,8 @@ func getDeletes(sub *Subscription, path *string, deleteOnly bool) ([]*gnmipb.Pat
 		}
 		datapath, err := xpath.ToGNMIPath(dpath)
 		if err != nil {
-			return nil, fmt.Errorf("path-conversion-error(%s)", dpath)
+			return nil, status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
+				"xpath-to-gpath converting error for %s", dpath)
 		}
 		deletes = append(deletes, datapath)
 	}
@@ -441,14 +442,16 @@ func getDeletes(sub *Subscription, path *string, deleteOnly bool) ([]*gnmipb.Pat
 func getUpdates(sub *Subscription, data *model.DataAndPath, encoding gnmipb.Encoding) (*gnmipb.Update, error) {
 	typedValue, err := ygot.EncodeTypedValue(data.Value, encoding)
 	if err != nil {
-		return nil, fmt.Errorf("encoding-error(%s)", err.Error())
+		return nil, status.TaggedErrorf(codes.Internal, status.TagBadData,
+			"typed-value encoding error in %s: %v", data.Path, err)
 	}
 	if typedValue == nil {
 		return nil, nil
 	}
 	datapath, err := xpath.ToGNMIPath(data.Path)
 	if err != nil {
-		return nil, fmt.Errorf("update-path-conversion-error(%s)", data.Path)
+		return nil, status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
+			"xpath-to-gpath converting error for %s", data.Path)
 	}
 	var duplicates uint32
 	if sub != nil {
@@ -489,7 +492,8 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 	subses.RLock()
 	defer subses.RUnlock()
 	if err := xpath.ValidateGNMIPath(prefix); err != nil {
-		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
+		return status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidPath,
+			"prefix validation failed: %s", err)
 	}
 	toplist, ok := subses.Find(subses.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
@@ -498,24 +502,22 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 			// doest send any of messages ahead of the sync response.
 			return subses.sendTelemetryUpdate(buildSyncResponse())
 		}
-		return status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPath(prefix))
+		return status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
+			"unable to find %s from the schema tree", xpath.ToXPath(prefix))
 	}
 
 	updates := []*gnmipb.Update{}
 	for _, top := range toplist {
-		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
-		bprefix, err := xpath.ToGNMIPath(bpath)
-		if err != nil {
-			return status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
-		}
 		if bundling {
 			updates = make([]*gnmipb.Update, 0, 16)
 		}
 		for _, updateEntry := range subList {
 			path := updateEntry.Path
 			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
-				return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
+				return status.TaggedErrorf(codes.Unimplemented, status.TagInvalidPath,
+					"full path (%s + %s) validation failed: %v",
+					xpath.ToXPath(prefix), xpath.ToXPath(path), err)
 			}
 			datalist, ok := subses.Find(branch, path)
 			if !ok || len(datalist) <= 0 {
@@ -524,7 +526,7 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 			for _, data := range datalist {
 				u, err := getUpdates(nil, data, encoding)
 				if err != nil {
-					return status.Error(codes.Internal, err)
+					return err
 				}
 				if u != nil {
 					if bundling {
@@ -541,7 +543,7 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 			}
 		}
 		if bundling && len(updates) > 0 {
-			err = subses.sendTelemetryUpdate(
+			err := subses.sendTelemetryUpdate(
 				buildSubscribeResponse(prefix, updates, nil))
 			if err != nil {
 				return err
@@ -571,41 +573,41 @@ func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.Go
 		updatedroot = subses.GetRoot()
 	}
 	if err := xpath.ValidateGNMIPath(prefix); err != nil {
-		return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
+		return status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidPath,
+			"prefix validation failed: %s", err)
 	}
 	toplist, ok := subses.Find(updatedroot, prefix)
 	if !ok || len(toplist) <= 0 {
 		if ok = subses.ValidatePathSchema(prefix); ok {
 			// data-missing is not an error in SubscribeRPC
-			// doest send any of messages.
+			// does not send any of messages.
 			return nil
 		}
-		return status.Errorf(codes.NotFound, "unknown-schema(%s)", xpath.ToXPath(prefix))
+		return status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
+			"unable to find %s from the schema tree", xpath.ToXPath(prefix))
 	}
 
 	deletes := []*gnmipb.Path{}
 	updates := []*gnmipb.Update{}
 
 	for _, top := range toplist {
+		var err error
 		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
-		bprefix, err := xpath.ToGNMIPath(bpath)
-		if err != nil {
-			return status.Errorf(codes.Internal, "path-conversion-error(%s)", bprefix)
-		}
-
 		if bundling {
 			updates = make([]*gnmipb.Update, 0, 16)
 			// get all replaced, deleted paths relative to the prefix
 			deletes, err = getDeletes(sub, &bpath, false)
 			if err != nil {
-				return status.Error(codes.Internal, err)
+				return err
 			}
 		}
 
 		for _, path := range sub.Paths {
 			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
-				return status.Errorf(codes.Unimplemented, "invalid-path(%s)", err.Error())
+				return status.TaggedErrorf(codes.Unimplemented, status.TagInvalidPath,
+					"full path (%s + %s) validation failed: %v",
+					xpath.ToXPath(prefix), xpath.ToXPath(path), err)
 			}
 			datalist, ok := subses.Find(branch, path)
 			if !ok || len(datalist) <= 0 {
@@ -614,7 +616,7 @@ func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.Go
 			for _, data := range datalist {
 				u, err := getUpdates(sub, data, encoding)
 				if err != nil {
-					return status.Error(codes.Internal, err)
+					return err
 				}
 				if u != nil {
 					if bundling {
@@ -623,7 +625,7 @@ func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.Go
 						fullpath := bpath + data.Path
 						deletes, err = getDeletes(sub, &fullpath, false)
 						if err != nil {
-							return status.Error(codes.Internal, err)
+							return err
 						}
 						aliasPrefix := subses.ToAlias(prefix, false).(*gnmipb.Path)
 						err = subses.sendTelemetryUpdate(
@@ -645,7 +647,7 @@ func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.Go
 		} else {
 			deletes, err = getDeletes(sub, &bpath, true)
 			if err != nil {
-				return status.Error(codes.Internal, err)
+				return err
 			}
 			for _, d := range deletes {
 				aliasPrefix := subses.ToAlias(prefix, false).(*gnmipb.Path)
@@ -689,8 +691,8 @@ func (subses *SubSession) addStreamSubscription(
 		mutex:             &sync.Mutex{},
 	}
 	if streamingMode == gnmipb.SubscriptionList_POLL {
-		return nil, status.Errorf(codes.InvalidArgument,
-			"poll subscription configured as streaming subscription")
+		return nil, status.TaggedErrorf(codes.InvalidArgument, status.TagMalformedMessage,
+			"streaming subscription not allowed on poll mode")
 	}
 	// 3.5.1.5.2 STREAM Subscriptions Must be satisfied for telemetry update starting.
 	switch sub.SubscriptionMode {
@@ -702,8 +704,8 @@ func (subses *SubSession) addStreamSubscription(
 		sub.Configured.HeartbeatInterval = 0
 	case gnmipb.SubscriptionMode_ON_CHANGE:
 		if sub.HeartbeatInterval < minimumInterval && sub.HeartbeatInterval != 0 {
-			return nil, status.Errorf(codes.InvalidArgument,
-				"heartbeat_interval(< 1sec) is not supported")
+			return nil, status.TaggedErrorf(codes.OutOfRange, status.TagInvalidConfig,
+				"heartbeat_interval(!= 0sec and < 1sec) is not supported")
 		}
 		sub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_ON_CHANGE
 		sub.Configured.SampleInterval = 0
@@ -711,12 +713,12 @@ func (subses *SubSession) addStreamSubscription(
 		sub.Configured.HeartbeatInterval = sub.HeartbeatInterval
 	case gnmipb.SubscriptionMode_SAMPLE:
 		if sub.SampleInterval < minimumInterval && sub.SampleInterval != 0 {
-			return nil, status.Errorf(codes.InvalidArgument,
-				"sample_interval(< 1sec) is not supported")
+			return nil, status.TaggedErrorf(codes.OutOfRange, status.TagInvalidConfig,
+				"sample_interval(!= 0sec and < 1sec) is not supported")
 		}
 		if sub.HeartbeatInterval < minimumInterval && sub.HeartbeatInterval != 0 {
-			return nil, status.Errorf(codes.InvalidArgument,
-				"heartbeat_interval(< 1sec) is not supported")
+			return nil, status.TaggedErrorf(codes.OutOfRange, status.TagInvalidConfig,
+				"heartbeat_interval(!= 0sec and < 1sec) is not supported")
 		}
 		sub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_SAMPLE
 		sub.Configured.SampleInterval = sub.SampleInterval
@@ -790,7 +792,8 @@ func (subses *SubSession) processSubscribeRequest(req *gnmipb.SubscribeRequest) 
 	// extension := req.GetExtension()
 	subscriptionList := req.GetSubscribe()
 	if subscriptionList == nil {
-		return status.Errorf(codes.InvalidArgument, "no subscribe(SubscriptionList)")
+		return status.TaggedErrorf(codes.InvalidArgument, status.TagMalformedMessage,
+			"no subscription info (SubscriptionList field)")
 	}
 	// check & update the server aliases and use_aliases
 	useAliases := subscriptionList.GetUseAliases()
@@ -801,16 +804,16 @@ func (subses *SubSession) processSubscribeRequest(req *gnmipb.SubscribeRequest) 
 	subList := subscriptionList.GetSubscription()
 	subListLength := len(subList)
 	if subList == nil || subListLength <= 0 {
-		err := fmt.Errorf("no subscription field(Subscription)")
-		return status.Error(codes.InvalidArgument, err)
+		return status.TaggedErrorf(codes.InvalidArgument, status.TagMalformedMessage,
+			"no subscription info (subscription field)")
 	}
 	encoding := subscriptionList.GetEncoding()
 	useModules := subscriptionList.GetUseModels()
 
 	if err := subses.CheckModels(useModules); err != nil {
-		return status.Error(codes.Unimplemented, err)
+		return err
 	}
-	if err := subses.checkEncoding(encoding); err != nil {
+	if err := subses.CheckEncoding(encoding); err != nil {
 		return err
 	}
 	prefix := subscriptionList.GetPrefix()
@@ -839,8 +842,8 @@ func (subses *SubSession) processSubscribeRequest(req *gnmipb.SubscribeRequest) 
 		fullpath := xpath.GNMIFullPath(prefix, path)
 		_, ok := subses.FindAllPaths(fullpath)
 		if !ok {
-			return status.Errorf(codes.InvalidArgument,
-				"schema not found for %s", xpath.ToXPath(fullpath))
+			return status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
+				"unable to find %s from the schema tree", xpath.ToXPath(fullpath))
 		}
 		sub, err := subses.addStreamSubscription(
 			prefix, useAliases, gnmipb.SubscriptionList_STREAM,

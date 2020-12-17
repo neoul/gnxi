@@ -63,7 +63,8 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 	cn ChangeNotification, sc StateConfig, ss StateSync) (*Model, error) {
 	s, err := schema()
 	if err != nil {
-		return nil, status.Error(codes.Internal, err)
+		return nil, status.TaggedErrorf(codes.Internal,
+			status.TagOperationFail, "schema-loading failed:: %v", err)
 	}
 	m := &Model{
 		MO:                 (*MO)(s),
@@ -86,7 +87,7 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 func (m *Model) Load(startup []byte, sync bool) error {
 	newMO, err := m.NewRoot(startup)
 	if err != nil {
-		return status.Error(codes.Internal, err)
+		return err
 	}
 	if sync && m.StateConfig != nil {
 		newlist := newMO.ListAll(newMO.GetRoot(), nil)
@@ -96,28 +97,33 @@ func (m *Model) Load(startup []byte, sync bool) error {
 		// Get difference between cur and new for C/R/D operations
 		if err = m.StateConfig.UpdateStart(); err != nil {
 			m.StateConfig.UpdateEnd()
-			return err
+			return status.TaggedErrorf(codes.Internal,
+				status.TagOperationFail, "state-config (update-start) error:: %v", err)
 		}
 		for p := range cur {
 			if _, exists := new[p]; !exists {
 				if err := m.StateConfig.UpdateDelete(p); err != nil {
-					return err
+					return status.TaggedErrorf(codes.Internal,
+						status.TagOperationFail, "state-config (update-delete) error:: %v", err)
 				}
 			}
 		}
 		for p, entry := range new {
 			if _, exists := cur[p]; exists {
 				if err := m.StateConfig.UpdateReplace(p, entry.GetValueString()); err != nil {
-					return err
+					return status.TaggedErrorf(codes.Internal,
+						status.TagOperationFail, "state-config (update-replace) error:: %v", err)
 				}
 			} else {
 				if err := m.StateConfig.UpdateCreate(p, entry.GetValueString()); err != nil {
-					return err
+					return status.TaggedErrorf(codes.Internal,
+						status.TagOperationFail, "state-config (update-create) error:: %v", err)
 				}
 			}
 		}
 		if err = m.StateConfig.UpdateEnd(); err != nil {
-			return err
+			return status.TaggedErrorf(codes.Internal,
+				status.TagOperationFail, "state-config (update-end) error:: %v", err)
 		}
 	}
 	m.MO = newMO
@@ -155,7 +161,8 @@ func (m *Model) CheckModels(models []*gnmipb.ModelData) error {
 			}
 		}
 		if !isSupported {
-			return status.Error(codes.Unimplemented, fmt.Errorf("unsupported model: %v", m))
+			return status.TaggedErrorf(codes.Unimplemented,
+				status.TagNotSupport, "unsupported model: %v", m)
 		}
 	}
 	return nil
