@@ -29,6 +29,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/neoul/gnxi/gnmi/model"
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
@@ -55,6 +56,7 @@ type Server struct {
 	serverAliases   map[string]string // target-defined aliases (server aliases)
 	enabledAliases  bool              // whether server aliases is enabled
 	iStateUpdate    *ydb.YDB          // internal StateUpdate interface
+	reqSeq          uint64
 }
 
 // Option is an interface used in the gNMI Server configuration
@@ -151,9 +153,12 @@ func (o Aliases) IsOption() {}
 
 func hasAliases(opts []Option) map[string]string {
 	for _, o := range opts {
-		switch v := o.(type) {
+		switch a := o.(type) {
 		case Aliases:
-			return map[string]string(v)
+			for k, v := range a {
+				glog.Infof("server-aliases(%s: %s)\n", k, v)
+			}
+			return map[string]string(a)
 		}
 	}
 	return nil
@@ -235,8 +240,57 @@ func getGNMIServiceVersion() (*string, error) {
 	return ver.(*string), nil
 }
 
+func (s *Server) getReqSequence() uint64 {
+	s.reqSeq++
+	return s.reqSeq
+}
+
 // Capabilities returns supported encodings and supported models.
 func (s *Server) Capabilities(ctx context.Context, req *gnmipb.CapabilityRequest) (*gnmipb.CapabilityResponse, error) {
+	seq := s.getReqSequence()
+	glog.V(1).Infof("Capabilities.request[%d]::\n%s", seq, proto.MarshalTextString(req))
+	resp, err := s.capabilities(ctx, req)
+	if err != nil {
+		glog.Errorf("Capabilities.response[%d]:: %v", seq, err)
+	} else {
+		glog.V(1).Infof("Capabilities.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
+	}
+	return resp, err
+}
+
+// Get implements the Get RPC in gNMI spec.
+func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetResponse, error) {
+	seq := s.getReqSequence()
+	glog.V(1).Infof("Get.request[%d]::\n%s", seq, proto.MarshalTextString(req))
+	resp, err := s.get(ctx, req)
+	if err != nil {
+		glog.Errorf("Get.response[%d]:: %v", seq, err)
+	} else {
+		glog.V(1).Infof("Get.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
+	}
+	return resp, err
+}
+
+// Set implements the Set RPC in gNMI spec.
+func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetResponse, error) {
+	seq := s.getReqSequence()
+	glog.V(1).Infof("Set.request[%d]::\n%s", seq, proto.MarshalTextString(req))
+	resp, err := s.set(ctx, req)
+	if err != nil {
+		glog.Errorf("Set.response[%d]:: %v", seq, err)
+	} else {
+		glog.V(1).Infof("Set.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
+	}
+	return resp, err
+}
+
+// Subscribe implements the Subscribe RPC in gNMI spec.
+func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
+	return s.subscribe(stream)
+}
+
+// Capabilities returns supported encodings and supported models.
+func (s *Server) capabilities(ctx context.Context, req *gnmipb.CapabilityRequest) (*gnmipb.CapabilityResponse, error) {
 	ver, err := getGNMIServiceVersion()
 	if err != nil {
 		return nil, status.TaggedErrorf(codes.Internal, status.TagOperationFail,
@@ -250,7 +304,7 @@ func (s *Server) Capabilities(ctx context.Context, req *gnmipb.CapabilityRequest
 }
 
 // Get implements the Get RPC in gNMI spec.
-func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetResponse, error) {
+func (s *Server) get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetResponse, error) {
 	if req.GetType() != gnmipb.GetRequest_ALL {
 		return nil, status.TaggedErrorf(codes.Unimplemented, status.TagNotSupport,
 			"unsupported request type: %s", gnmipb.GetRequest_DataType_name[int32(gnmipb.GetRequest_ALL)])
@@ -338,7 +392,7 @@ func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 }
 
 // Set implements the Set RPC in gNMI spec.
-func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetResponse, error) {
+func (s *Server) set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetResponse, error) {
 	// utilities.PrintProto(req)
 	prefix := req.GetPrefix()
 
@@ -396,7 +450,7 @@ func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 }
 
 // Subscribe implements the Subscribe RPC in gNMI spec.
-func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
+func (s *Server) subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 	subses := newSubSession(stream.Context(), s)
 	// run stream responsor
 	subses.waitgroup.Add(1)
@@ -411,8 +465,9 @@ func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 			select {
 			case resp, ok := <-telemetrychannel:
 				if ok {
-					// fmt.Println(proto.MarshalTextString(resp))
 					stream.Send(resp)
+					glog.V(1).Infof("Subscribe[%s:%d:%d].response::\n%s",
+						subses.Address, subses.Port, 0, proto.MarshalTextString(resp))
 				} else {
 					return
 				}
@@ -427,14 +482,20 @@ func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 	}()
 	for {
 		req, err := stream.Recv()
+		seq := s.getReqSequence()
 		if err != nil {
 			if err == io.EOF {
 				return nil
 			}
+			glog.Errorf("Subscribe[%s:%d:%d].response:: %v",
+				subses.Address, subses.Port, 0, err)
 			return err
 		}
-		// fmt.Println(proto.MarshalTextString(req))
+		glog.V(1).Infof("Subscribe[%s:%d:%d].request::\n%s",
+			subses.Address, subses.Port, seq, proto.MarshalTextString(req))
 		if err = subses.processSubscribeRequest(req); err != nil {
+			glog.Errorf("Subscribe[%s:%d:%d].response:: %v",
+				subses.Address, subses.Port, seq, err)
 			return err
 		}
 	}
