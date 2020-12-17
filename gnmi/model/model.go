@@ -64,7 +64,7 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 	s, err := schema()
 	if err != nil {
 		return nil, status.TaggedErrorf(codes.Internal,
-			status.TagOperationFail, "schema-loading failed:: %v", err)
+			status.TagOperationFail, "schema loading failed:: %v", err)
 	}
 	m := &Model{
 		MO:                 (*MO)(s),
@@ -77,6 +77,8 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 	}
 	if m.StateConfig == nil {
 		m.StateConfig = &emptyStateConfig{}
+		glog.Infof("StateConfig interface is not installed.")
+		glog.Infof("The model starts as a read-only")
 	}
 	m.initStateSync(ss)
 	return m, nil
@@ -152,17 +154,17 @@ func (m *Model) FindModel(name string) (*gnmipb.ModelData, bool) {
 
 // CheckModels checks whether models are supported by the model. Return error if anything is unsupported.
 func (m *Model) CheckModels(models []*gnmipb.ModelData) error {
-	for _, mo := range models {
+	for _, model := range models {
 		isSupported := false
 		for _, supportedModel := range m.modelData {
-			if reflect.DeepEqual(mo, supportedModel) {
+			if reflect.DeepEqual(model, supportedModel) {
 				isSupported = true
 				break
 			}
 		}
 		if !isSupported {
 			return status.TaggedErrorf(codes.Unimplemented,
-				status.TagNotSupport, "unsupported model: %v", m)
+				status.TagNotSupport, "unsupported model:: %v", model)
 		}
 	}
 	return nil
@@ -486,17 +488,17 @@ func (m *Model) findSchemaAndDataPath(path dataAndSchemaPath, parent *yang.Entry
 func (m *Model) UpdateCreate(path string, value string) error {
 	// fmt.Printf("m.UpdateCreate %v %v {\n", path, value)
 	schema := m.RootSchema()
-	err := ValWrite(schema, m.GetRoot(), path, value)
+	err := writeValue(schema, m.GetRoot(), path, value)
 	if err == nil {
 		if m.updatedroot != nil {
 			fakeRoot := m.updatedroot.GetRoot()
-			ValWrite(schema, fakeRoot, path, value)
+			writeValue(schema, fakeRoot, path, value)
 			if m.ChangeNotification != nil {
 				m.ChangeNotification.ChangeCreated(path, fakeRoot)
 			}
 		}
 	} else {
-		glog.Errorf("%v", err)
+		glog.Errorf("model.UpdateCreate:: %v", err)
 	}
 	// fmt.Println("}")
 	// ignore StateUpdate error
@@ -507,17 +509,17 @@ func (m *Model) UpdateCreate(path string, value string) error {
 func (m *Model) UpdateReplace(path string, value string) error {
 	// fmt.Printf("m.UpdateCreate %v %v {\n", path, value)
 	schema := m.RootSchema()
-	err := ValWrite(schema, m.GetRoot(), path, value)
+	err := writeValue(schema, m.GetRoot(), path, value)
 	if err == nil {
 		if m.updatedroot != nil {
 			fakeRoot := m.updatedroot.GetRoot()
-			ValWrite(schema, fakeRoot, path, value)
+			writeValue(schema, fakeRoot, path, value)
 			if m.ChangeNotification != nil {
 				m.ChangeNotification.ChangeReplaced(path, fakeRoot)
 			}
 		}
 	} else {
-		glog.Errorf("%v", err)
+		glog.Errorf("model.UpdateReplace:: %v", err)
 	}
 	// fmt.Println("}")
 	// ignore StateUpdate error
@@ -528,13 +530,13 @@ func (m *Model) UpdateReplace(path string, value string) error {
 func (m *Model) UpdateDelete(path string) error {
 	// fmt.Printf("m.UpdateDelete %v {\n", path)
 	schema := m.RootSchema()
-	err := ValDelete(schema, m.GetRoot(), path)
+	err := deleteValue(schema, m.GetRoot(), path)
 	if err == nil {
 		if m.ChangeNotification != nil {
 			m.ChangeNotification.ChangeDeleted(path)
 		}
 	} else {
-		glog.Errorf("%v", err)
+		glog.Errorf("model.UpdateDelete:: %v", err)
 	}
 	// fmt.Println("}")
 	// ignore StateUpdate error
@@ -547,7 +549,7 @@ func (m *Model) UpdateStart() error {
 	// updatedroot is used to save the changes of the model data.
 	updatedroot, err := m.NewRoot(nil)
 	if err != nil {
-		glog.Errorf("%v", err)
+		glog.Errorf("model.UpdateStart:: %v", err)
 	}
 	m.updatedroot = updatedroot
 	if m.ChangeNotification != nil {

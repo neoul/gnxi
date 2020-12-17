@@ -5,14 +5,12 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/neoul/gnxi/utilities/status"
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/goyang/pkg/yang"
 	"github.com/openconfig/ygot/ygot"
 	"github.com/openconfig/ygot/ytypes"
-	"google.golang.org/grpc/codes"
 )
 
 // DataAndPath - used to retrieve of the data and gNMI path from ygot go structure.
@@ -628,17 +626,39 @@ func FindSchemaByGNMIPath(baseSchema *yang.Entry, base interface{}, path *gnmipb
 	return findSchema(baseSchema, path)
 }
 
-// ValWrite - Write the value to the model instance
-func ValWrite(schema *yang.Entry, base ygot.GoStruct, path string, value string) error {
+// writeTypedValue - Write the TypedValue to the model instance
+func writeTypedValue(m *Model, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
+	// var err error
+	schema := m.GetSchema()
+	base := m.GetRoot()
+	tValue, tSchema, err := ytypes.GetOrCreateNode(schema, base, path)
+	if err != nil {
+		return err
+	}
+	if tSchema.IsDir() {
+		target := tValue.(ygot.GoStruct)
+		// FIXME
+		if err := m.Unmarshal(typedValue.GetJsonIetfVal(), target); err != nil {
+			return err
+		}
+	} else { // (schema.IsLeaf() || schema.IsLeafList())
+		err = ytypes.SetNode(schema, base, path, typedValue, &ytypes.InitMissingElements{})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeValue - Write the value to the model instance
+func writeValue(schema *yang.Entry, base ygot.GoStruct, path string, value string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
-		return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
-			"xpath-to-gpath converting error for %s", path)
+		return err
 	}
 	target, tSchema, err := ytypes.GetOrCreateNode(schema, base, gpath)
 	if err != nil {
-		return status.TaggedErrorf(codes.Internal, status.TagOperationFail,
-			"get-or-creat-node error for %s", path)
+		return err
 	}
 	if !tSchema.IsDir() {
 		// v := reflect.ValueOf(target)
@@ -649,34 +669,29 @@ func ValWrite(schema *yang.Entry, base ygot.GoStruct, path string, value string)
 		}
 		vv, err := ytypes.StringToType(vt, value)
 		if err != nil {
-			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
-				"string-to-type encoding error in %s:: %v", path, err)
+			return err
 		}
 		typedValue, err := ygot.EncodeTypedValue(vv.Interface(), gnmipb.Encoding_JSON_IETF)
 		if err != nil {
-			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
-				"typed-value encoding error in %s:: %v", path, err)
+			return err
 		}
 		err = ytypes.SetNode(schema, base, gpath, typedValue, &ytypes.InitMissingElements{})
 		if err != nil {
-			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
-				"typed-value set error in %s:: %v", path, err)
+			return err
 		}
 	}
 	return err
 }
 
-// ValDelete - Delete the value from the model instance
-func ValDelete(schema *yang.Entry, base ygot.GoStruct, path string) error {
+// deleteValue - Delete the value from the model instance
+func deleteValue(schema *yang.Entry, base ygot.GoStruct, path string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
-		return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
-			"xpath-to-gpath converting error for %s", path)
+		return err
 	}
 	tSchema := FindSchemaByGNMIPath(schema, base, gpath)
 	if tSchema == nil {
-		return status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
-			"schema finding error for %s", path)
+		return err
 	}
 	// The key field deletion is not allowed.
 	if pSchema := tSchema.Parent; pSchema != nil {
@@ -686,8 +701,7 @@ func ValDelete(schema *yang.Entry, base ygot.GoStruct, path string) error {
 		}
 	}
 	if err := ytypes.DeleteNode(schema, base, gpath); err != nil {
-		return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
-			"deleting-node error in %s:: %v", path, err)
+		return err
 	}
 	return nil
 }
