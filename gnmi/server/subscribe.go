@@ -475,8 +475,8 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 	bundling := !subses.disableBundling
 	subscriptionList := req.GetSubscribe()
 	subList := subscriptionList.GetSubscription()
-	updateOnly := subscriptionList.GetUpdatesOnly()
-	if updateOnly {
+	updatesOnly := subscriptionList.GetUpdatesOnly()
+	if updatesOnly {
 		return subses.sendTelemetryUpdate(buildSyncResponse())
 	}
 	prefix := subscriptionList.GetPrefix()
@@ -514,10 +514,15 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 		}
 		for _, updateEntry := range subList {
 			path := updateEntry.Path
+			fullpath := xpath.GNMIFullPath(prefix, path)
 			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
 				return status.TaggedErrorf(codes.Unimplemented, status.TagInvalidPath,
 					"full path (%s + %s) validation failed: %v",
 					xpath.ToXPath(prefix), xpath.ToXPath(path), err)
+			}
+			if ok = subses.ValidatePathSchema(fullpath); !ok {
+				return status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
+					"unable to find %s from the schema tree", xpath.ToXPath(fullpath))
 			}
 			datalist, ok := subses.Find(branch, path)
 			if !ok || len(datalist) <= 0 {
@@ -543,8 +548,9 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 			}
 		}
 		if bundling && len(updates) > 0 {
+			aliasPrefix := subses.ToAlias(prefix, false).(*gnmipb.Path)
 			err := subses.sendTelemetryUpdate(
-				buildSubscribeResponse(prefix, updates, nil))
+				buildSubscribeResponse(aliasPrefix, updates, nil))
 			if err != nil {
 				return err
 			}
@@ -795,7 +801,7 @@ func (subses *SubSession) processSubscribeRequest(req *gnmipb.SubscribeRequest) 
 		return status.TaggedErrorf(codes.InvalidArgument, status.TagMalformedMessage,
 			"no subscription info (SubscriptionList field)")
 	}
-	// check & update the server aliases and use_aliases
+	// check & update the server aliases if use_aliases is true
 	useAliases := subscriptionList.GetUseAliases()
 	if useAliases {
 		subses.aliasesUpdate()

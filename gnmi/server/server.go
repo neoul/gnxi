@@ -187,10 +187,13 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 	}
 	s.Model = m
 	if startup := hasStartup(opts); startup != nil {
-		m.Load(startup, true)
+		if err := m.Load(startup, true); err != nil {
+			return nil, err
+		}
 	}
 	s.iStateUpdate.EnableAtomicUpdate(true)
 	s.iStateUpdate.SetTarget(m, false)
+	// gdump.Print(s.Model.GetRoot())
 	return s, nil
 }
 
@@ -286,7 +289,33 @@ func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 
 // Subscribe implements the Subscribe RPC in gNMI spec.
 func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
-	return s.subscribe(stream)
+	subses := newSubSession(stream.Context(), s)
+	defer func() { subses.stopSubSession() }()
+	// run stream responsor
+	subses.waitgroup.Add(1)
+	go func(
+		stream gnmipb.GNMI_SubscribeServer,
+		telemetrychannel chan *gnmipb.SubscribeResponse,
+		shutdown chan struct{},
+		waitgroup *sync.WaitGroup,
+	) {
+		defer waitgroup.Done()
+		for {
+			select {
+			case resp, ok := <-telemetrychannel:
+				if ok {
+					stream.Send(resp)
+					glog.V(1).Infof("Subscribe[%s:%d:%d].response::\n%s",
+						subses.Address, subses.Port, 0, proto.MarshalTextString(resp))
+				} else {
+					return
+				}
+			case <-shutdown:
+				return
+			}
+		}
+	}(stream, subses.respchan, subses.shutdown, subses.waitgroup)
+	return s.subscribe(subses, stream)
 }
 
 // Capabilities returns supported encodings and supported models.
@@ -450,36 +479,7 @@ func (s *Server) set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 }
 
 // Subscribe implements the Subscribe RPC in gNMI spec.
-func (s *Server) subscribe(stream gnmipb.GNMI_SubscribeServer) error {
-	subses := newSubSession(stream.Context(), s)
-	// run stream responsor
-	subses.waitgroup.Add(1)
-	go func(
-		stream gnmipb.GNMI_SubscribeServer,
-		telemetrychannel chan *gnmipb.SubscribeResponse,
-		shutdown chan struct{},
-		waitgroup *sync.WaitGroup,
-	) {
-		defer waitgroup.Done()
-		for {
-			select {
-			case resp, ok := <-telemetrychannel:
-				if ok {
-					stream.Send(resp)
-					glog.V(1).Infof("Subscribe[%s:%d:%d].response::\n%s",
-						subses.Address, subses.Port, 0, proto.MarshalTextString(resp))
-				} else {
-					return
-				}
-			case <-shutdown:
-				return
-			}
-		}
-	}(stream, subses.respchan, subses.shutdown, subses.waitgroup)
-
-	defer func() {
-		subses.stopSubSession()
-	}()
+func (s *Server) subscribe(subses *SubSession, stream gnmipb.GNMI_SubscribeServer) error {
 	for {
 		req, err := stream.Recv()
 		seq := s.getReqSequence()

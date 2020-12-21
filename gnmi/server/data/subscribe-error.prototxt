@@ -1,0 +1,28 @@
+##@ 0 SubscribeRequest
+subscribe: <
+  prefix: <
+    elem: <
+      name: "interfaces"
+    >
+    elem: <
+      name: "interface"
+      key: <
+        key: "name"
+        value: "1/1"
+      >
+    >
+  >
+  subscription: <
+    path: <
+      elem: <
+        name: "unknown"
+      >
+    >
+  >
+  use_aliases: true
+  mode: ONCE
+>
+
+##@ Error
+
+code: 10

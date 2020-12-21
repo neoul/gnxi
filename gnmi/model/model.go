@@ -76,7 +76,7 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 		stateSyncPath:      gtrie.New(),
 	}
 	if m.StateConfig == nil {
-		m.StateConfig = &emptyStateConfig{}
+		m.StateConfig = &ignoringStateConfig{}
 		glog.Infof("StateConfig interface is not installed.")
 		glog.Infof("The model starts as a read-only")
 	}

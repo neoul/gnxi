@@ -7,6 +7,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -160,6 +161,19 @@ func (s *Status) GRPCStatus() *status.Status {
 		})
 	}
 	return ss
+}
+
+// ToProto return gRPC error status
+func ToProto(err error) *spb.Status {
+	if err == nil {
+		return nil
+	}
+	s := FromError(err)
+	return s.GRPCStatus().Proto()
+}
+
+func EmptyProto() *spb.Status {
+	return &spb.Status{}
 }
 
 // New returns a Status representing c and msg.

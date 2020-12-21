@@ -233,28 +233,29 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 	return nil
 }
 
-type emptyStateConfig struct{}
+type ignoringStateConfig struct{}
 
-func (sc *emptyStateConfig) UpdateStart() error {
-	return status.TaggedErrorf(codes.Unimplemented, status.TagNotSupport, "set not supported")
-}
-func (sc *emptyStateConfig) UpdateCreate(path string, value string) error {
-	// fmt.Println("emptyStateConfig.UpdateCreate", "C", path, value)
+func (sc *ignoringStateConfig) UpdateStart() error {
+	// return status.TaggedErrorf(codes.Unimplemented, status.TagNotSupport, "not implemented StateConfig interface")
 	return nil
 }
-func (sc *emptyStateConfig) UpdateReplace(path string, value string) error {
-	// fmt.Println("emptyStateConfig.UpdateReplace", "R", path, value)
+func (sc *ignoringStateConfig) UpdateCreate(path string, value string) error {
+	// fmt.Println("ignoringStateConfig.UpdateCreate", "C", path, value)
 	return nil
 }
-func (sc *emptyStateConfig) UpdateDelete(path string) error {
-	// fmt.Println("emptyStateConfig.UpdateDelete", "D", path)
+func (sc *ignoringStateConfig) UpdateReplace(path string, value string) error {
+	// fmt.Println("ignoringStateConfig.UpdateReplace", "R", path, value)
 	return nil
 }
-func (sc *emptyStateConfig) UpdateEnd() error {
-	// fmt.Println("emptyStateConfig.UpdateEnd")
+func (sc *ignoringStateConfig) UpdateDelete(path string) error {
+	// fmt.Println("ignoringStateConfig.UpdateDelete", "D", path)
 	return nil
 }
-func (sc *emptyStateConfig) UpdateSync(path ...string) error {
-	// fmt.Println("emptyStateConfig.UpdateSync", path)
+func (sc *ignoringStateConfig) UpdateEnd() error {
+	// fmt.Println("ignoringStateConfig.UpdateEnd")
+	return nil
+}
+func (sc *ignoringStateConfig) UpdateSync(path ...string) error {
+	// fmt.Println("ignoringStateConfig.UpdateSync", path)
 	return nil
 }

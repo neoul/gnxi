@@ -294,12 +294,18 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 		Unmarshal:  mo.Unmarshal,
 	}
 	if startup != nil {
-		if jerr := newMO.Unmarshal(startup, newMO.GetRoot()); jerr != nil {
+		s := strings.TrimLeft(string(startup), "\n \t")
+		if strings.HasPrefix(s, "{") {
+			if jerr := newMO.Unmarshal(startup, newMO.GetRoot()); jerr != nil {
+				return nil, status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+					"invalid startup data:: json: %v", jerr)
+			}
+		} else {
 			db, close := ydb.Open("_startup")
 			defer close()
 			if yerr := db.Parse(startup); yerr != nil {
 				return nil, status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
-					"invalid startup data:: json: %v, yaml: %v", jerr, yerr)
+					"invalid startup data:: yaml: %v", yerr)
 			}
 			if yerr := db.Convert(newMO); yerr != nil {
 				return nil, status.TaggedErrorf(codes.Internal, status.TagOperationFail,
@@ -327,10 +333,12 @@ func (mo *MO) ExportToJSON(rfc7951json bool) ([]byte, error) {
 	if err != nil {
 		return nil, status.TaggedErrorf(codes.Internal, status.TagBadData, "json-constructing error:: %v", err)
 	}
-	if b, err := json.MarshalIndent(jm, "", " "); err != nil {
-		return b, nil
+	b, err := json.MarshalIndent(jm, "", " ")
+	if err != nil {
+		return nil, status.TaggedErrorf(codes.Internal, status.TagBadData, "json-marshaling error:: %v", err)
+
 	}
-	return nil, status.TaggedErrorf(codes.Internal, status.TagBadData, "json-marshaling error:: %v", err)
+	return b, nil
 }
 
 // Export returns json map[string]interface{} of the MO
@@ -352,7 +360,7 @@ func (mo *MO) Export(rfc7951json bool) (map[string]interface{}, error) {
 func (mo *MO) UpdateCreate(path string, value string) error {
 	err := writeValue(mo.RootSchema(), mo.Root, path, value)
 	if err != nil {
-		glog.Errorf("mo.UpdateCreate:: %v", err)
+		glog.Errorf("mo.UpdateCreate:: path %s, %v", path, err)
 	}
 	return nil
 }
@@ -361,7 +369,7 @@ func (mo *MO) UpdateCreate(path string, value string) error {
 func (mo *MO) UpdateReplace(path string, value string) error {
 	err := writeValue(mo.RootSchema(), mo.Root, path, value)
 	if err != nil {
-		glog.Errorf("mo.UpdateReplace:: %v", err)
+		glog.Errorf("mo.UpdateReplace:: path %s, %v", path, err)
 	}
 	return nil
 }

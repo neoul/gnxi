@@ -1,7 +1,11 @@
 package test
 
 import (
+	"io/ioutil"
+	"os"
 	"reflect"
+	"regexp"
+	"strings"
 )
 
 // isTypeInterface reports whether v is an interface.
@@ -47,4 +51,32 @@ func IsEqualList(d1, d2 interface{}) bool {
 		}
 	}
 	return true
+}
+
+// LoadProtoMessages loads ref type's proto message
+func LoadProtoMessages(file string) ([]string, error) {
+	reg, err := regexp.Compile("##@")
+	if err != nil {
+		return nil, err
+	}
+	fp, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer fp.Close()
+	data, err := ioutil.ReadAll(fp)
+	if err != nil {
+		return nil, err
+	}
+
+	var start, end int
+	allindex := reg.FindAllIndex(data, len(data))
+	textlist := make([]string, 0, len(allindex)+1)
+	for i := 1; i < len(allindex); i++ {
+		start = allindex[i-1][0]
+		end = allindex[i][0]
+		textlist = append(textlist, strings.Trim(string(data[start:end]), " \n\t"))
+	}
+	textlist = append(textlist, strings.Trim(string(data[end:]), " \n\t"))
+	return textlist, nil
 }

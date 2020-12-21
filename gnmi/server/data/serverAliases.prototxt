@@ -1,0 +1,92 @@
+##@ 0 SubscribeRequest
+subscribe: <
+  prefix: <
+    elem: <
+      name: "interfaces"
+    >
+    elem: <
+      name: "interface"
+      key: <
+        key: "name"
+        value: "1/1"
+      >
+    >
+  >
+  subscription: <
+    path: <
+      elem: <
+        name: "state"
+      >
+      elem: <
+        name: "counters"
+      >
+      elem: <
+        name: "in-pkts"
+      >
+    >
+  >
+  use_aliases: true
+  mode: ONCE
+>
+
+##@ 1 SubscribeResponse
+update: <
+  prefix: <
+    elem: <
+      name: "interfaces"
+    >
+    elem: <
+      name: "interface"
+      key: <
+        key: "name"
+        value: "1/1"
+      >
+    >
+  >
+  alias: "#1/1"
+>
+
+##@ 2 SubscribeResponse
+update: <
+  prefix: <
+    elem: <
+      name: "interfaces"
+    >
+    elem: <
+      name: "interface"
+      key: <
+        key: "name"
+        value: "1/2"
+      >
+    >
+  >
+  alias: "#1/2"
+>
+
+##@ 3 SubscribeResponse
+update: <
+  prefix: <
+    elem: <
+      name: "#1/1"
+    >
+  >
+  update: <
+    path: <
+      elem: <
+        name: "state"
+      >
+      elem: <
+        name: "counters"
+      >
+      elem: <
+        name: "in-pkts"
+      >
+    >
+    val: <
+      uint_val: 100
+    >
+  >
+>
+
+##@ 4 SubscribeResponse
+sync_response: true
