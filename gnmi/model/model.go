@@ -11,6 +11,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
 	"github.com/neoul/gnxi/utilities/status"
+	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/gtrie"
 	"github.com/neoul/libydb/go/ydb"
 	"github.com/openconfig/goyang/pkg/yang"
@@ -163,6 +164,10 @@ func (m *Model) CheckModels(models []*gnmipb.ModelData) error {
 			}
 		}
 		if !isSupported {
+			if model.Name == "" {
+				return status.TaggedErrorf(codes.InvalidArgument,
+					status.TagBadData, "invalid supported model data:: %v", model)
+			}
 			return status.TaggedErrorf(codes.Unimplemented,
 				status.TagNotSupport, "unsupported model:: %v", model)
 		}
@@ -305,6 +310,20 @@ func (m *Model) ValidatePathSchema(path *gnmipb.Path) bool {
 		}
 	}
 	return true
+}
+
+// ValidateGNMIPath - validates the gNMI Paths and check the schema.
+func (m *Model) ValidateGNMIPath(path ...*gnmipb.Path) error {
+	fullpath, err := xpath.ValidateGNMIPath(path...)
+	if err != nil {
+		return status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidPath,
+			"invalid prefix or path: %s", err)
+	}
+	if !m.ValidatePathSchema(fullpath) {
+		return status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
+			"unable to find %s from the schema tree", xpath.ToXPath(fullpath))
+	}
+	return nil
 }
 
 // FindSchemaPaths - validates all schema of the gNMI Path.

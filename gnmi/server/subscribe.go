@@ -462,7 +462,16 @@ func getUpdates(sub *Subscription, data *model.DataAndPath, encoding gnmipb.Enco
 	return &gnmipb.Update{Path: datapath, Val: typedValue, Duplicates: duplicates}, nil
 }
 
-func (subses *SubSession) aliasesUpdate() {
+func (subses *SubSession) clientAliasesUpdate(aliaslist *gnmipb.AliasList) error {
+	aliasnames, err := subses.SetAliases(aliaslist.GetAlias())
+	for _, name := range aliasnames {
+		subses.sendTelemetryUpdate(
+			buildAliasResponse(subses.ToPath(name, true).(*gnmipb.Path), name))
+	}
+	return err
+}
+
+func (subses *SubSession) serverAliasesUpdate() {
 	aliases := subses.UpdateAliases(subses.serverAliases, true)
 	for _, alias := range aliases {
 		subses.sendTelemetryUpdate(
@@ -491,19 +500,12 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 
 	subses.RLock()
 	defer subses.RUnlock()
-	if err := xpath.ValidateGNMIPath(prefix); err != nil {
-		return status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidPath,
-			"prefix validation failed: %s", err)
+	if err := subses.ValidateGNMIPath(prefix); err != nil {
+		return err
 	}
 	toplist, ok := subses.Find(subses.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
-		if ok = subses.ValidatePathSchema(prefix); ok {
-			// data-missing is not an error in SubscribeRPC
-			// doest send any of messages ahead of the sync response.
-			return subses.sendTelemetryUpdate(buildSyncResponse())
-		}
-		return status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
-			"unable to find %s from the schema tree", xpath.ToXPath(prefix))
+		return subses.sendTelemetryUpdate(buildSyncResponse())
 	}
 
 	updates := []*gnmipb.Update{}
@@ -514,15 +516,8 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 		}
 		for _, updateEntry := range subList {
 			path := updateEntry.Path
-			fullpath := xpath.GNMIFullPath(prefix, path)
-			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
-				return status.TaggedErrorf(codes.Unimplemented, status.TagInvalidPath,
-					"full path (%s + %s) validation failed: %v",
-					xpath.ToXPath(prefix), xpath.ToXPath(path), err)
-			}
-			if ok = subses.ValidatePathSchema(fullpath); !ok {
-				return status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
-					"unable to find %s from the schema tree", xpath.ToXPath(fullpath))
+			if err := subses.ValidateGNMIPath(prefix, path); err != nil {
+				return err
 			}
 			datalist, ok := subses.Find(branch, path)
 			if !ok || len(datalist) <= 0 {
@@ -578,19 +573,14 @@ func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.Go
 	if updatedroot == nil {
 		updatedroot = subses.GetRoot()
 	}
-	if err := xpath.ValidateGNMIPath(prefix); err != nil {
-		return status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidPath,
-			"prefix validation failed: %s", err)
+	if err := subses.ValidateGNMIPath(prefix); err != nil {
+		return err
 	}
 	toplist, ok := subses.Find(updatedroot, prefix)
 	if !ok || len(toplist) <= 0 {
-		if ok = subses.ValidatePathSchema(prefix); ok {
-			// data-missing is not an error in SubscribeRPC
-			// does not send any of messages.
-			return nil
-		}
-		return status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
-			"unable to find %s from the schema tree", xpath.ToXPath(prefix))
+		// data-missing is not an error in SubscribeRPC
+		// does not send any of messages.
+		return nil
 	}
 
 	deletes := []*gnmipb.Path{}
@@ -610,10 +600,8 @@ func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.Go
 		}
 
 		for _, path := range sub.Paths {
-			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
-				return status.TaggedErrorf(codes.Unimplemented, status.TagInvalidPath,
-					"full path (%s + %s) validation failed: %v",
-					xpath.ToXPath(prefix), xpath.ToXPath(path), err)
+			if err := subses.ValidateGNMIPath(prefix, path); err != nil {
+				return err
 			}
 			datalist, ok := subses.Find(branch, path)
 			if !ok || len(datalist) <= 0 {
@@ -792,7 +780,7 @@ func (subses *SubSession) processSubscribeRequest(req *gnmipb.SubscribeRequest) 
 	// SubscribeRequest for aliases update
 	aliases := req.GetAliases()
 	if aliases != nil {
-		return subses.SetAliases(aliases.GetAlias())
+		return subses.clientAliasesUpdate(aliases)
 	}
 
 	// extension := req.GetExtension()
@@ -804,7 +792,7 @@ func (subses *SubSession) processSubscribeRequest(req *gnmipb.SubscribeRequest) 
 	// check & update the server aliases if use_aliases is true
 	useAliases := subscriptionList.GetUseAliases()
 	if useAliases {
-		subses.aliasesUpdate()
+		subses.serverAliasesUpdate()
 	}
 
 	subList := subscriptionList.GetSubscription()

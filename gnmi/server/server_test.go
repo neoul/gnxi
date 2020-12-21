@@ -17,8 +17,6 @@ package server
 
 import (
 	"encoding/json"
-	"flag"
-	"fmt"
 	"io/ioutil"
 	"reflect"
 	"strings"
@@ -283,9 +281,9 @@ interfaces:
 			wantRetCode: codes.NotFound,
 		},
 		{
-			desc:        "use of model data not supported",
+			desc:        "invalid supported model data",
 			modelData:   []*gnmipb.ModelData{&gnmipb.ModelData{}},
-			wantRetCode: codes.Unimplemented,
+			wantRetCode: codes.InvalidArgument,
 		},
 	}
 
@@ -461,8 +459,12 @@ func TestGetWithYaml(t *testing.T) {
 			wantRetCode: codes.NotFound,
 		},
 		{
-			desc:        "use of model data not supported",
-			modelData:   []*gnmipb.ModelData{&gnmipb.ModelData{}},
+			desc: "use of model data not supported",
+			modelData: []*gnmipb.ModelData{&gnmipb.ModelData{
+				Name:         "openconfig-interfaces",
+				Organization: "OpenConfig working group",
+				Version:      "2.4.1",
+			}},
 			wantRetCode: codes.Unimplemented,
 		},
 	}
@@ -1361,18 +1363,15 @@ func clearNotificationTimestamp(r *gnmipb.SubscribeResponse) {
 }
 
 func TestSubscribe(t *testing.T) {
-	if f := flag.Lookup("v"); f != nil && f.Value.String() == f.DefValue {
-		f.Value.Set("99")
-	}
-	if f := flag.Lookup("alsologtostderr"); f != nil && f.Value.String() == f.DefValue {
-		f.Value.Set("true")
-	}
-	if f := flag.Lookup("stderrthreshold"); f != nil && f.Value.String() == f.DefValue {
-		f.Value.Set("info")
-	}
-	if f := flag.Lookup("stderrthreshold"); f != nil && f.Value.String() == f.DefValue {
-		f.Value.Set("info")
-	}
+	// if f := flag.Lookup("v"); f != nil && f.Value.String() == f.DefValue {
+	// 	f.Value.Set("99")
+	// }
+	// if f := flag.Lookup("alsologtostderr"); f != nil && f.Value.String() == f.DefValue {
+	// 	f.Value.Set("true")
+	// }
+	// if f := flag.Lookup("stderrthreshold"); f != nil && f.Value.String() == f.DefValue {
+	// 	f.Value.Set("info")
+	// }
 
 	startup := `{
 		"openconfig-messages:messages": {
@@ -1433,17 +1432,6 @@ func TestSubscribe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error in creating config server: %v", err)
 	}
-	subses := &SubSession{
-		ID:            1,
-		Address:       "127.0.0.1",
-		Port:          uint16(11112),
-		SubList:       map[string]*Subscription{},
-		respchan:      make(chan *gnmipb.SubscribeResponse, 256),
-		shutdown:      make(chan struct{}),
-		waitgroup:     new(sync.WaitGroup),
-		clientAliases: newClientAliases(),
-		Server:        s,
-	}
 
 	type testsubscribe struct {
 		name    string
@@ -1468,15 +1456,15 @@ func TestSubscribe(t *testing.T) {
 						t.Errorf("different response:\ngot : %v\nwant: %v\n", got, want)
 					}
 				case <-shutdown:
-					t.Errorf("different response:\ngot : %v\nwant: %v\n", got, want)
+					t.Errorf("different response:\ngot : %v\nwant: %v\n", nil, want)
 					return
 				}
 			case got = <-gotresp:
 				clearNotificationTimestamp(got)
-				t.Log("got-response:*", got)
+				t.Log("got-response:", got)
 				select {
 				case want = <-wantresp:
-					t.Log("want-response:*", want)
+					t.Log("want-response:", want)
 					if !proto.Equal(got, want) {
 						t.Errorf("different response:\ngot : %v\nwant: %v\n", got, want)
 					}
@@ -1493,11 +1481,15 @@ func TestSubscribe(t *testing.T) {
 	tests := []testsubscribe{
 		{
 			name:    "server-aliases",
-			msgfile: "data/serverAliases.prototxt",
+			msgfile: "data/server-aliases.prototxt",
+		},
+		{
+			name:    "client-aliases",
+			msgfile: "data/client-aliases.prototxt",
 		},
 	}
-	j, _ := s.ExportToJSON(true)
-	fmt.Println(string(j))
+	// j, _ := s.ExportToJSON(true)
+	// fmt.Println(string(j))
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1505,6 +1497,17 @@ func TestSubscribe(t *testing.T) {
 			txtMessages, err := test.LoadProtoMessages(tc.msgfile)
 			if err != nil {
 				t.Errorf("loading '%s' got error: %v", tc.msgfile, err)
+			}
+			subses := &SubSession{
+				ID:            1,
+				Address:       "127.0.0.1",
+				Port:          uint16(11112),
+				SubList:       map[string]*Subscription{},
+				respchan:      make(chan *gnmipb.SubscribeResponse, 256),
+				shutdown:      make(chan struct{}),
+				waitgroup:     new(sync.WaitGroup),
+				clientAliases: newClientAliases(),
+				Server:        s,
 			}
 			subses.waitgroup.Add(1)
 			go SubscribeResponseValidator(t, subses, tc, wantresp)
@@ -1519,7 +1522,7 @@ func TestSubscribe(t *testing.T) {
 					if err := proto.UnmarshalText(txtMessages[i], wantErr); err != nil {
 						t.Errorf("proto message unmarshaling got error: %v", err)
 					}
-					if wantErr.Code == int32(rcode) {
+					if wantErr.Code != int32(rcode) {
 						t.Errorf("different response:\ngot : %v\nwant: %v\n", rcode, codes.Code(wantErr.Code).String())
 					}
 				} else if pos := strings.Index(txtMessages[i], "SubscribeRequest"); pos >= 0 && pos < newline {
@@ -1531,7 +1534,7 @@ func TestSubscribe(t *testing.T) {
 					err := subses.processSubscribeRequest(req)
 					if estatus := status.FromError(err); estatus != nil {
 						// fmt.Println(proto.MarshalTextString(status.ToProto(err)))
-						t.Log("got-error:", estatus.Code.String(), uint32(estatus.Code))
+						t.Log("got-error:", estatus.Code.String(), uint32(estatus.Code), estatus.Message)
 						rcode = estatus.Code
 					} else {
 						rcode = codes.OK

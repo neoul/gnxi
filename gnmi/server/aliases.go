@@ -93,7 +93,7 @@ func (cas *clientAliases) SetAlias(alias *gnmipb.Alias) error {
 		return nil
 	}
 	path := xpath.ToXPath(gpath)
-	if err := xpath.ValidateGNMIPath(gpath); err != nil {
+	if _, err := xpath.ValidateGNMIPath(gpath); err != nil {
 		return status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidAlias, "invalid path '%s'", path)
 	}
 	if ca, ok := cas.path2alias[path]; ok {
@@ -113,14 +113,16 @@ func (cas *clientAliases) SetAlias(alias *gnmipb.Alias) error {
 	return nil
 }
 
-func (cas *clientAliases) SetAliases(aliases []*gnmipb.Alias) error {
+func (cas *clientAliases) SetAliases(aliases []*gnmipb.Alias) ([]string, error) {
+	var aliasname []string
 	for _, alias := range aliases {
 		if err := cas.SetAlias(alias); err != nil {
-			return err
+			return aliasname, err
 		}
+		aliasname = append(aliasname, alias.GetAlias())
 		glog.Infof("Set Alias '%s' to '%s'", alias.GetAlias(), alias.GetPath())
 	}
-	return nil
+	return aliasname, nil
 }
 
 // ToPath converts an alias to the related path.

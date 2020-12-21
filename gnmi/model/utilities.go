@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/neoul/gnxi/utilities/status"
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
@@ -633,7 +634,7 @@ func writeTypedValue(m *Model, path *gnmipb.Path, typedValue *gnmipb.TypedValue)
 	base := m.GetRoot()
 	tValue, tSchema, err := ytypes.GetOrCreateNode(schema, base, path)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s", status.FromError(err).Message)
 	}
 	if tSchema.IsDir() {
 		target := tValue.(ygot.GoStruct)
@@ -644,7 +645,7 @@ func writeTypedValue(m *Model, path *gnmipb.Path, typedValue *gnmipb.TypedValue)
 	} else { // (schema.IsLeaf() || schema.IsLeafList())
 		err = ytypes.SetNode(schema, base, path, typedValue, &ytypes.InitMissingElements{})
 		if err != nil {
-			return err
+			return fmt.Errorf("%s", status.FromError(err).Message)
 		}
 	}
 	return nil
@@ -658,7 +659,7 @@ func writeValue(schema *yang.Entry, base ygot.GoStruct, path string, value strin
 	}
 	target, tSchema, err := ytypes.GetOrCreateNode(schema, base, gpath)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s", status.FromError(err).Message)
 	}
 	if !tSchema.IsDir() {
 		// v := reflect.ValueOf(target)
@@ -677,7 +678,7 @@ func writeValue(schema *yang.Entry, base ygot.GoStruct, path string, value strin
 		}
 		err = ytypes.SetNode(schema, base, gpath, typedValue, &ytypes.InitMissingElements{})
 		if err != nil {
-			return err
+			return fmt.Errorf("%s", status.FromError(err).Message)
 		}
 	}
 	return err

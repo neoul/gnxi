@@ -254,7 +254,7 @@ func (s *Server) Capabilities(ctx context.Context, req *gnmipb.CapabilityRequest
 	glog.V(1).Infof("Capabilities.request[%d]::\n%s", seq, proto.MarshalTextString(req))
 	resp, err := s.capabilities(ctx, req)
 	if err != nil {
-		glog.Errorf("Capabilities.response[%d]:: %v", seq, err)
+		glog.Errorf("Capabilities.response[%d]:: %v", seq, status.FromError(err))
 	} else {
 		glog.V(1).Infof("Capabilities.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
 	}
@@ -267,7 +267,7 @@ func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 	glog.V(1).Infof("Get.request[%d]::\n%s", seq, proto.MarshalTextString(req))
 	resp, err := s.get(ctx, req)
 	if err != nil {
-		glog.Errorf("Get.response[%d]:: %v", seq, err)
+		glog.Errorf("Get.response[%d]:: %v", seq, status.FromError(err))
 	} else {
 		glog.V(1).Infof("Get.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
 	}
@@ -280,7 +280,7 @@ func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 	glog.V(1).Infof("Set.request[%d]::\n%s", seq, proto.MarshalTextString(req))
 	resp, err := s.set(ctx, req)
 	if err != nil {
-		glog.Errorf("Set.response[%d]:: %v", seq, err)
+		glog.Errorf("Set.response[%d]:: %v", seq, status.FromError(err))
 	} else {
 		glog.V(1).Infof("Set.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
 	}
@@ -355,18 +355,14 @@ func (s *Server) get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 	defer s.Model.RUnlock()
 
 	// each prefix + path ==> one notification message
-	if err := xpath.ValidateGNMIPath(prefix); err != nil {
-		return nil, status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidPath,
-			"prefix validation failed: %s", err)
+	if err := s.ValidateGNMIPath(prefix); err != nil {
+		return nil, err
 	}
 	toplist, ok := s.Model.Find(s.Model.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
-		if ok = s.Model.ValidatePathSchema(prefix); ok {
-			return nil, status.TaggedErrorf(codes.NotFound, status.TagDataMissing,
-				"no data found in %v", xpath.ToXPath(prefix))
-		}
-		return nil, status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
-			"unable to find %s from the schema tree", xpath.ToXPath(prefix))
+		// [FIXME] Should it be failed?
+		return nil, status.TaggedErrorf(codes.NotFound, status.TagDataMissing,
+			"no data found in %v", xpath.ToXPath(prefix))
 	}
 	notifications := []*gnmipb.Notification{}
 	for _, top := range toplist {
@@ -378,19 +374,13 @@ func (s *Server) get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 				"xpath-to-gpath converting error for %s", bpath)
 		}
 		for _, path := range paths {
-			if err := xpath.ValidateGNMIFullPath(prefix, path); err != nil {
-				return nil, status.TaggedErrorf(codes.Unimplemented, status.TagInvalidPath,
-					"full path (%s + %s) validation failed: %v",
-					xpath.ToXPath(prefix), xpath.ToXPath(path), err)
+			if err := s.ValidateGNMIPath(prefix, path); err != nil {
+				return nil, err
 			}
 			datalist, ok := s.Model.Find(branch, path)
 			if !ok || len(datalist) <= 0 {
 				// [FIXME] Should it be failed?
-				fullpath := xpath.GNMIFullPath(prefix, path)
-				if ok = s.Model.ValidatePathSchema(fullpath); !ok {
-					return nil, status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
-						"unable to find %s from the schema tree", xpath.ToXPath(fullpath))
-				}
+				continue
 			}
 			update := make([]*gnmipb.Update, len(datalist))
 			for j, data := range datalist {

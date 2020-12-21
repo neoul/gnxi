@@ -1,0 +1,71 @@
+##@ 0 SubscribeRequest
+aliases: <
+  alias: <
+    path: <
+      elem: <
+        name: "messages"
+      >
+      elem: <
+        name: "state"
+      >
+      elem: <
+        name: "message"
+      >
+    >
+    alias: "syslog"
+  >
+>
+
+##@ Error
+code: 3
+
+##@ SubscribeRequest
+aliases: <
+  alias: <
+    path: <
+      elem: <
+        name: "messages"
+      >
+      elem: <
+        name: "state"
+      >
+      elem: <
+        name: "message"
+      >
+    >
+    alias: "#syslog"
+  >
+>
+
+##@ SubscribeResponse
+update: <
+  prefix: <
+    elem: <
+      name: "messages"
+    >
+    elem: <
+      name: "state"
+    >
+    elem: <
+      name: "message"
+    >
+  >
+  alias: "#syslog"
+>
+
+##@ SubscribeRequest
+subscribe: <
+  prefix: <
+    elem: <
+      name: "#syslog"
+    >
+  >
+  subscription: <
+    path: <
+      elem: <
+        name: "msg"
+      >
+    >
+  >
+  mode: ONCE
+>

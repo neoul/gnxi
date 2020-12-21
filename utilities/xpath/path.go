@@ -17,10 +17,10 @@ limitations under the License.
 package xpath
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/golang/protobuf/proto"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
@@ -60,35 +60,23 @@ func GNMIAliasPath(name string) *gnmipb.Path {
 }
 
 // ValidateGNMIPath - checks the validation of the gNMI path.
-func ValidateGNMIPath(path *gnmipb.Path) error {
-	if path.GetElem() == nil && path.GetElement() != nil {
-		return fmt.Errorf("deprecated path element")
+func ValidateGNMIPath(path ...*gnmipb.Path) (*gnmipb.Path, error) {
+	if len(path) == 0 {
+		return nil, fmt.Errorf("no input path")
 	}
-	return nil
-}
-
-// ValidateGNMIFullPath - check the validation of the gNMI full path
-func ValidateGNMIFullPath(prefix, path *gnmipb.Path) error {
-	if path == nil {
-		return fmt.Errorf("no path input")
-	}
-	if path.GetElem() == nil && path.GetElement() != nil {
-		return fmt.Errorf("deprecated path element")
-	}
-	if prefix == nil {
-		return nil
-	}
-	oPre, oPath := prefix.GetOrigin(), path.GetOrigin()
-	switch {
-	case oPre != "" && oPath != "":
-		return errors.New("origin is set both in prefix and path")
-	case oPath != "":
-		if len(prefix.GetElem()) > 0 {
-			return errors.New("path elements in prefix are set even though origin is set in path")
+	p := proto.Clone(path[0]).(*gnmipb.Path)
+	for i := range path {
+		if path[i].GetElem() == nil && path[i].GetElement() != nil {
+			return nil, fmt.Errorf("deprecated path.element used")
 		}
-	default:
+		if i > 0 {
+			if path[i].Target != "" { // 2.2.2.1 Path Target
+				return nil, fmt.Errorf("path.target MUST only ever be present on the prefix path")
+			}
+			p = GNMIFullPath(p, path[i])
+		}
 	}
-	return nil
+	return p, nil
 }
 
 // mergePaths returns a single merged path
@@ -121,7 +109,8 @@ func GNMIFullPath(prefix, path *gnmipb.Path) *gnmipb.Path {
 		}
 		return path
 	}
-	fullPath := &gnmipb.Path{Origin: prefix.Origin}
+	fullPath := proto.Clone(prefix).(*gnmipb.Path)
+	// fullPath := &gnmipb.Path{Target: prefix.Target, Origin: prefix.Origin}
 	if path.GetElement() != nil {
 		fullPath.Element = append(prefix.GetElement(), path.GetElement()...)
 	}
@@ -130,7 +119,6 @@ func GNMIFullPath(prefix, path *gnmipb.Path) *gnmipb.Path {
 		if fullPath.Elem == nil {
 			return nil
 		}
-		// fullPath.Elem = append(prefix.GetElem(), path.GetElem()...)
 	}
 	return fullPath
 }

@@ -46,7 +46,7 @@ func (s *Status) Error() string {
 	if s == nil {
 		return ""
 	}
-	return s.Message
+	return fmt.Sprintf("[%s] %s", s.Tag, s.Message)
 }
 
 // // NewInvalidArgument return an error object including a BadRequest
