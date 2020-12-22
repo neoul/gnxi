@@ -56,6 +56,7 @@ update: <
 ##@ SubscribeRequest
 subscribe: <
   prefix: <
+    target: "test"
     elem: <
       name: "#syslog"
     >
@@ -72,7 +73,7 @@ subscribe: <
 
 ##@ SubscribeResponse
 
-update:{prefix:{elem:{name:"#syslog"}}  update:{path:{elem:{name:"msg"}}  val:{string_val:"Messages presents here."}}}
+update:{prefix:{elem:{name:"#syslog"}  target:"test"}  update:{path:{elem:{name:"msg"}}  val:{string_val:"Messages presents here."}}}
 
 
 ##@ 4 SubscribeResponse

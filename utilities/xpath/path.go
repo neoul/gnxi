@@ -49,14 +49,39 @@ var (
 )
 
 // GNMIAliasPath returns Alias gNMI Path.
-func GNMIAliasPath(name string) *gnmipb.Path {
+func GNMIAliasPath(name, target, origin string) *gnmipb.Path {
 	return &gnmipb.Path{
+		Target: target,
+		Origin: origin,
 		Elem: []*gnmipb.PathElem{
 			&gnmipb.PathElem{
 				Name: name,
 			},
 		},
 	}
+}
+
+// CloneGNMIPath returns cloned gNMI Path.
+func CloneGNMIPath(src *gnmipb.Path) *gnmipb.Path {
+	return proto.Clone(src).(*gnmipb.Path)
+}
+
+// UpdateGNMIPathElem returns the updated gNMI Path.
+func UpdateGNMIPathElem(target, src *gnmipb.Path) *gnmipb.Path {
+	if target == nil {
+		return CloneGNMIPath(src)
+	}
+	if src == nil {
+		return target
+	}
+	l := len(src.GetElem())
+	pathElems := []*gnmipb.PathElem{}
+	if l > 0 {
+		pathElems = make([]*gnmipb.PathElem, l)
+		copy(pathElems, src.GetElem())
+	}
+	target.Elem = pathElems
+	return target
 }
 
 // ValidateGNMIPath - checks the validation of the gNMI path.

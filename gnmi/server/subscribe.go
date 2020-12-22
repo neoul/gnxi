@@ -463,7 +463,7 @@ func getUpdates(sub *Subscription, data *model.DataAndPath, encoding gnmipb.Enco
 }
 
 func (subses *SubSession) clientAliasesUpdate(aliaslist *gnmipb.AliasList) error {
-	aliasnames, err := subses.SetAliases(aliaslist.GetAlias())
+	aliasnames, err := subses.updateClientAliases(aliaslist.GetAlias())
 	for _, name := range aliasnames {
 		subses.sendTelemetryUpdate(
 			buildAliasResponse(subses.ToPath(name, true).(*gnmipb.Path), name))
@@ -472,7 +472,7 @@ func (subses *SubSession) clientAliasesUpdate(aliaslist *gnmipb.AliasList) error
 }
 
 func (subses *SubSession) serverAliasesUpdate() {
-	aliases := subses.UpdateAliases(subses.serverAliases, true)
+	aliases := subses.updateServerAliases(subses.serverAliases, true)
 	for _, alias := range aliases {
 		subses.sendTelemetryUpdate(
 			buildAliasResponse(subses.ToPath(alias, true).(*gnmipb.Path), alias))

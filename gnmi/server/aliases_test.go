@@ -21,7 +21,7 @@ func Test_clientAliases(t *testing.T) {
 	cas := newClientAliases()
 
 	// enable server aliases
-	cas.UpdateAliases(serveraliases, true)
+	cas.updateServerAliases(serveraliases, true)
 
 	type setTest struct {
 		name    string
@@ -87,7 +87,7 @@ func Test_clientAliases(t *testing.T) {
 
 	for _, tt := range settests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := cas.SetAlias(tt.alias); err != nil && !tt.wantErr {
+			if err := cas.updateClientAlias(tt.alias); err != nil && !tt.wantErr {
 				t.Errorf("clientAliases.Set() = %v", err)
 			}
 		})
@@ -134,7 +134,7 @@ func Test_clientAliases(t *testing.T) {
 		{
 			name: "ToPath",
 			args: args{
-				input:      xpath.GNMIAliasPath("#1/3"),
+				input:      xpath.GNMIAliasPath("#1/3", "", ""),
 				diffFormat: false,
 			},
 			want: &gnmipb.Path{
@@ -154,7 +154,7 @@ func Test_clientAliases(t *testing.T) {
 		{
 			name: "ToPath",
 			args: args{
-				input:      xpath.GNMIAliasPath("#1/3"),
+				input:      xpath.GNMIAliasPath("#1/3", "", ""),
 				diffFormat: true,
 			},
 			want: "/interfaces/interface[name=1/3]",
@@ -190,7 +190,7 @@ func Test_clientAliases(t *testing.T) {
 				input:      "/interfaces/interface[name=1/3]",
 				diffFormat: true,
 			},
-			want: xpath.GNMIAliasPath("#1/3"),
+			want: xpath.GNMIAliasPath("#1/3", "", ""),
 		},
 		{
 			name: "ToAlias",
@@ -210,7 +210,7 @@ func Test_clientAliases(t *testing.T) {
 				},
 				diffFormat: false,
 			},
-			want: xpath.GNMIAliasPath("#ifstate"),
+			want: xpath.GNMIAliasPath("#ifstate", "", ""),
 		},
 		{
 			name: "ToAlias",
@@ -242,7 +242,7 @@ func Test_clientAliases(t *testing.T) {
 	}
 
 	// disable server aliases
-	cas.UpdateAliases(serveraliases, false)
+	cas.updateServerAliases(serveraliases, false)
 
 	// server aliases are removed from client aliases.
 	tests = []test{

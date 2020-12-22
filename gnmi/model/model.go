@@ -291,6 +291,18 @@ func (m *Model) ValidatePathSchema(path *gnmipb.Path) bool {
 	if entry == nil {
 		return false
 	}
+	if path.Origin != "" {
+		isSupported := false
+		for _, supportedModel := range m.modelData {
+			if path.Origin == supportedModel.Name {
+				isSupported = true
+				break
+			}
+		}
+		if !isSupported {
+			return false
+		}
+	}
 
 	elems := path.GetElem()
 	if len(elems) <= 0 {

@@ -36,7 +36,7 @@ func newClientAliases() *clientAliases {
 }
 
 // update updates or deletes the server aliases and returns the updated aliases.
-func (cas *clientAliases) UpdateAliases(serverAliases map[string]string, add bool) []string {
+func (cas *clientAliases) updateServerAliases(serverAliases map[string]string, add bool) []string {
 	cas.mutex.Lock()
 	defer cas.mutex.Unlock()
 	aliaslist := make([]string, 0, len(serverAliases))
@@ -73,7 +73,7 @@ func (cas *clientAliases) UpdateAliases(serverAliases map[string]string, add boo
 }
 
 // Set sets the client alias to the clientAliases structure.
-func (cas *clientAliases) SetAlias(alias *gnmipb.Alias) error {
+func (cas *clientAliases) updateClientAlias(alias *gnmipb.Alias) error {
 	cas.mutex.Lock()
 	defer cas.mutex.Unlock()
 	name := alias.GetAlias()
@@ -113,10 +113,10 @@ func (cas *clientAliases) SetAlias(alias *gnmipb.Alias) error {
 	return nil
 }
 
-func (cas *clientAliases) SetAliases(aliases []*gnmipb.Alias) ([]string, error) {
+func (cas *clientAliases) updateClientAliases(aliases []*gnmipb.Alias) ([]string, error) {
 	var aliasname []string
 	for _, alias := range aliases {
-		if err := cas.SetAlias(alias); err != nil {
+		if err := cas.updateClientAlias(alias); err != nil {
 			return aliasname, err
 		}
 		aliasname = append(aliasname, alias.GetAlias())
@@ -147,7 +147,7 @@ func (cas *clientAliases) ToPath(alias interface{}, diffFormat bool) interface{}
 					if diffFormat {
 						return ca.path
 					}
-					return ca.gpath
+					return xpath.UpdateGNMIPathElem(a, ca.gpath)
 				}
 			}
 			break
@@ -186,7 +186,7 @@ func (cas *clientAliases) ToAlias(path interface{}, diffFormat bool) interface{}
 			if diffFormat {
 				return ca.name
 			}
-			return xpath.GNMIAliasPath(ca.name)
+			return xpath.GNMIAliasPath(ca.name, gpath.Target, gpath.Origin)
 		}
 		if diffFormat {
 			return p
@@ -196,7 +196,7 @@ func (cas *clientAliases) ToAlias(path interface{}, diffFormat bool) interface{}
 		p := path.(string)
 		if ca, ok := cas.path2alias[p]; ok {
 			if diffFormat {
-				return xpath.GNMIAliasPath(ca.name)
+				return xpath.GNMIAliasPath(ca.name, "", "")
 			}
 			return ca.name
 		}
