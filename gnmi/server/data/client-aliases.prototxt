@@ -69,3 +69,11 @@ subscribe: <
   >
   mode: ONCE
 >
+
+##@ SubscribeResponse
+
+update:{prefix:{elem:{name:"#syslog"}}  update:{path:{elem:{name:"msg"}}  val:{string_val:"Messages presents here."}}}
+
+
+##@ 4 SubscribeResponse
+sync_response: true

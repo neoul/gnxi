@@ -1542,6 +1542,9 @@ func TestSubscribe(t *testing.T) {
 					}
 					t.Log("request:", req)
 					reqerr = subses.processSubscribeRequest(req)
+					if reqerr != nil {
+						t.Log("request-error:", reqerr)
+					}
 					reqResult = true
 				} else if pos := strings.Index(txtMessages[i], "SubscribeResponse"); pos >= 0 && pos < newline {
 					resp := &gnmipb.SubscribeResponse{}

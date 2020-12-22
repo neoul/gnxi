@@ -489,6 +489,9 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 		return subses.sendTelemetryUpdate(buildSyncResponse())
 	}
 	prefix := subscriptionList.GetPrefix()
+	prefix = subses.ToPath(prefix, false).(*gnmipb.Path)
+	prefixAlias := subses.ToAlias(prefix, false).(*gnmipb.Path)
+
 	encoding := subscriptionList.GetEncoding()
 	mode := subscriptionList.GetMode()
 	// [FIXME] Are they different?
@@ -532,9 +535,8 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 					if bundling {
 						updates = append(updates, u)
 					} else {
-						aliasPrefix := subses.ToAlias(prefix, false).(*gnmipb.Path)
 						err = subses.sendTelemetryUpdate(
-							buildSubscribeResponse(aliasPrefix, []*gnmipb.Update{u}, nil))
+							buildSubscribeResponse(prefixAlias, []*gnmipb.Update{u}, nil))
 						if err != nil {
 							return err
 						}
@@ -543,9 +545,9 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 			}
 		}
 		if bundling && len(updates) > 0 {
-			aliasPrefix := subses.ToAlias(prefix, false).(*gnmipb.Path)
+			prefixAlias := subses.ToAlias(prefix, false).(*gnmipb.Path)
 			err := subses.sendTelemetryUpdate(
-				buildSubscribeResponse(aliasPrefix, updates, nil))
+				buildSubscribeResponse(prefixAlias, updates, nil))
 			if err != nil {
 				return err
 			}
@@ -558,6 +560,8 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.GoStruct) error {
 	bundling := !subses.disableBundling
 	prefix := sub.Prefix
+	prefix = subses.ToPath(prefix, false).(*gnmipb.Path)
+	prefixAlias := subses.ToAlias(prefix, false).(*gnmipb.Path)
 	encoding := sub.Encoding
 	mode := sub.StreamingMode
 
@@ -621,9 +625,8 @@ func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.Go
 						if err != nil {
 							return err
 						}
-						aliasPrefix := subses.ToAlias(prefix, false).(*gnmipb.Path)
 						err = subses.sendTelemetryUpdate(
-							buildSubscribeResponse(aliasPrefix, []*gnmipb.Update{u}, nil))
+							buildSubscribeResponse(prefixAlias, []*gnmipb.Update{u}, nil))
 						if err != nil {
 							return err
 						}
@@ -632,9 +635,8 @@ func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.Go
 			}
 		}
 		if bundling {
-			aliasPrefix := subses.ToAlias(prefix, false).(*gnmipb.Path)
 			err = subses.sendTelemetryUpdate(
-				buildSubscribeResponse(aliasPrefix, updates, deletes))
+				buildSubscribeResponse(prefixAlias, updates, deletes))
 			if err != nil {
 				return err
 			}
@@ -644,9 +646,8 @@ func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.Go
 				return err
 			}
 			for _, d := range deletes {
-				aliasPrefix := subses.ToAlias(prefix, false).(*gnmipb.Path)
 				err = subses.sendTelemetryUpdate(
-					buildSubscribeResponse(aliasPrefix, nil, []*gnmipb.Path{d}))
+					buildSubscribeResponse(prefixAlias, nil, []*gnmipb.Path{d}))
 				if err != nil {
 					return err
 				}
@@ -811,6 +812,7 @@ func (subses *SubSession) processSubscribeRequest(req *gnmipb.SubscribeRequest) 
 		return err
 	}
 	prefix := subscriptionList.GetPrefix()
+	prefix = subses.ToPath(prefix, false).(*gnmipb.Path)
 	paths := make([]*gnmipb.Path, 0, subListLength)
 	for _, updateEntry := range subList {
 		paths = append(paths, updateEntry.Path)
