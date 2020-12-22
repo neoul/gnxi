@@ -702,6 +702,10 @@ func (subses *SubSession) addStreamSubscription(
 			return nil, status.TaggedErrorf(codes.OutOfRange, status.TagInvalidConfig,
 				"heartbeat_interval(!= 0sec and < 1sec) is not supported")
 		}
+		if sub.SampleInterval != 0 {
+			return nil, status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidConfig,
+				"sample_interval not allowed on on_change mode")
+		}
 		sub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_ON_CHANGE
 		sub.Configured.SampleInterval = 0
 		sub.Configured.SuppressRedundant = false
@@ -714,6 +718,10 @@ func (subses *SubSession) addStreamSubscription(
 		if sub.HeartbeatInterval < minimumInterval && sub.HeartbeatInterval != 0 {
 			return nil, status.TaggedErrorf(codes.OutOfRange, status.TagInvalidConfig,
 				"heartbeat_interval(!= 0sec and < 1sec) is not supported")
+		}
+		if sub.SampleInterval > sub.HeartbeatInterval {
+			return nil, status.TaggedErrorf(codes.OutOfRange, status.TagInvalidConfig,
+				"heartbeat_interval should be larger than sample_interval")
 		}
 		sub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_SAMPLE
 		sub.Configured.SampleInterval = sub.SampleInterval
