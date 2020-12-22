@@ -345,8 +345,6 @@ func (s *Server) get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 		return nil, err
 	}
 
-	// fmt.Println(proto.MarshalTextString(req))
-
 	prefix := req.GetPrefix()
 	paths := req.GetPath()
 	s.Model.RequestStateSync(prefix, paths)
@@ -360,10 +358,13 @@ func (s *Server) get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 	}
 	toplist, ok := s.Model.Find(s.Model.GetRoot(), prefix)
 	if !ok || len(toplist) <= 0 {
-		// [FIXME] Should it be failed?
-		return nil, status.TaggedErrorf(codes.NotFound, status.TagDataMissing,
-			"no data found in %v", xpath.ToXPath(prefix))
+		return &gnmipb.GetResponse{Notification: []*gnmipb.Notification{}}, nil
 	}
+	// [FIXME] Get RPC should be failed if no data?
+	// if !ok || len(toplist) <= 0 {
+	// 	return nil, status.TaggedErrorf(codes.NotFound, status.TagDataMissing,
+	// 		"no data found in %v", xpath.ToXPath(prefix))
+	// }
 	notifications := []*gnmipb.Notification{}
 	for _, top := range toplist {
 		bpath := top.Path
@@ -404,7 +405,7 @@ func (s *Server) get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 			notifications = append(notifications, notification)
 		}
 	}
-	// [FIXME] Is Get RPC failed if no data?
+	// [FIXME] Get RPC should be failed if no data?
 	// if len(notifications) <= 0 {
 	// 	return nil, status.TaggedErrorf(codes.NotFound, status.TagDataMissing, "no data found")
 	// }

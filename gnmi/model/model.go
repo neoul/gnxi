@@ -225,7 +225,6 @@ func (m *Model) findAllPaths(sp pathFinder, elems []*gnmipb.PathElem) []pathFind
 		return []pathFinder{}
 	}
 	elem := elems[0]
-	// fmt.Println("** Search", elem.GetName(), "from", sp.t)
 	if elem.GetName() == "*" {
 		rv := []pathFinder{}
 		csplist, ok := getAllSchemaPaths(sp)
@@ -351,9 +350,6 @@ func (m *Model) FindSchemaPaths(path *gnmipb.Path) ([]string, bool) {
 		return []string{"/"}, true
 	}
 	paths := m.findSchemaPath("", entry, elems)
-	// for i, p := range paths {
-	// 	fmt.Println(i, p)
-	// }
 	return paths, true
 }
 
@@ -517,7 +513,6 @@ func (m *Model) findSchemaAndDataPath(path dataAndSchemaPath, parent *yang.Entry
 
 // UpdateCreate is a function of StateUpdate Interface to add a new value to the path of the Model.
 func (m *Model) UpdateCreate(path string, value string) error {
-	// fmt.Printf("m.UpdateCreate %v %v {\n", path, value)
 	schema := m.RootSchema()
 	err := writeValue(schema, m.GetRoot(), path, value)
 	if err == nil {
@@ -531,14 +526,12 @@ func (m *Model) UpdateCreate(path string, value string) error {
 	} else {
 		glog.Errorf("model.create:: %v in %s", err, path)
 	}
-	// fmt.Println("}")
 	// ignore StateUpdate error
 	return nil
 }
 
 // UpdateReplace is a function of StateUpdate Interface to replace the value in the path of the Model.
 func (m *Model) UpdateReplace(path string, value string) error {
-	// fmt.Printf("m.UpdateCreate %v %v {\n", path, value)
 	schema := m.RootSchema()
 	err := writeValue(schema, m.GetRoot(), path, value)
 	if err == nil {
@@ -552,14 +545,12 @@ func (m *Model) UpdateReplace(path string, value string) error {
 	} else {
 		glog.Errorf("model.replace:: %v in %s", err, path)
 	}
-	// fmt.Println("}")
 	// ignore StateUpdate error
 	return nil
 }
 
 // UpdateDelete is a function of StateUpdate Interface to delete the value in the path of the Model.
 func (m *Model) UpdateDelete(path string) error {
-	// fmt.Printf("m.UpdateDelete %v {\n", path)
 	schema := m.RootSchema()
 	err := deleteValue(schema, m.GetRoot(), path)
 	if err == nil {
@@ -569,7 +560,6 @@ func (m *Model) UpdateDelete(path string) error {
 	} else {
 		glog.Errorf("model.delete:: %v in %s", err, path)
 	}
-	// fmt.Println("}")
 	// ignore StateUpdate error
 	return nil
 }

@@ -81,7 +81,6 @@ func FindAllData(gs ygot.GoStruct, path *gnmipb.Path) ([]*DataAndPath, bool) {
 	v := reflect.ValueOf(gs)
 	datapath := &dataAndPath{Value: v, Key: []string{""}}
 	founds := findAllData(datapath, elems)
-	// fmt.Println(founds)
 	num := len(founds)
 	if num <= 0 {
 		return []*DataAndPath{}, false
@@ -219,11 +218,9 @@ func (dpath *dataAndPath) findChildren(key string, opt ...FindOption) ([]*dataAn
 	}
 	if ydb.IsValMap(cv) {
 		dpath.Value = cv
-		// fmt.Println("findChild MAP:", dpath.Key)
 		return dpath.getAllChildren(key, opt...)
 	}
 	child := &dataAndPath{Value: cv, Key: appendCopy(dpath.Key, key)}
-	// fmt.Println("findChild :", child.Key)
 	return []*dataAndPath{child}, true
 }
 
@@ -237,7 +234,6 @@ func findAllData(dpath *dataAndPath, elems []*gnmipb.PathElem, opt ...FindOption
 	}
 
 	elem := elems[0]
-	// fmt.Println("** Search", elem.GetName(), "from", ydb.DebugValueStringInline(dpath.Value.Interface(), 0, nil))
 	if elem.GetName() == "*" {
 		rpath := []*dataAndPath{}
 		childlist, ok := dpath.getAllChildren("")
@@ -260,9 +256,6 @@ func findAllData(dpath *dataAndPath, elems []*gnmipb.PathElem, opt ...FindOption
 				rpath = append(rpath, findAllData(child, elems, opt...)...)
 			}
 		}
-		// for _, r := range rpath {
-		// 	fmt.Println("... found:", r.Key, ydb.DebugValueStringInline(r.Value.Interface(), 1, nil))
-		// }
 		return rpath
 	}
 
@@ -294,7 +287,6 @@ func FindAllDataNodes(gs ygot.GoStruct, path *gnmipb.Path) ([]interface{}, bool)
 	}
 	v := reflect.ValueOf(gs)
 	rvlist := findAllDataNodes(v, elems)
-	// fmt.Println(rvlist)
 	num := len(rvlist)
 	if num <= 0 {
 		return []interface{}{}, false
@@ -410,7 +402,6 @@ func findAllSchemaTypes(t reflect.Type, elems []*gnmipb.PathElem) []reflect.Type
 		return []reflect.Type{}
 	}
 	elem := elems[0]
-	// fmt.Println("** Search", elem.GetName(), "from", t)
 	if elem.GetName() == "*" {
 		rv := []reflect.Type{}
 		ctlist, ok := ydb.TypeGetAll(t)
@@ -496,7 +487,6 @@ func findAllSchemaPaths(sp pathFinder, elems []*gnmipb.PathElem) []pathFinder {
 		return []pathFinder{}
 	}
 	elem := elems[0]
-	// fmt.Println("** Search", elem.GetName(), "from", sp.t)
 	if elem.GetName() == "*" {
 		rv := []pathFinder{}
 		csplist, ok := getAllSchemaPaths(sp)
@@ -661,8 +651,6 @@ func writeValue(schema *yang.Entry, base ygot.GoStruct, path string, value strin
 		return fmt.Errorf("%s", status.FromError(err).Message)
 	}
 	if !tSchema.IsDir() {
-		// v := reflect.ValueOf(target)
-		// fmt.Println(strings.Join(keys, "/"))
 		vt := reflect.TypeOf(target)
 		if vt.Kind() == reflect.Ptr {
 			vt = vt.Elem()

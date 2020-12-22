@@ -240,22 +240,17 @@ func (sc *ignoringStateConfig) UpdateStart() error {
 	return nil
 }
 func (sc *ignoringStateConfig) UpdateCreate(path string, value string) error {
-	// fmt.Println("ignoringStateConfig.UpdateCreate", "C", path, value)
 	return nil
 }
 func (sc *ignoringStateConfig) UpdateReplace(path string, value string) error {
-	// fmt.Println("ignoringStateConfig.UpdateReplace", "R", path, value)
 	return nil
 }
 func (sc *ignoringStateConfig) UpdateDelete(path string) error {
-	// fmt.Println("ignoringStateConfig.UpdateDelete", "D", path)
 	return nil
 }
 func (sc *ignoringStateConfig) UpdateEnd() error {
-	// fmt.Println("ignoringStateConfig.UpdateEnd")
 	return nil
 }
 func (sc *ignoringStateConfig) UpdateSync(path ...string) error {
-	// fmt.Println("ignoringStateConfig.UpdateSync", path)
 	return nil
 }

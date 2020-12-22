@@ -228,7 +228,6 @@ func (mo *MO) Find(base interface{}, path *gnmipb.Path, opts ...FindOption) ([]*
 	v := reflect.ValueOf(base)
 	datapath := &dataAndPath{Value: v, Key: []string{""}}
 	founds := findAllData(datapath, elems, opts...)
-	// fmt.Println(founds)
 	num := len(founds)
 	if num <= 0 {
 		return []*DataAndPath{}, false
