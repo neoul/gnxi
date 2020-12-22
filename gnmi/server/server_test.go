@@ -1511,34 +1511,38 @@ func TestSubscribe(t *testing.T) {
 			}
 			subses.waitgroup.Add(1)
 			go SubscribeResponseValidator(t, subses, tc, wantresp)
-			var rcode codes.Code
+
+			var reqResult bool
+			var reqerr error
 			for i := range txtMessages {
 				newline := strings.Index(txtMessages[i], "\n")
 				if newline < 0 {
 					continue
 				}
-				if pos := strings.Index(txtMessages[i], "Error"); pos >= 0 && pos < newline {
-					wantErr := status.EmptyProto()
-					if err := proto.UnmarshalText(txtMessages[i], wantErr); err != nil {
-						t.Errorf("proto message unmarshaling got error: %v", err)
+				if reqResult {
+					reqResult = false
+					if pos := strings.Index(txtMessages[i], "Error"); pos >= 0 && pos < newline {
+						wantErr := status.EmptyProto()
+						if err := proto.UnmarshalText(txtMessages[i], wantErr); err != nil {
+							t.Errorf("proto message unmarshaling got error: %v", err)
+						}
+						if codes.Code(wantErr.Code) != status.Code(reqerr) {
+							t.Errorf("different response:\ngot : %v\nwant: %v\n", reqerr, codes.Code(wantErr.Code).String())
+						}
+						continue
+					} else if status.Code(reqerr) != codes.OK {
+						t.Errorf("different response:\ngot : %v\nwant: %v\n", reqerr, codes.OK)
 					}
-					if wantErr.Code != int32(rcode) {
-						t.Errorf("different response:\ngot : %v\nwant: %v\n", rcode, codes.Code(wantErr.Code).String())
-					}
-				} else if pos := strings.Index(txtMessages[i], "SubscribeRequest"); pos >= 0 && pos < newline {
+				}
+
+				if pos := strings.Index(txtMessages[i], "SubscribeRequest"); pos >= 0 && pos < newline {
 					req := &gnmipb.SubscribeRequest{}
 					if err := proto.UnmarshalText(txtMessages[i], req); err != nil {
 						t.Errorf("proto message unmarshaling got error: %v", err)
 					}
 					t.Log("request:", req)
-					err := subses.processSubscribeRequest(req)
-					if estatus := status.FromError(err); estatus != nil {
-						// fmt.Println(proto.MarshalTextString(status.ToProto(err)))
-						t.Log("got-error:", estatus.Code.String(), uint32(estatus.Code), estatus.Message)
-						rcode = estatus.Code
-					} else {
-						rcode = codes.OK
-					}
+					reqerr = subses.processSubscribeRequest(req)
+					reqResult = true
 				} else if pos := strings.Index(txtMessages[i], "SubscribeResponse"); pos >= 0 && pos < newline {
 					resp := &gnmipb.SubscribeResponse{}
 					if err := proto.UnmarshalText(txtMessages[i], resp); err != nil {
@@ -1546,6 +1550,10 @@ func TestSubscribe(t *testing.T) {
 					}
 					wantresp <- resp
 				}
+			}
+			if reqResult && status.Code(reqerr) != codes.OK {
+				reqResult = false
+				t.Errorf("different response:\ngot : %v\nwant: %v\n", reqerr, codes.OK)
 			}
 			time.Sleep(2 * time.Second)
 			subses.shutdown <- struct{}{}
