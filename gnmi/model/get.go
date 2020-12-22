@@ -22,6 +22,7 @@ func (m *Model) initStateSync(ss StateSync) {
 }
 
 // RequestStateSync requests the data sync to the system before read.
+// Do not use Model.Lock() before it.
 func (m *Model) RequestStateSync(prefix *gnmipb.Path, paths []*gnmipb.Path) bool {
 	if m.StateSync == nil {
 		return false

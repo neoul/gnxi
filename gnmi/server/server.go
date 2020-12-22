@@ -371,7 +371,7 @@ func (s *Server) get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 		bprefix, err := xpath.ToGNMIPath(bpath)
 		if err != nil {
 			return nil, status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
-				"xpath-to-gpath converting error for %s", bpath)
+				"xpath-to-gnmipath converting error for %s", bpath)
 		}
 		for _, path := range paths {
 			if err := s.ValidateGNMIPath(prefix, path); err != nil {
@@ -392,7 +392,7 @@ func (s *Server) get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 				datapath, err := xpath.ToGNMIPath(data.Path)
 				if err != nil {
 					return nil, status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
-						"xpath-to-gpath converting error for %s", data.Path)
+						"xpath-to-gnmipath converting error for %s", data.Path)
 				}
 				update[j] = &gnmipb.Update{Path: datapath, Val: typedValue}
 			}
@@ -404,15 +404,15 @@ func (s *Server) get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 			notifications = append(notifications, notification)
 		}
 	}
-	if len(notifications) <= 0 {
-		return nil, status.TaggedErrorf(codes.NotFound, status.TagDataMissing, "no data found")
-	}
+	// [FIXME] Is Get RPC failed if no data?
+	// if len(notifications) <= 0 {
+	// 	return nil, status.TaggedErrorf(codes.NotFound, status.TagDataMissing, "no data found")
+	// }
 	return &gnmipb.GetResponse{Notification: notifications}, nil
 }
 
 // Set implements the Set RPC in gNMI spec.
 func (s *Server) set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetResponse, error) {
-	// utilities.PrintProto(req)
 	prefix := req.GetPrefix()
 
 	var index int
@@ -464,7 +464,6 @@ func (s *Server) set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 		Prefix:   req.GetPrefix(),
 		Response: result,
 	}
-	// utilities.PrintProto(resp)
 	return resp, err
 }
 

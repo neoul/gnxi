@@ -432,7 +432,7 @@ func getDeletes(sub *Subscription, path *string, deleteOnly bool) ([]*gnmipb.Pat
 		datapath, err := xpath.ToGNMIPath(dpath)
 		if err != nil {
 			return nil, status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
-				"xpath-to-gpath converting error for %s", dpath)
+				"xpath-to-gnmipath converting error for %s", dpath)
 		}
 		deletes = append(deletes, datapath)
 	}
@@ -451,7 +451,7 @@ func getUpdates(sub *Subscription, data *model.DataAndPath, encoding gnmipb.Enco
 	datapath, err := xpath.ToGNMIPath(data.Path)
 	if err != nil {
 		return nil, status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
-			"xpath-to-gpath converting error for %s", data.Path)
+			"xpath-to-gnmipath converting error for %s", data.Path)
 	}
 	var duplicates uint32
 	if sub != nil {

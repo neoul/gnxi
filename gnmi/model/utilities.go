@@ -393,7 +393,6 @@ func FindAllSchemaTypes(gs ygot.GoStruct, path *gnmipb.Path) ([]reflect.Type, bo
 // findAllSchemaTypes - finds all schema nodes matched to the gNMI Path.
 func findAllSchemaTypes(t reflect.Type, elems []*gnmipb.PathElem) []reflect.Type {
 	// select all child nodes if the current node is a list.
-	fmt.Println(t)
 	if t.Kind() == reflect.Map {
 		rv := []reflect.Type{}
 		ctlist, ok := ydb.TypeGetAll(t)

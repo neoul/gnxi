@@ -143,7 +143,7 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 		targetPath, err := xpath.ToGNMIPath(target.Path)
 		if err != nil {
 			return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
-				"xpath-to-gpath converting error for %s", target.Path)
+				"xpath-to-gnmipath converting error for %s", target.Path)
 		}
 		m.transaction.addOperation(opDelete, &target.Path, targetPath, target.Value)
 		if len(targetPath.GetElem()) == 0 {
@@ -175,7 +175,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 			targetPath, err := xpath.ToGNMIPath(target.Path)
 			if err != nil {
 				return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
-					"xpath-to-gpath converting error for %s", target.Path)
+					"xpath-to-gnmipath converting error for %s", target.Path)
 			}
 			m.transaction.addOperation(opReplace, &target.Path, targetPath, target.Value)
 			err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath)
@@ -212,7 +212,7 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 			targetPath, err := xpath.ToGNMIPath(target.Path)
 			if err != nil {
 				return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
-					"xpath-to-gpath converting error for %s", target.Path)
+					"xpath-to-gnmipath converting error for %s", target.Path)
 			}
 			m.transaction.addOperation(opUpdate, &target.Path, targetPath, target.Value)
 			err = writeTypedValue(m, targetPath, typedValue)
