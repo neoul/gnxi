@@ -67,14 +67,28 @@ subscribe: <
         name: "msg"
       >
     >
+    mode: ON_CHANGE
+    # sample_interval: 1000000000
   >
-  mode: ONCE
+  mode: STREAM
 >
 
 ##@ SubscribeResponse
-
 update:{prefix:{elem:{name:"#syslog"}  target:"test"}  update:{path:{elem:{name:"msg"}}  val:{string_val:"Messages presents here."}}}
 
 
-##@ 4 SubscribeResponse
+##@ SubscribeResponse
 sync_response: true
+
+
+##@ UpdateState
+
+# refresh the msg via YDB.
+messages:
+ state:
+  message:
+   msg: message updated
+   priority: 2
+
+##@ SubscribeResponse
+update:{prefix:{elem:{name:"#syslog"} target:"test"} update:{path:{elem:{name:"msg"}} val:{string_val:"message updated"}} delete:{elem:{name:"messages"} elem:{name:"state"} elem:{name:"message"} elem:{name:"msg"}}}

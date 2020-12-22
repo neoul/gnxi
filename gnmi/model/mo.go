@@ -360,7 +360,7 @@ func (mo *MO) Export(rfc7951json bool) (map[string]interface{}, error) {
 func (mo *MO) UpdateCreate(path string, value string) error {
 	err := writeValue(mo.RootSchema(), mo.Root, path, value)
 	if err != nil {
-		glog.Errorf("mo.UpdateCreate:: path %s, %v", path, err)
+		glog.Errorf("mo.create:: %v in %s", err, path)
 	}
 	return nil
 }
@@ -369,7 +369,7 @@ func (mo *MO) UpdateCreate(path string, value string) error {
 func (mo *MO) UpdateReplace(path string, value string) error {
 	err := writeValue(mo.RootSchema(), mo.Root, path, value)
 	if err != nil {
-		glog.Errorf("mo.UpdateReplace:: path %s, %v", path, err)
+		glog.Errorf("mo.replace:: %v in %s", err, path)
 	}
 	return nil
 }
@@ -378,7 +378,7 @@ func (mo *MO) UpdateReplace(path string, value string) error {
 func (mo *MO) UpdateDelete(path string) error {
 	err := deleteValue(mo.RootSchema(), mo.Root, path)
 	if err != nil {
-		glog.Errorf("mo.UpdateDelete:: %v", err)
+		glog.Errorf("mo.delete:: %v in %s", err, path)
 	}
 	return nil
 }

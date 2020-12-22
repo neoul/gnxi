@@ -1,6 +1,7 @@
 package test
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -53,9 +54,15 @@ func IsEqualList(d1, d2 interface{}) bool {
 	return true
 }
 
-// LoadProtoMessages loads ref type's proto message
-func LoadProtoMessages(file string) ([]string, error) {
-	reg, err := regexp.Compile("##@")
+// Object for test
+type Object struct {
+	Name string
+	Text string
+}
+
+// LoadTestFile loads ref type's proto message
+func LoadTestFile(file string) ([]*Object, error) {
+	reg, err := regexp.Compile("##@[a-zA-Z0-9 _+=.,-]+\n")
 	if err != nil {
 		return nil, err
 	}
@@ -71,12 +78,24 @@ func LoadProtoMessages(file string) ([]string, error) {
 
 	var start, end int
 	allindex := reg.FindAllIndex(data, len(data))
-	textlist := make([]string, 0, len(allindex)+1)
+	testobjs := make([]*Object, 0, len(allindex)+1)
 	for i := 1; i < len(allindex); i++ {
 		start = allindex[i-1][0]
 		end = allindex[i][0]
-		textlist = append(textlist, strings.Trim(string(data[start:end]), " \n\t"))
+		o := &Object{
+			Name: strings.Trim(string(data[start:allindex[i-1][1]]), " \n\t"),
+			Text: strings.Trim(string(data[start:end]), " \n\t"),
+		}
+		testobjs = append(testobjs, o)
 	}
-	textlist = append(textlist, strings.Trim(string(data[end:]), " \n\t"))
-	return textlist, nil
+	if allindex != nil {
+		i := len(allindex) - 1
+		o := &Object{
+			Name: strings.Trim(string(data[allindex[i][0]:allindex[i][1]]), " \n\t"),
+			Text: strings.Trim(string(data[allindex[i][0]:]), " \n\t"),
+		}
+		testobjs = append(testobjs, o)
+		return testobjs, nil
+	}
+	return nil, fmt.Errorf("test object not found")
 }

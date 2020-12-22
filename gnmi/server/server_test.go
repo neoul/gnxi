@@ -28,6 +28,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/neoul/gnxi/utilities/status"
 	"github.com/neoul/gnxi/utilities/test"
+	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/value"
 	"github.com/openconfig/ygot/ygot"
@@ -1362,6 +1363,47 @@ func clearNotificationTimestamp(r *gnmipb.SubscribeResponse) {
 	update.Timestamp = 0
 }
 
+func subscribeResponseValidator(t *testing.T, subses *SubSession, wantresp chan *gnmipb.SubscribeResponse) {
+	// var ok bool
+	var got, want *gnmipb.SubscribeResponse
+	waitgroup := subses.waitgroup
+	gotresp := subses.respchan
+	shutdown := subses.shutdown
+	defer waitgroup.Done()
+	for {
+		select {
+		case want = <-wantresp:
+			t.Log("want-response:", want)
+			select {
+			case got = <-gotresp:
+				clearNotificationTimestamp(got)
+				t.Log("got-response:", got)
+				if !proto.Equal(got, want) {
+					t.Errorf("different response:\ngot : %v\nwant: %v\n", got, want)
+				}
+			case <-shutdown:
+				t.Errorf("different response:\ngot : %v\nwant: %v\n", nil, want)
+				return
+			}
+		case got = <-gotresp:
+			clearNotificationTimestamp(got)
+			t.Log("got-response:", got)
+			select {
+			case want = <-wantresp:
+				t.Log("want-response:", want)
+				if !proto.Equal(got, want) {
+					t.Errorf("different response:\ngot : %v\nwant: %v\n", got, want)
+				}
+			case <-shutdown:
+				t.Errorf("different response:\ngot : %v\nwant: %v\n", got, nil)
+				return
+			}
+		case <-shutdown:
+			return
+		}
+	}
+}
+
 func TestSubscribe(t *testing.T) {
 	// if f := flag.Lookup("v"); f != nil && f.Value.String() == f.DefValue {
 	// 	f.Value.Set("99")
@@ -1373,119 +1415,98 @@ func TestSubscribe(t *testing.T) {
 	// 	f.Value.Set("info")
 	// }
 
-	startup := `{
-		"openconfig-messages:messages": {
-			"config": {
-				"severity": "ERROR"
-			},
-			"state": {
-				"severity": "ERROR",
-				"message": {
-					"msg" : "Messages presents here.",
-					"priority": 10
-				}
-			}
+	db := ydb.New("TestSubscribe")
+	if db == nil {
+		t.Fatalf("datablock open failed")
+	}
+	// must be closed for the next use.
+	defer db.Close()
+
+	startup := `
+    interfaces: 
+     interface[name=1/1]: 
+      config: 
+       description: Interface#1
+       enabled: true
+       loopback-mode: false
+       mtu: 1516
+       name: 1/1
+       type: ethernetCsmacd
+      hold-time: 
+      name: 1/1
+      state: 
+       admin-status: 
+       counters: 
+        in-pkts: 100
+        out-pkts: 100
+       description: Interface#1
+       enabled: true
+       ifindex: 
+       last-change: 
+       logical: 
+       loopback-mode: false
+       mtu: 1516
+       name: 1/1
+       oper-status: 
+       type: ethernetCsmacd
+      subinterfaces: 
+     interface[name=1/2]: 
+      config: 
+       description: n/a
+       enabled: true
+       loopback-mode: false
+       mtu: 1516
+       name: 1/2
+       type: ethernetCsmacd
+      hold-time: 
+      name: 1/2
+      state: 
+      subinterfaces: 
+    messages: 
+     config: 
+      severity: ERROR
+     debug-entries: 
+     state: 
+      message: 
+       app-name: 
+       msg: Messages presents here.
+       msgid: 
+       priority: 10
+       procid: 
+      severity: ERROR
+`
+	s, err := NewServer(Startup(startup),
+		Aliases{
+			"#1/1": "/interfaces/interface[name=1/1]",
+			"#1/2": "/interfaces/interface[name=1/2]",
 		},
-		"openconfig-interfaces:interfaces": {
-			"interface": [
-				{
-					"name": "1/1",
-					"config": {
-						"name": "1/1",
-						"type": "iana-if-type:ethernetCsmacd",
-						"mtu": 1516,
-						"loopback-mode": false,
-						"description": "Interface#1",
-						"enabled": true
-					},
-					"state": {
-						"name": "1/1",
-						"type": "iana-if-type:ethernetCsmacd",
-						"mtu": 1516,
-						"loopback-mode": false,
-						"description": "Interface#1",
-						"enabled": true,
-						"counters": {
-							"in-pkts": "100",
-							"out-pkts": "100"
-						}
-					}
-				},
-				{
-					"name": "1/2",
-					"config": {
-						"name": "1/2",
-						"type": "iana-if-type:ethernetCsmacd",
-						"mtu": 1516,
-						"loopback-mode": false,
-						"description": "n/a",
-						"enabled": true
-					}
-				}
-			]
-		}
-	}`
-	s, err := NewServer(Startup(startup), Aliases{
-		"#1/1": "/interfaces/interface[name=1/1]",
-		"#1/2": "/interfaces/interface[name=1/2]",
-	})
+		GetCallback{StateSync: db},
+		SetCallback{StateConfig: db},
+	)
 	if err != nil {
 		t.Fatalf("error in creating config server: %v", err)
 	}
 
+	// Make the link from the datablock to the gNMI server for state data update.
+	db.SetTarget(s, true)
+	// fmt.Println(string(db.Read([]byte(""))))
+
 	type testsubscribe struct {
-		name    string
-		msgfile string
-	}
-	SubscribeResponseValidator := func(t *testing.T, subses *SubSession, tc testsubscribe, wantresp chan *gnmipb.SubscribeResponse) {
-		// var ok bool
-		var got, want *gnmipb.SubscribeResponse
-		waitgroup := subses.waitgroup
-		gotresp := subses.respchan
-		shutdown := subses.shutdown
-		defer waitgroup.Done()
-		for {
-			select {
-			case want = <-wantresp:
-				t.Log("want-response:", want)
-				select {
-				case got = <-gotresp:
-					clearNotificationTimestamp(got)
-					t.Log("got-response:", got)
-					if !proto.Equal(got, want) {
-						t.Errorf("different response:\ngot : %v\nwant: %v\n", got, want)
-					}
-				case <-shutdown:
-					t.Errorf("different response:\ngot : %v\nwant: %v\n", nil, want)
-					return
-				}
-			case got = <-gotresp:
-				clearNotificationTimestamp(got)
-				t.Log("got-response:", got)
-				select {
-				case want = <-wantresp:
-					t.Log("want-response:", want)
-					if !proto.Equal(got, want) {
-						t.Errorf("different response:\ngot : %v\nwant: %v\n", got, want)
-					}
-				case <-shutdown:
-					t.Errorf("different response:\ngot : %v\nwant: %v\n", got, nil)
-					return
-				}
-			case <-shutdown:
-				return
-			}
-		}
+		name     string
+		msgfile  string
+		waittime time.Duration
 	}
 
 	tests := []testsubscribe{
 		{
-			name:    "server-aliases",
-			msgfile: "data/server-aliases.prototxt",
+			name:     "server-aliases",
+			msgfile:  "data/server-aliases.prototxt",
+			waittime: time.Second * 1,
 		},
 		{
-			name:    "client-aliases",
-			msgfile: "data/client-aliases.prototxt",
+			name:     "client-aliases",
+			msgfile:  "data/client-aliases.prototxt",
+			waittime: time.Second * 1,
 		},
 	}
 	// j, _ := s.ExportToJSON(true)
@@ -1494,7 +1515,7 @@ func TestSubscribe(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			wantresp := make(chan *gnmipb.SubscribeResponse, 128)
-			txtMessages, err := test.LoadProtoMessages(tc.msgfile)
+			testobj, err := test.LoadTestFile(tc.msgfile)
 			if err != nil {
 				t.Errorf("loading '%s' got error: %v", tc.msgfile, err)
 			}
@@ -1510,21 +1531,20 @@ func TestSubscribe(t *testing.T) {
 				Server:        s,
 			}
 			subses.waitgroup.Add(1)
-			go SubscribeResponseValidator(t, subses, tc, wantresp)
+			go subscribeResponseValidator(t, subses, wantresp)
 
 			var reqResult bool
 			var reqerr error
-			for i := range txtMessages {
-				newline := strings.Index(txtMessages[i], "\n")
-				if newline < 0 {
+			for i := range testobj {
+				if testobj[i].Name == "" || testobj[i].Text == "" {
 					continue
 				}
 				if reqResult {
 					reqResult = false
-					if pos := strings.Index(txtMessages[i], "Error"); pos >= 0 && pos < newline {
+					if strings.Contains(testobj[i].Name, "Error") {
 						wantErr := status.EmptyProto()
-						if err := proto.UnmarshalText(txtMessages[i], wantErr); err != nil {
-							t.Errorf("proto message unmarshaling got error: %v", err)
+						if err := proto.UnmarshalText(testobj[i].Text, wantErr); err != nil {
+							t.Fatalf("proto message unmarshaling got error: %v", err)
 						}
 						if codes.Code(wantErr.Code) != status.Code(reqerr) {
 							t.Errorf("different response:\ngot : %v\nwant: %v\n", reqerr, codes.Code(wantErr.Code).String())
@@ -1534,11 +1554,11 @@ func TestSubscribe(t *testing.T) {
 						t.Errorf("different response:\ngot : %v\nwant: %v\n", reqerr, codes.OK)
 					}
 				}
-
-				if pos := strings.Index(txtMessages[i], "SubscribeRequest"); pos >= 0 && pos < newline {
+				switch {
+				case strings.Contains(testobj[i].Name, "SubscribeRequest"):
 					req := &gnmipb.SubscribeRequest{}
-					if err := proto.UnmarshalText(txtMessages[i], req); err != nil {
-						t.Errorf("proto message unmarshaling got error: %v", err)
+					if err := proto.UnmarshalText(testobj[i].Text, req); err != nil {
+						t.Fatalf("proto message unmarshaling got error: %v", err)
 					}
 					t.Log("request:", req)
 					reqerr = subses.processSubscribeRequest(req)
@@ -1546,23 +1566,23 @@ func TestSubscribe(t *testing.T) {
 						t.Log("request-error:", reqerr)
 					}
 					reqResult = true
-				} else if pos := strings.Index(txtMessages[i], "SubscribeResponse"); pos >= 0 && pos < newline {
+				case strings.Contains(testobj[i].Name, "SubscribeResponse"):
 					resp := &gnmipb.SubscribeResponse{}
-					if err := proto.UnmarshalText(txtMessages[i], resp); err != nil {
-						t.Errorf("proto message unmarshaling got error: %v", err)
+					if err := proto.UnmarshalText(testobj[i].Text, resp); err != nil {
+						t.Fatalf("proto message unmarshaling got error: %v", err)
 					}
 					wantresp <- resp
+				case strings.Contains(testobj[i].Name, "UpdateState"):
+					db.Write([]byte(testobj[i].Text))
 				}
 			}
 			if reqResult && status.Code(reqerr) != codes.OK {
 				reqResult = false
 				t.Errorf("different response:\ngot : %v\nwant: %v\n", reqerr, codes.OK)
 			}
-			time.Sleep(2 * time.Second)
+			time.Sleep(tc.waittime)
 			subses.shutdown <- struct{}{}
 			defer func() { subses.stopSubSession() }()
-			// wait for SubscribeResponseValidator completion
 		})
 	}
-
 }

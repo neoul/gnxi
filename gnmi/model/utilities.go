@@ -670,7 +670,15 @@ func writeValue(schema *yang.Entry, base ygot.GoStruct, path string, value strin
 		}
 		vv, err := ytypes.StringToType(vt, value)
 		if err != nil {
-			return err
+			switch tSchema.Type.Kind {
+			case yang.Yenum, yang.Yidentityref:
+				return err
+			}
+			var yerr error
+			vv, yerr = ydb.ValScalarNew(vt, value)
+			if yerr != nil {
+				return err
+			}
 		}
 		typedValue, err := ygot.EncodeTypedValue(vv.Interface(), gnmipb.Encoding_JSON_IETF)
 		if err != nil {

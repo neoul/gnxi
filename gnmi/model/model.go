@@ -529,7 +529,7 @@ func (m *Model) UpdateCreate(path string, value string) error {
 			}
 		}
 	} else {
-		glog.Errorf("model.UpdateCreate:: %v", err)
+		glog.Errorf("model.create:: %v in %s", err, path)
 	}
 	// fmt.Println("}")
 	// ignore StateUpdate error
@@ -550,7 +550,7 @@ func (m *Model) UpdateReplace(path string, value string) error {
 			}
 		}
 	} else {
-		glog.Errorf("model.UpdateReplace:: %v", err)
+		glog.Errorf("model.replace:: %v in %s", err, path)
 	}
 	// fmt.Println("}")
 	// ignore StateUpdate error
@@ -567,7 +567,7 @@ func (m *Model) UpdateDelete(path string) error {
 			m.ChangeNotification.ChangeDeleted(path)
 		}
 	} else {
-		glog.Errorf("model.UpdateDelete:: %v", err)
+		glog.Errorf("model.delete:: %v in %s", err, path)
 	}
 	// fmt.Println("}")
 	// ignore StateUpdate error
@@ -580,7 +580,7 @@ func (m *Model) UpdateStart() error {
 	// updatedroot is used to save the changes of the model data.
 	updatedroot, err := m.NewRoot(nil)
 	if err != nil {
-		glog.Errorf("model.UpdateStart:: %v", err)
+		glog.Errorf("model.start:: %v", err)
 	}
 	m.updatedroot = updatedroot
 	if m.ChangeNotification != nil {
