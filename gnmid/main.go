@@ -26,13 +26,12 @@ import (
 )
 
 var (
-	configFile      = pflag.StringP("config", "c", "", "Configuration file for gnmid; search gnmid.conf from $PWD, /etc and $HOME/.gnmid if not specified")
-	bindAddr        = pflag.StringP("bind-address", "b", ":57400", "Bind to address:port")
-	startup         = pflag.String("startup", "", "IETF JSON or YAML file for target startup data")
-	disableBundling = pflag.Bool("disable-update-bundling", false, "Disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1")
-	help            = pflag.BoolP("help", "h", false, "Help for gnmid")
-	enableSyslog    = pflag.Bool("enable-syslog", false, "Enable syslog message over gNMI")
-	syncPaths       = pflag.StringSliceP("sync-path", "s", []string{}, "The paths that needs to be updated before read")
+	configFile   = pflag.StringP("config", "c", "", "Configuration file for gnmid; search gnmid.conf from $PWD, /etc and $HOME/.gnmid if not specified")
+	bindAddr     = pflag.StringP("bind-address", "b", ":57400", "Bind to address:port")
+	startup      = pflag.String("startup", "", "IETF JSON or YAML file for target startup data")
+	help         = pflag.BoolP("help", "h", false, "Help for gnmid")
+	enableSyslog = pflag.Bool("enable-syslog", false, "Enable syslog message over gNMI")
+	syncPaths    = pflag.StringSliceP("sync-path", "s", []string{}, "The paths that needs to be updated before read")
 )
 
 // Server is gNMI server instance.
@@ -114,9 +113,6 @@ func NewServer() (*Server, error) {
 		opts = append(opts, gnmiserver.Startup(startbyte))
 	}
 
-	if *disableBundling {
-		opts = append(opts, gnmiserver.DisableBundling{})
-	}
 	opts = append(opts, gnmiserver.GetCallback{StateSync: server.datablock},
 		gnmiserver.SetCallback{StateConfig: server.datablock})
 	s, err := gnmiserver.NewServer(opts...)

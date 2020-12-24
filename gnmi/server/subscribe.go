@@ -481,7 +481,6 @@ func (subses *SubSession) serverAliasesUpdate() {
 
 // initTelemetryUpdate - Process and generate responses for a init update.
 func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) error {
-	bundling := !subses.disableBundling
 	subscriptionList := req.GetSubscribe()
 	subList := subscriptionList.GetSubscription()
 	updatesOnly := subscriptionList.GetUpdatesOnly()
@@ -511,12 +510,9 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 		return subses.sendTelemetryUpdate(buildSyncResponse())
 	}
 
-	updates := []*gnmipb.Update{}
 	for _, top := range toplist {
 		branch := top.Value.(ygot.GoStruct)
-		if bundling {
-			updates = make([]*gnmipb.Update, 0, 16)
-		}
+		updates := make([]*gnmipb.Update, 0, 16)
 		for _, updateEntry := range subList {
 			path := updateEntry.Path
 			if err := subses.ValidateGNMIPath(prefix, path); err != nil {
@@ -532,20 +528,11 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 					return err
 				}
 				if u != nil {
-					if bundling {
-						updates = append(updates, u)
-					} else {
-						err = subses.sendTelemetryUpdate(
-							buildSubscribeResponse(prefixAlias, []*gnmipb.Update{u}, nil))
-						if err != nil {
-							return err
-						}
-					}
+					updates = append(updates, u)
 				}
 			}
 		}
-		if bundling && len(updates) > 0 {
-			prefixAlias := subses.ToAlias(prefix, false).(*gnmipb.Path)
+		if len(updates) > 0 {
 			err := subses.sendTelemetryUpdate(
 				buildSubscribeResponse(prefixAlias, updates, nil))
 			if err != nil {
@@ -558,9 +545,7 @@ func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) erro
 
 // telemetryUpdate - Process and generate responses for a telemetry update.
 func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.GoStruct) error {
-	bundling := !subses.disableBundling
 	prefix := sub.Prefix
-	prefix = subses.ToPath(prefix, false).(*gnmipb.Path)
 	prefixAlias := subses.ToAlias(prefix, false).(*gnmipb.Path)
 	encoding := sub.Encoding
 	mode := sub.StreamingMode
@@ -587,22 +572,18 @@ func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.Go
 		return nil
 	}
 
-	deletes := []*gnmipb.Path{}
-	updates := []*gnmipb.Update{}
-
 	for _, top := range toplist {
 		var err error
+		var deletes []*gnmipb.Path
+		var updates []*gnmipb.Update
 		bpath := top.Path
 		branch := top.Value.(ygot.GoStruct)
-		if bundling {
-			updates = make([]*gnmipb.Update, 0, 16)
-			// get all replaced, deleted paths relative to the prefix
-			deletes, err = getDeletes(sub, &bpath, false)
-			if err != nil {
-				return err
-			}
+		// get all replaced, deleted paths relative to the prefix
+		deletes, err = getDeletes(sub, &bpath, false)
+		if err != nil {
+			return err
 		}
-
+		updates = make([]*gnmipb.Update, 0, 16)
 		for _, path := range sub.Paths {
 			if err := subses.ValidateGNMIPath(prefix, path); err != nil {
 				return err
@@ -617,41 +598,14 @@ func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.Go
 					return err
 				}
 				if u != nil {
-					if bundling {
-						updates = append(updates, u)
-					} else {
-						fullpath := bpath + data.Path
-						deletes, err = getDeletes(sub, &fullpath, false)
-						if err != nil {
-							return err
-						}
-						err = subses.sendTelemetryUpdate(
-							buildSubscribeResponse(prefixAlias, []*gnmipb.Update{u}, nil))
-						if err != nil {
-							return err
-						}
-					}
+					updates = append(updates, u)
 				}
 			}
 		}
-		if bundling {
-			err = subses.sendTelemetryUpdate(
-				buildSubscribeResponse(prefixAlias, updates, deletes))
-			if err != nil {
-				return err
-			}
-		} else {
-			deletes, err = getDeletes(sub, &bpath, true)
-			if err != nil {
-				return err
-			}
-			for _, d := range deletes {
-				err = subses.sendTelemetryUpdate(
-					buildSubscribeResponse(prefixAlias, nil, []*gnmipb.Path{d}))
-				if err != nil {
-					return err
-				}
-			}
+		err = subses.sendTelemetryUpdate(
+			buildSubscribeResponse(prefixAlias, updates, deletes))
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -843,11 +797,8 @@ func (subses *SubSession) processSubscribeRequest(req *gnmipb.SubscribeRequest) 
 		SampleInterval := updateEntry.GetSampleInterval()
 		supressRedundant := updateEntry.GetSuppressRedundant()
 		heartBeatInterval := updateEntry.GetHeartbeatInterval()
-		fullpath := xpath.GNMIFullPath(prefix, path)
-		_, ok := subses.FindAllPaths(fullpath)
-		if !ok {
-			return status.TaggedErrorf(codes.NotFound, status.TagUnknownPath,
-				"unable to find %s from the schema tree", xpath.ToXPath(fullpath))
+		if err := subses.ValidateGNMIPath(prefix, path); err != nil {
+			return err
 		}
 		sub, err := subses.addStreamSubscription(
 			prefix, useAliases, gnmipb.SubscriptionList_STREAM,

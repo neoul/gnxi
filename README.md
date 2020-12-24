@@ -92,3 +92,9 @@ gnmic -a 192.168.0.77:10161 -u neoul -p admin --tls-ca pki/ca.crt --tls-cert pki
   * Client-defined Aliases
   * Target-defined Aliases
 * Target and Origin in gNMI Path
+
+
+## Not supported
+
+- 3.5.2.1 Bundling of Telemetry Updates: Spec error described in https://github.com/openconfig/reference/issues/59
+- 

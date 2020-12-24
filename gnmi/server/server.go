@@ -51,12 +51,11 @@ var (
 type Server struct {
 	*model.Model
 	*teleCtrl
-	disableBundling bool
-	sessions        map[string]*Session
-	serverAliases   map[string]string // target-defined aliases (server aliases)
-	enabledAliases  bool              // whether server aliases is enabled
-	iStateUpdate    *ydb.YDB          // internal StateUpdate interface
-	reqSeq          uint64
+	sessions       map[string]*Session
+	serverAliases  map[string]string // target-defined aliases (server aliases)
+	enabledAliases bool              // whether server aliases is enabled
+	iStateUpdate   *ydb.YDB          // internal StateUpdate interface
+	reqSeq         uint64
 }
 
 // Option is an interface used in the gNMI Server configuration
@@ -65,20 +64,20 @@ type Option interface {
 	IsOption()
 }
 
-// DisableBundling is used to disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1
-type DisableBundling struct{}
+// UpdateBunding is used to disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1
+type UpdateBunding int
 
-// IsOption - DisableBundling is a Option.
-func (o DisableBundling) IsOption() {}
+// IsOption - UpdateBunding is a Option.
+func (o UpdateBunding) IsOption() {}
 
-func hasDisableBundling(opts []Option) bool {
+func hasDisableBundling(opts []Option) int {
 	for _, o := range opts {
-		switch o.(type) {
-		case DisableBundling:
-			return true
+		switch b := o.(type) {
+		case UpdateBunding:
+			return int(b)
 		}
 	}
-	return false
+	return 0
 }
 
 // Startup is JSON or YAML bytes to be loaded at startup.
@@ -174,11 +173,10 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 	var err error
 	var m *model.Model
 	s := &Server{
-		disableBundling: hasDisableBundling(opts),
-		serverAliases:   hasAliases(opts),
-		sessions:        map[string]*Session{},
-		teleCtrl:        newTeleCtrl(),
-		iStateUpdate:    ydb.New("gnmi.iStateUpdate"),
+		serverAliases: hasAliases(opts),
+		sessions:      map[string]*Session{},
+		teleCtrl:      newTeleCtrl(),
+		iStateUpdate:  ydb.New("gnmi.iStateUpdate"),
 	}
 
 	m, err = model.NewCustomModel(schema, supportedModels, s, hasSetCallback(opts), hasGetCallback(opts))
