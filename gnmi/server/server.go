@@ -96,48 +96,44 @@ func hasStartup(opts []Option) []byte {
 	return nil
 }
 
-// SetCallback includes a callback interface to configure or execute
-// gNMI Set to the system. The callback interface consists of a set of
-// the following functions that must be implemented by the system.
+// Callback includes two callback interfaces.
+// model.StateConfig interface is used to configure & execute
+// gNMI Set to the system and model.StateSync interface is used to
+// retrieve the config state data from the system immediately.
 //
+// The model.StateConfig interface consists of a set of
+// the following functions that must be implemented by the system.
 // 	UpdateStart() error // Set starts.
 // 	UpdateCreate(path string, value string) error // Set creates new config data.
 // 	UpdateReplace(path string, value string) error // Set replaces config data.
 // 	UpdateDelete(path string) error // Set deletes config data.
 // 	UpdateEnd() error // Set ends.
-type SetCallback struct {
+//
+// the model.StateSync interface consists of
+// a following function that must be implemented by the system.
+// 	UpdateSync(path ...string) error
+type Callback struct {
 	model.StateConfig
+	model.StateSync
 }
 
 // IsOption - SetCallback is a Option.
-func (o SetCallback) IsOption() {}
+func (o Callback) IsOption() {}
 
 func hasSetCallback(opts []Option) model.StateConfig {
 	for _, o := range opts {
 		switch v := o.(type) {
-		case SetCallback:
+		case Callback:
 			return v.StateConfig
 		}
 	}
 	return nil
 }
 
-// GetCallback includes a callback interface to get the config state data
-// from the system immediately. The callback interface consists of
-// a following function that must be implemented by the system.
-//
-// 	UpdateSync(path ...string) error
-type GetCallback struct {
-	model.StateSync
-}
-
-// IsOption - GetCallback is a Option.
-func (o GetCallback) IsOption() {}
-
 func hasGetCallback(opts []Option) model.StateSync {
 	for _, o := range opts {
 		switch v := o.(type) {
-		case GetCallback:
+		case Callback:
 			return v.StateSync
 		}
 	}

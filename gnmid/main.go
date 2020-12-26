@@ -112,9 +112,8 @@ func NewServer() (*Server, error) {
 		}
 		opts = append(opts, gnmiserver.Startup(startbyte))
 	}
-
-	opts = append(opts, gnmiserver.GetCallback{StateSync: server.datablock},
-		gnmiserver.SetCallback{StateConfig: server.datablock})
+	opts = append(opts, gnmiserver.Callback{
+		StateConfig: server.datablock, StateSync: server.datablock})
 	s, err := gnmiserver.NewServer(opts...)
 	if err != nil {
 		server.datablock.Close()
