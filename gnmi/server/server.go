@@ -64,22 +64,6 @@ type Option interface {
 	IsOption()
 }
 
-// UpdateBunding is used to disable Bundling of Telemetry Updates defined in gNMI Specification 3.5.2.1
-type UpdateBunding int
-
-// IsOption - UpdateBunding is a Option.
-func (o UpdateBunding) IsOption() {}
-
-func hasDisableBundling(opts []Option) int {
-	for _, o := range opts {
-		switch b := o.(type) {
-		case UpdateBunding:
-			return int(b)
-		}
-	}
-	return 0
-}
-
 // Startup is JSON or YAML bytes to be loaded at startup.
 type Startup []byte
 
