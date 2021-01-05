@@ -1480,8 +1480,7 @@ func TestSubscribe(t *testing.T) {
 			"#1/1": "/interfaces/interface[name=1/1]",
 			"#1/2": "/interfaces/interface[name=1/2]",
 		},
-		GetCallback{StateSync: db},
-		SetCallback{StateConfig: db},
+		Callback{StateSync: db, StateConfig: db},
 	)
 	if err != nil {
 		t.Fatalf("error in creating config server: %v", err)
