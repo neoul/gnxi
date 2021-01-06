@@ -36,7 +36,7 @@ type Model struct {
 
 	sync.RWMutex  // The lock for the access of the Model
 	stateSyncPath *gtrie.Trie
-	transaction   *setTransaction
+	transaction   *trans
 	updatedroot   *MO // A fake data instance to represent the changed data.
 }
 

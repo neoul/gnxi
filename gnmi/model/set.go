@@ -10,7 +10,7 @@ import (
 
 // SetInit initializes the Set transaction.
 func (m *Model) SetInit() error {
-	m.transaction = startTransaction()
+	m.transaction = newTrans()
 	return nil
 }
 
@@ -34,131 +34,38 @@ func newDataAndPathMap(in []*DataAndPath) map[string]*DataAndPath {
 	return m
 }
 
-// SetCommit commit the changed configuration. it returns an error with error index.
-func (m *Model) SetCommit() (int, error) {
-	var err error
-	if m.StateConfig == nil {
-		return m.transaction.returnSetError(
-			opNone, -1, status.TaggedErrorf(codes.Internal, status.TagOperationFail, "no state-config interface"))
-	}
-
-	// delete
-	if err = m.StateConfig.UpdateStart(); err != nil {
-		m.StateConfig.UpdateEnd()
-		return m.transaction.returnSetError(opDelete, -1, err)
-	}
-	for _, opinfo := range m.transaction.delete {
-		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath})
-		for p := range newDataAndPathMap(curlist) {
-			err = m.StateConfig.UpdateDelete(p)
-			if err != nil {
-				m.StateConfig.UpdateEnd()
-				return m.transaction.returnSetError(opDelete, opinfo.opseq, err)
-			}
-		}
-	}
-	if err = m.StateConfig.UpdateEnd(); err != nil {
-		return m.transaction.returnSetError(opDelete, -1, err)
-	}
-
-	// replace (delete and then update)
-	if err = m.StateConfig.UpdateStart(); err != nil {
-		m.StateConfig.UpdateEnd()
-		return m.transaction.returnSetError(opReplace, -1, err)
-	}
-	for _, opinfo := range m.transaction.replace {
-		newlist := m.ListAll(m.GetRoot(), opinfo.gpath)
-		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath})
-		cur := newDataAndPathMap(curlist)
-		new := newDataAndPathMap(newlist)
-		// Get difference between cur and new for C/R/D operations
-		for p := range cur {
-			if _, exists := new[p]; !exists {
-				err = m.StateConfig.UpdateDelete(p)
-				if err != nil {
-					m.StateConfig.UpdateEnd()
-					return m.transaction.returnSetError(opReplace, opinfo.opseq, err)
-				}
-			}
-		}
-		for p, entry := range new {
-			if _, exists := cur[p]; exists {
-				err = m.StateConfig.UpdateReplace(p, entry.GetValueString())
-			} else {
-				err = m.StateConfig.UpdateCreate(p, entry.GetValueString())
-			}
-			if err != nil {
-				m.StateConfig.UpdateEnd()
-				return m.transaction.returnSetError(opReplace, opinfo.opseq, err)
-			}
-		}
-	}
-	if err = m.StateConfig.UpdateEnd(); err != nil {
-		return m.transaction.returnSetError(opReplace, -1, err)
-	}
-	// update
-	if err = m.StateConfig.UpdateStart(); err != nil {
-		m.StateConfig.UpdateEnd()
-		return m.transaction.returnSetError(opUpdate, -1, err)
-	}
-	for _, opinfo := range m.transaction.update {
-		newlist := m.ListAll(m.GetRoot(), opinfo.gpath)
-		curlist := m.ListAll(opinfo.curval, nil, &AddFakePrefix{Prefix: opinfo.gpath})
-		cur := newDataAndPathMap(curlist)
-		new := newDataAndPathMap(newlist)
-		// Get difference between cur and new for C/R/D operations
-		for p := range cur {
-			if _, exists := new[p]; !exists {
-				err = m.StateConfig.UpdateDelete(p)
-				if err != nil {
-					m.StateConfig.UpdateEnd()
-					return m.transaction.returnSetError(opUpdate, opinfo.opseq, err)
-				}
-			}
-		}
-		for p, entry := range new {
-			if _, exists := cur[p]; exists {
-				err = m.StateConfig.UpdateReplace(p, entry.GetValueString())
-			} else {
-				err = m.StateConfig.UpdateCreate(p, entry.GetValueString())
-			}
-			if err != nil {
-				m.StateConfig.UpdateEnd()
-				return m.transaction.returnSetError(opUpdate, opinfo.opseq, err)
-			}
-		}
-	}
-	if err = m.StateConfig.UpdateEnd(); err != nil {
-		return m.transaction.returnSetError(opUpdate, -1, err)
-	}
-	return -1, nil
+// SetCommit commit the changed configuration. it returns an error.
+func (m *Model) SetCommit() error {
+	return nil
 }
 
 // SetDelete deletes the path from root if the path exists.
 func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 	fullpath := xpath.GNMIFullPath(prefix, path)
 	targets, _ := m.Get(fullpath)
-	m.transaction.setSequnce()
 	for _, target := range targets {
 		targetPath, err := xpath.ToGNMIPath(target.Path)
 		if err != nil {
 			return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
-				"xpath-to-gnmipath converting error for %s", target.Path)
+				"path.converting error for %s", target.Path)
 		}
-		m.transaction.addOperation(opDelete, &target.Path, targetPath, target.Value)
 		if len(targetPath.GetElem()) == 0 {
 			// root deletion
 			if mo, err := m.NewRoot(nil); err == nil {
 				m.MO = mo
 			} else {
 				return status.TaggedErrorf(codes.Internal,
-					status.TagOperationFail, "root deleting error:: %v", err)
+					status.TagOperationFail, "set.delete error for root:: %v", err)
 			}
 		} else {
 			if err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath); err != nil {
 				return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
-					"deleting error in %s:: %v", target.Path, err)
+					"set.delete error in %s:: %v", target.Path, err)
 			}
+		}
+		m.transaction.newUnit(gnmipb.UpdateResult_DELETE, &target.Path, targetPath, target.Value)
+		if err := m.executeStateConfig(targetPath, target.Value); err != nil {
+			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 		}
 	}
 	return nil
@@ -168,35 +75,40 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	var err error
 	fullpath := xpath.GNMIFullPath(prefix, path)
-	m.transaction.setSequnce()
 	targets, ok := m.Get(fullpath)
-	if ok {
-		for _, target := range targets {
-			targetPath, err := xpath.ToGNMIPath(target.Path)
-			if err != nil {
-				return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
-					"xpath-to-gnmipath converting error for %s", target.Path)
-			}
-			m.transaction.addOperation(opReplace, &target.Path, targetPath, target.Value)
-			err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath)
-			if err != nil {
-				return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
-					"deleting error in %s:: %v", target.Path, err)
-			}
-			err = writeTypedValue(m, targetPath, typedValue)
-			if err != nil {
-				return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
-					"writing error in %s:: %v", target.Path, err)
-			}
+	if !ok {
+		tpath := xpath.ToXPath(fullpath)
+		err = writeTypedValue(m, fullpath, typedValue)
+		if err != nil {
+			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+				"replace error in %s:: %v", tpath, err)
+		}
+		m.transaction.newUnit(gnmipb.UpdateResult_REPLACE, &tpath, fullpath, nil)
+		if err := m.executeStateConfig(fullpath, nil); err != nil {
+			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 		}
 		return nil
 	}
-	tpath := xpath.ToXPath(fullpath)
-	m.transaction.addOperation(opReplace, &tpath, fullpath, nil)
-	err = writeTypedValue(m, fullpath, typedValue)
-	if err != nil {
-		return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
-			"writing error in %s:: %v", tpath, err)
+	for _, target := range targets {
+		targetPath, err := xpath.ToGNMIPath(target.Path)
+		if err != nil {
+			return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
+				"path.converting error for %s", target.Path)
+		}
+		err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath)
+		if err != nil {
+			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+				"set.replace error in %s:: %v", target.Path, err)
+		}
+		err = writeTypedValue(m, targetPath, typedValue)
+		if err != nil {
+			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+				"set.replace error in %s:: %v", target.Path, err)
+		}
+		m.transaction.newUnit(gnmipb.UpdateResult_REPLACE, &target.Path, targetPath, target.Value)
+		if err := m.executeStateConfig(targetPath, target.Value); err != nil {
+			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
+		}
 	}
 	return nil
 }
@@ -205,30 +117,73 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	var err error
 	fullpath := xpath.GNMIFullPath(prefix, path)
-	m.transaction.setSequnce()
 	targets, ok := m.Get(fullpath)
-	if ok {
-		for _, target := range targets {
-			targetPath, err := xpath.ToGNMIPath(target.Path)
-			if err != nil {
-				return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
-					"xpath-to-gnmipath converting error for %s", target.Path)
-			}
-			m.transaction.addOperation(opUpdate, &target.Path, targetPath, target.Value)
-			err = writeTypedValue(m, targetPath, typedValue)
-			if err != nil {
-				return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
-					"writing error in %s:: %v", target.Path, err)
-			}
+	if !ok {
+		tpath := xpath.ToXPath(fullpath)
+		err = writeTypedValue(m, fullpath, typedValue)
+		if err != nil {
+			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+				"set.update error in %s:: %v", tpath, err)
+		}
+		m.transaction.newUnit(gnmipb.UpdateResult_UPDATE, &tpath, fullpath, nil)
+		if err := m.executeStateConfig(fullpath, nil); err != nil {
+			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 		}
 		return nil
 	}
-	tpath := xpath.ToXPath(fullpath)
-	m.transaction.addOperation(opUpdate, &tpath, fullpath, nil)
-	err = writeTypedValue(m, fullpath, typedValue)
-	if err != nil {
-		return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
-			"writing error in %s:: %v", tpath, err)
+	for _, target := range targets {
+		targetPath, err := xpath.ToGNMIPath(target.Path)
+		if err != nil {
+			return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
+				"path.converting error for %s", target.Path)
+		}
+		err = writeTypedValue(m, targetPath, typedValue)
+		if err != nil {
+			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+				"set.update error in %s:: %v", target.Path, err)
+		}
+		m.transaction.newUnit(gnmipb.UpdateResult_UPDATE, &target.Path, targetPath, target.Value)
+		if err := m.executeStateConfig(targetPath, target.Value); err != nil {
+			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
+		}
+	}
+	return nil
+}
+
+func (m *Model) executeStateConfig(gpath *gnmipb.Path, oldval interface{}) error {
+	curlist := m.ListAll(oldval, nil, &AddFakePrefix{Prefix: gpath})
+	newlist := m.ListAll(m.GetRoot(), gpath)
+	cur := newDataAndPathMap(curlist)
+	new := newDataAndPathMap(newlist)
+
+	if err := m.StateConfig.UpdateStart(); err != nil {
+		m.StateConfig.UpdateEnd()
+		return err
+	}
+	// Get difference between cur and new for C/R/D operations
+	for _, entry := range curlist {
+		if _, exists := new[entry.Path]; !exists {
+			err := m.StateConfig.UpdateDelete(entry.Path)
+			if err != nil {
+				m.StateConfig.UpdateEnd()
+				return err
+			}
+		}
+	}
+	for _, entry := range newlist {
+		var err error
+		if _, exists := cur[entry.Path]; exists {
+			err = m.StateConfig.UpdateReplace(entry.Path, entry.GetValueString())
+		} else {
+			err = m.StateConfig.UpdateCreate(entry.Path, entry.GetValueString())
+		}
+		if err != nil {
+			m.StateConfig.UpdateEnd()
+			return err
+		}
+	}
+	if err := m.StateConfig.UpdateEnd(); err != nil {
+		return err
 	}
 	return nil
 }

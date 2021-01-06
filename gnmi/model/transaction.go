@@ -1,28 +1,23 @@
 package model
 
 import (
-	"fmt"
-
-	"github.com/neoul/gnxi/utilities/status"
-	"github.com/neoul/gtrie"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
-	"google.golang.org/grpc/codes"
 )
 
-// opType [Update,Replace,Delete]
-type opType int
+// transUnitType [Update,Replace,Delete]
+type transUnitType int
 
 const (
-	opNone opType = iota
-	// opUpdate - opType of SetPathData (Merge)
+	opNone transUnitType = iota
+	// opUpdate - transUnitType of SetPathData (Merge)
 	opUpdate
-	// opReplace - opType of SetPathData
+	// opReplace - transUnitType of SetPathData
 	opReplace
-	// opDelete - opType of SetPathData
+	// opDelete - transUnitType of SetPathData
 	opDelete
 )
 
-func (op opType) String() string {
+func (op transUnitType) String() string {
 	switch op {
 	case opUpdate: // = Merge
 		return "U"
@@ -34,72 +29,39 @@ func (op opType) String() string {
 	return "?"
 }
 
-type opInfo struct {
-	optype opType
-	opseq  int
+type transUnit struct {
+	optype gnmipb.UpdateResult_Operation
 	xpath  *string
 	gpath  *gnmipb.Path
 	curval interface{}
 }
 
-var setTranID uint
+var transID uint
 
-type setTransaction struct {
-	id      uint
-	seq     int
-	opseqs  *gtrie.Trie
-	delete  []*opInfo
-	replace []*opInfo
-	update  []*opInfo
+type trans struct {
+	id    uint
+	seq   int
+	units []*transUnit
 }
 
-// start the setTransaction for modeldata
-func startTransaction() *setTransaction {
-	setTranID++
-	set := &setTransaction{
-		id:      setTranID,
-		seq:     -1,
-		opseqs:  gtrie.New(),
-		delete:  []*opInfo{},
-		replace: []*opInfo{},
-		update:  []*opInfo{},
+// start the trans for modeldata
+func newTrans() *trans {
+	transID++
+	set := &trans{
+		id:    transID,
+		seq:   -1,
+		units: []*transUnit{},
 	}
 	return set
 }
 
-func (set *setTransaction) setSequnce() {
-	set.seq++
-}
-
-func (set *setTransaction) addOperation(optype opType, xpath *string, gpath *gnmipb.Path, curval interface{}) {
-	opinfo := &opInfo{
+func (set *trans) newUnit(optype gnmipb.UpdateResult_Operation, xpath *string, gpath *gnmipb.Path, curval interface{}) *transUnit {
+	unit := &transUnit{
 		optype: optype,
-		opseq:  set.seq,
 		xpath:  xpath,
 		gpath:  gpath,
 		curval: curval,
 	}
-	opath := fmt.Sprintf("%s%s", optype, *xpath)
-	set.opseqs.Add(opath, set.seq)
-	switch optype {
-	case opDelete:
-		set.delete = append(set.delete, opinfo)
-	case opReplace:
-		set.replace = append(set.replace, opinfo)
-	case opUpdate:
-		set.update = append(set.update, opinfo)
-	}
-}
-
-func (set *setTransaction) returnSetError(optype opType, seq int, err error) (int, error) {
-	if err != nil {
-		return -1, nil
-	}
-	if serr, ok := err.(SetError); ok {
-		opath := fmt.Sprintf("%s%s", optype, serr.ErrorPath())
-		if _, fvalue, ok := set.opseqs.FindLongestMatchedPrefix(opath); ok {
-			return fvalue.(int), status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
-		}
-	}
-	return seq, status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
+	set.units = append(set.units, unit)
+	return unit
 }

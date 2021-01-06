@@ -350,7 +350,7 @@ func (s *Server) get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 		bprefix, err := xpath.ToGNMIPath(bpath)
 		if err != nil {
 			return nil, status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
-				"xpath-to-gnmipath converting error for %s", bpath)
+				"path.converting error for %s", bpath)
 		}
 		for _, path := range paths {
 			if err := s.ValidateGNMIPath(prefix, path); err != nil {
@@ -371,7 +371,7 @@ func (s *Server) get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 				datapath, err := xpath.ToGNMIPath(data.Path)
 				if err != nil {
 					return nil, status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
-						"xpath-to-gnmipath converting error for %s", data.Path)
+						"path.converting error for %s", data.Path)
 				}
 				update[j] = &gnmipb.Update{Path: datapath, Val: typedValue}
 			}
@@ -393,8 +393,6 @@ func (s *Server) get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 // Set implements the Set RPC in gNMI spec.
 func (s *Server) set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetResponse, error) {
 	prefix := req.GetPrefix()
-
-	var index int
 	var err error
 	result := make([]*gnmipb.UpdateResult, 0, 6)
 	s.Model.SetInit()
@@ -425,17 +423,9 @@ func (s *Server) set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 		result = append(result, buildUpdateResult(gnmipb.UpdateResult_UPDATE, path, err))
 	}
 	if err == nil {
-		index, err = s.Model.SetCommit()
+		err = s.Model.SetCommit()
 	}
 	if err != nil {
-		// update error
-		if index < -1 {
-			resultlen := len(result)
-			for i := index; i < resultlen; i++ {
-				result[i] = buildUpdateResultAborted(result[i].Op, result[i].Path)
-			}
-			result[index] = buildUpdateResult(result[index].Op, result[index].Path, err)
-		}
 		s.Model.SetRollback()
 	}
 	s.Model.SetDone()
