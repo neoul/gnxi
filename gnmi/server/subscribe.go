@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -473,6 +474,9 @@ func (subses *SubSession) clientAliasesUpdate(aliaslist *gnmipb.AliasList) error
 
 func (subses *SubSession) serverAliasesUpdate() {
 	aliases := subses.updateServerAliases(subses.serverAliases, true)
+	sort.Slice(aliases, func(i, j int) bool {
+		return aliases[i] < aliases[j]
+	})
 	for _, alias := range aliases {
 		subses.sendTelemetryUpdate(
 			buildAliasResponse(subses.ToPath(alias, true).(*gnmipb.Path), alias))
