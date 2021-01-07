@@ -8,15 +8,35 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
+type rollbackEntry struct {
+	optype gnmipb.UpdateResult_Operation
+	xpath  *string
+	gpath  *gnmipb.Path
+	oldval interface{}
+}
+
+func (m *Model) addRollbackEntry(optype gnmipb.UpdateResult_Operation,
+	xpath *string, gpath *gnmipb.Path, oldval interface{}) {
+	unit := &rollbackEntry{
+		optype: optype,
+		xpath:  xpath,
+		gpath:  gpath,
+		oldval: oldval,
+	}
+	m.setRollback = append(m.setRollback, unit)
+	return
+}
+
 // SetInit initializes the Set transaction.
 func (m *Model) SetInit() error {
-	m.transaction = newTrans()
+	m.setSeq++
+	m.setRollback = nil
 	return nil
 }
 
 // SetDone resets the Set transaction.
 func (m *Model) SetDone() {
-	m.transaction = nil
+	m.setRollback = nil
 }
 
 // SetRollback reverts the original configuration.
@@ -63,7 +83,7 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 					"set.delete error in %s:: %v", target.Path, err)
 			}
 		}
-		m.transaction.newUnit(gnmipb.UpdateResult_DELETE, &target.Path, targetPath, target.Value)
+		m.addRollbackEntry(gnmipb.UpdateResult_DELETE, &target.Path, targetPath, target.Value)
 		if err := m.executeStateConfig(targetPath, target.Value); err != nil {
 			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 		}
@@ -83,7 +103,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
 				"replace error in %s:: %v", tpath, err)
 		}
-		m.transaction.newUnit(gnmipb.UpdateResult_REPLACE, &tpath, fullpath, nil)
+		m.addRollbackEntry(gnmipb.UpdateResult_REPLACE, &tpath, fullpath, nil)
 		if err := m.executeStateConfig(fullpath, nil); err != nil {
 			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 		}
@@ -105,7 +125,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
 				"set.replace error in %s:: %v", target.Path, err)
 		}
-		m.transaction.newUnit(gnmipb.UpdateResult_REPLACE, &target.Path, targetPath, target.Value)
+		m.addRollbackEntry(gnmipb.UpdateResult_REPLACE, &target.Path, targetPath, target.Value)
 		if err := m.executeStateConfig(targetPath, target.Value); err != nil {
 			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 		}
@@ -125,7 +145,7 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
 				"set.update error in %s:: %v", tpath, err)
 		}
-		m.transaction.newUnit(gnmipb.UpdateResult_UPDATE, &tpath, fullpath, nil)
+		m.addRollbackEntry(gnmipb.UpdateResult_UPDATE, &tpath, fullpath, nil)
 		if err := m.executeStateConfig(fullpath, nil); err != nil {
 			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 		}
@@ -142,7 +162,7 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
 				"set.update error in %s:: %v", target.Path, err)
 		}
-		m.transaction.newUnit(gnmipb.UpdateResult_UPDATE, &target.Path, targetPath, target.Value)
+		m.addRollbackEntry(gnmipb.UpdateResult_UPDATE, &target.Path, targetPath, target.Value)
 		if err := m.executeStateConfig(targetPath, target.Value); err != nil {
 			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 		}

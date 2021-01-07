@@ -632,6 +632,7 @@ func writeTypedValue(m *Model, path *gnmipb.Path, typedValue *gnmipb.TypedValue)
 			return err
 		}
 	} else { // (schema.IsLeaf() || schema.IsLeafList())
+		// FIXME - need to process the json type leaf or leaflist...
 		err = ytypes.SetNode(schema, base, path, typedValue, &ytypes.InitMissingElements{})
 		if err != nil {
 			return fmt.Errorf("%s", status.FromError(err).Message)
