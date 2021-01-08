@@ -700,3 +700,112 @@ func TestFindAllSchemaPaths(t *testing.T) {
 		})
 	}
 }
+
+func Test_writeValue(t *testing.T) {
+	m, err := NewModel(nil, nil, nil)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+	type args struct {
+		path  *gnmipb.Path
+		value interface{}
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "writeValue",
+			args: args{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
+							Name: "interfaces",
+						},
+						&gnmipb.PathElem{
+							Name: "interface",
+							Key: map[string]string{
+								"name": "1/1",
+							},
+						},
+						&gnmipb.PathElem{
+							Name: "config",
+						},
+					},
+				},
+				value: &gostruct.OpenconfigInterfaces_Interfaces_Interface_Config{
+					Description: ygot.String("desciption field"),
+					Enabled:     ygot.Bool(true),
+					Name:        ygot.String("1/1"),
+				},
+			},
+		},
+		{
+			name: "writeValue",
+			args: args{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
+							Name: "sample",
+						},
+						&gnmipb.PathElem{
+							Name: "container-val",
+						},
+					},
+				},
+				value: &gostruct.Sample_Sample_ContainerVal{
+					LeafListVal: []string{"v1", "v2"},
+				},
+			},
+		},
+		{
+			name: "writeValue",
+			args: args{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
+							Name: "sample",
+						},
+						&gnmipb.PathElem{
+							Name: "container-val",
+						},
+						&gnmipb.PathElem{
+							Name: "enum-val",
+						},
+					},
+				},
+				value: gostruct.Sample_Sample_ContainerVal_EnumVal_enum2,
+			},
+		},
+		{
+			name: "writeValue",
+			args: args{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
+							Name: "sample",
+						},
+						&gnmipb.PathElem{
+							Name: "container-val",
+						},
+						&gnmipb.PathElem{
+							Name: "leaf-list-val",
+						},
+					},
+				},
+				value: []string{"v3"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := writeValue(m, tt.args.path, tt.args.value); (err != nil) != tt.wantErr {
+				t.Errorf("writeValue() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+	j, _ := m.ExportToJSON(false)
+	t.Log(string(j))
+}

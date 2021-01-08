@@ -357,7 +357,7 @@ func (mo *MO) Export(rfc7951json bool) (map[string]interface{}, error) {
 
 // UpdateCreate is a function of StateUpdate Interface to add a new value to the path of the MO.
 func (mo *MO) UpdateCreate(path string, value string) error {
-	err := writeValue(mo.RootSchema(), mo.Root, path, value)
+	err := writeStringValue(mo.RootSchema(), mo.Root, path, value)
 	if err != nil {
 		glog.Errorf("mo.create:: %v in %s", err, path)
 	}
@@ -366,7 +366,7 @@ func (mo *MO) UpdateCreate(path string, value string) error {
 
 // UpdateReplace is a function of StateUpdate Interface to replace the value in the path of the MO.
 func (mo *MO) UpdateReplace(path string, value string) error {
-	err := writeValue(mo.RootSchema(), mo.Root, path, value)
+	err := writeStringValue(mo.RootSchema(), mo.Root, path, value)
 	if err != nil {
 		glog.Errorf("mo.replace:: %v in %s", err, path)
 	}

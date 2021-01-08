@@ -515,11 +515,11 @@ func (m *Model) findSchemaAndDataPath(path dataAndSchemaPath, parent *yang.Entry
 // UpdateCreate is a function of StateUpdate Interface to add a new value to the path of the Model.
 func (m *Model) UpdateCreate(path string, value string) error {
 	schema := m.RootSchema()
-	err := writeValue(schema, m.GetRoot(), path, value)
+	err := writeStringValue(schema, m.GetRoot(), path, value)
 	if err == nil {
 		if m.updatedroot != nil {
 			fakeRoot := m.updatedroot.GetRoot()
-			writeValue(schema, fakeRoot, path, value)
+			writeStringValue(schema, fakeRoot, path, value)
 			if m.ChangeNotification != nil {
 				m.ChangeNotification.ChangeCreated(path, fakeRoot)
 			}
@@ -534,11 +534,11 @@ func (m *Model) UpdateCreate(path string, value string) error {
 // UpdateReplace is a function of StateUpdate Interface to replace the value in the path of the Model.
 func (m *Model) UpdateReplace(path string, value string) error {
 	schema := m.RootSchema()
-	err := writeValue(schema, m.GetRoot(), path, value)
+	err := writeStringValue(schema, m.GetRoot(), path, value)
 	if err == nil {
 		if m.updatedroot != nil {
 			fakeRoot := m.updatedroot.GetRoot()
-			writeValue(schema, fakeRoot, path, value)
+			writeStringValue(schema, fakeRoot, path, value)
 			if m.ChangeNotification != nil {
 				m.ChangeNotification.ChangeReplaced(path, fakeRoot)
 			}

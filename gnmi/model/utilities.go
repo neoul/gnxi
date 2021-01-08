@@ -641,8 +641,37 @@ func writeTypedValue(m *Model, path *gnmipb.Path, typedValue *gnmipb.TypedValue)
 	return nil
 }
 
-// writeValue - Write the value to the model instance
-func writeValue(schema *yang.Entry, base ygot.GoStruct, path string, value string) error {
+// writeValue - Write Go Struct or raw data
+func writeValue(m *Model, path *gnmipb.Path, value interface{}) error {
+	// var err error
+	schema := m.GetSchema()
+	base := m.GetRoot()
+	tValue, tSchema, err := ytypes.GetOrCreateNode(schema, base, path)
+	if err != nil {
+		return fmt.Errorf("%s", status.FromError(err).Message)
+	}
+	if tSchema.IsDir() {
+		tv := ydb.GetNonIfOrPtrValueDeep(reflect.ValueOf(tValue))
+		v := ydb.GetNonIfOrPtrValueDeep(reflect.ValueOf(value))
+		if !tv.CanSet() {
+			return fmt.Errorf("unable to set %s", tSchema.Name)
+		}
+		tv.Set(v)
+	} else { // (schema.IsLeaf() || schema.IsLeafList())
+		typedValue, err := ygot.EncodeTypedValue(value, gnmipb.Encoding_JSON_IETF)
+		if err != nil {
+			return err
+		}
+		err = ytypes.SetNode(schema, base, path, typedValue, &ytypes.InitMissingElements{})
+		if err != nil {
+			return fmt.Errorf("%s", status.FromError(err).Message)
+		}
+	}
+	return nil
+}
+
+// writeStringValue - Write the value to the model instance
+func writeStringValue(schema *yang.Entry, base ygot.GoStruct, path string, value string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
 		return err
