@@ -641,8 +641,21 @@ func writeTypedValue(m *Model, path *gnmipb.Path, typedValue *gnmipb.TypedValue)
 	return nil
 }
 
-// writeValue - Write Go Struct or raw data
-func writeValue(m *Model, path *gnmipb.Path, value interface{}) error {
+func findValueDirectly(m *Model, path *gnmipb.Path) interface{} {
+	schema := m.GetSchema()
+	base := m.GetRoot()
+	tNode, err := ytypes.GetNode(schema, base, path)
+	if err != nil {
+		return nil
+	}
+	if len(tNode) <= 0 {
+		return nil
+	}
+	return tNode[0].Data
+}
+
+// writeValueDirectly - Write Go Struct or raw data
+func writeValueDirectly(m *Model, path *gnmipb.Path, value interface{}) error {
 	// var err error
 	schema := m.GetSchema()
 	base := m.GetRoot()
@@ -670,8 +683,28 @@ func writeValue(m *Model, path *gnmipb.Path, value interface{}) error {
 	return nil
 }
 
-// writeStringValue - Write the value to the model instance
-func writeStringValue(schema *yang.Entry, base ygot.GoStruct, path string, value string) error {
+func deleteValueDirectly(m *Model, path *gnmipb.Path) error {
+	schema := m.GetSchema()
+	base := m.GetRoot()
+	tSchema := FindSchemaByGNMIPath(schema, base, path)
+	if tSchema == nil {
+		return fmt.Errorf("shema for %s not found", path)
+	}
+	// The key field deletion is not allowed.
+	if pSchema := tSchema.Parent; pSchema != nil {
+		elem := path.GetElem()
+		if strings.Contains(pSchema.Key, elem[len(elem)-1].GetName()) {
+			return nil
+		}
+	}
+	if err := ytypes.DeleteNode(schema, base, path); err != nil {
+		return err
+	}
+	return nil
+}
+
+// writeValue - Write the value to the model instance
+func writeValue(schema *yang.Entry, base ygot.GoStruct, path string, value string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
 		return err
@@ -717,7 +750,7 @@ func deleteValue(schema *yang.Entry, base ygot.GoStruct, path string) error {
 	}
 	tSchema := FindSchemaByGNMIPath(schema, base, gpath)
 	if tSchema == nil {
-		return err
+		return fmt.Errorf("shema for %s not found", path)
 	}
 	// The key field deletion is not allowed.
 	if pSchema := tSchema.Parent; pSchema != nil {

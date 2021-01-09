@@ -1,6 +1,7 @@
 package model
 
 import (
+	"github.com/golang/glog"
 	"github.com/neoul/gnxi/utilities/status"
 	"github.com/neoul/gnxi/utilities/xpath"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
@@ -41,17 +42,26 @@ func (m *Model) SetDone() {
 
 // SetRollback reverts the original configuration.
 func (m *Model) SetRollback() {
-
-}
-
-func newDataAndPathMap(in []*DataAndPath) map[string]*DataAndPath {
-	m := make(map[string]*DataAndPath)
-	for _, entry := range in {
-		if _, found := m[entry.Path]; !found {
-			m[entry.Path] = entry
+	for _, entry := range m.setRollback {
+		var err error
+		new := findValueDirectly(m, entry.gpath)
+		if entry.oldval == nil {
+			err = deleteValueDirectly(m, entry.gpath)
+		} else {
+			err = writeValueDirectly(m, entry.gpath, entry.oldval)
+		}
+		if err != nil {
+			glog.Error(status.TaggedErrorf(codes.Internal, status.TagOperationFail,
+				"rollback.delete error in %s:: %v", *entry.xpath, err))
+			continue
+		}
+		// error is ignored on rollback
+		if err := m.executeStateConfig(entry.gpath, new); err != nil {
+			glog.Error(status.TaggedErrorf(codes.Internal, status.TagOperationFail,
+				"rollback.delete error in %s:: %v", *entry.xpath, err))
+			continue
 		}
 	}
-	return m
 }
 
 // SetCommit commit the changed configuration. it returns an error.
@@ -170,11 +180,21 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 	return nil
 }
 
+func mapDataAndPath(in []*DataAndPath) map[string]*DataAndPath {
+	m := make(map[string]*DataAndPath)
+	for _, entry := range in {
+		if _, found := m[entry.Path]; !found {
+			m[entry.Path] = entry
+		}
+	}
+	return m
+}
+
 func (m *Model) executeStateConfig(gpath *gnmipb.Path, oldval interface{}) error {
 	curlist := m.ListAll(oldval, nil, &AddFakePrefix{Prefix: gpath})
 	newlist := m.ListAll(m.GetRoot(), gpath)
-	cur := newDataAndPathMap(curlist)
-	new := newDataAndPathMap(newlist)
+	cur := mapDataAndPath(curlist)
+	new := mapDataAndPath(newlist)
 
 	if err := m.StateConfig.UpdateStart(); err != nil {
 		m.StateConfig.UpdateEnd()

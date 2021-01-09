@@ -701,7 +701,7 @@ func TestFindAllSchemaPaths(t *testing.T) {
 	}
 }
 
-func Test_writeValue(t *testing.T) {
+func Test_writeValueDirectly(t *testing.T) {
 	m, err := NewModel(nil, nil, nil)
 	if err != nil {
 		t.Errorf("%v", err)
@@ -717,7 +717,7 @@ func Test_writeValue(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "writeValue",
+			name: "writeValueDirectly",
 			args: args{
 				path: &gnmipb.Path{
 					Elem: []*gnmipb.PathElem{
@@ -743,7 +743,7 @@ func Test_writeValue(t *testing.T) {
 			},
 		},
 		{
-			name: "writeValue",
+			name: "writeValueDirectly",
 			args: args{
 				path: &gnmipb.Path{
 					Elem: []*gnmipb.PathElem{
@@ -761,7 +761,7 @@ func Test_writeValue(t *testing.T) {
 			},
 		},
 		{
-			name: "writeValue",
+			name: "writeValueDirectly",
 			args: args{
 				path: &gnmipb.Path{
 					Elem: []*gnmipb.PathElem{
@@ -780,7 +780,7 @@ func Test_writeValue(t *testing.T) {
 			},
 		},
 		{
-			name: "writeValue",
+			name: "writeValueDirectly",
 			args: args{
 				path: &gnmipb.Path{
 					Elem: []*gnmipb.PathElem{
@@ -801,8 +801,8 @@ func Test_writeValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := writeValue(m, tt.args.path, tt.args.value); (err != nil) != tt.wantErr {
-				t.Errorf("writeValue() error = %v, wantErr %v", err, tt.wantErr)
+			if err := writeValueDirectly(m, tt.args.path, tt.args.value); (err != nil) != tt.wantErr {
+				t.Errorf("writeValueDirectly() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
