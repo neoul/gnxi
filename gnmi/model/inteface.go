@@ -47,9 +47,3 @@ type StateSync interface {
 	// UpdateSyncPath returns the paths that the synchronization is requested.
 	UpdateSyncPath() []string
 }
-
-// SetError interface is used to find the error path on Set
-type SetError interface {
-	error
-	ErrorPath() string // The error path
-}
