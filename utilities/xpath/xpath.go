@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	idPattern = `[a-zA-Z_][a-zA-Z\d\_\-\.]*`
+	idPattern = `[a-zA-Z0-9_][a-zA-Z\d\_\-\.]*`
 	// YANG identifiers must follow RFC 6020:
 	// https://tools.ietf.org/html/rfc6020#section-6.2.
 	idRe = regexp.MustCompile(`^` + idPattern + `$`)
