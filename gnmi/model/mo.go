@@ -357,7 +357,12 @@ func (mo *MO) Export(rfc7951json bool) (map[string]interface{}, error) {
 
 // UpdateCreate is a function of StateUpdate Interface to add a new value to the path of the MO.
 func (mo *MO) UpdateCreate(path string, value string) error {
-	err := writeValue(mo.RootSchema(), mo.Root, path, value)
+	gpath, err := xpath.ToGNMIPath(path)
+	if err != nil {
+		glog.Errorf("model.create:: %v in %s", err, path)
+		return nil
+	}
+	err = writeValue(mo.RootSchema(), mo.Root, gpath, value)
 	if err != nil {
 		glog.Errorf("mo.create:: %v in %s", err, path)
 	}
@@ -366,7 +371,12 @@ func (mo *MO) UpdateCreate(path string, value string) error {
 
 // UpdateReplace is a function of StateUpdate Interface to replace the value in the path of the MO.
 func (mo *MO) UpdateReplace(path string, value string) error {
-	err := writeValue(mo.RootSchema(), mo.Root, path, value)
+	gpath, err := xpath.ToGNMIPath(path)
+	if err != nil {
+		glog.Errorf("model.replace:: %v in %s", err, path)
+		return nil
+	}
+	err = writeValue(mo.RootSchema(), mo.Root, gpath, value)
 	if err != nil {
 		glog.Errorf("mo.replace:: %v in %s", err, path)
 	}
@@ -375,7 +385,12 @@ func (mo *MO) UpdateReplace(path string, value string) error {
 
 // UpdateDelete is a function of StateUpdate Interface to delete the value in the path of the MO.
 func (mo *MO) UpdateDelete(path string) error {
-	err := deleteValue(mo.RootSchema(), mo.Root, path)
+	gpath, err := xpath.ToGNMIPath(path)
+	if err != nil {
+		glog.Errorf("model.replace:: %v in %s", err, path)
+		return nil
+	}
+	err = deleteValue(mo.RootSchema(), mo.Root, gpath)
 	if err != nil {
 		glog.Errorf("mo.delete:: %v in %s", err, path)
 	}

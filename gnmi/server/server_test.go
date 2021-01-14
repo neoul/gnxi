@@ -1243,62 +1243,85 @@ func TestReplace(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	tests := []gnmiSetTestCase{{
-		desc: "update leaf node",
-		initConfig: `{
-			"system": {
-				"config": {
-					"hostname": "switch_a"
+	tests := []gnmiSetTestCase{
+		{
+			desc: "update leaf node",
+			initConfig: `{
+				"system": {
+					"config": {
+						"hostname": "switch_a"
+					}
 				}
-			}
-		}`,
-		op: gnmipb.UpdateResult_UPDATE,
-		textPbPath: `
-			elem: <name: "system" >
-			elem: <name: "config" >
-			elem: <name: "domain-name" >
-		`,
-		val: &gnmipb.TypedValue{
-			Value: &gnmipb.TypedValue_StringVal{StringVal: "foo.bar.com"},
-		},
-		wantRetCode: codes.OK,
-		wantConfig: `{
-			"system": {
-				"config": {
-					"domain-name": "foo.bar.com",
-					"hostname": "switch_a"
-				}
-			}
-		}`,
-	}, {
-		desc: "update subtree",
-		initConfig: `{
-			"system": {
-				"config": {
-					"hostname": "switch_a"
-				}
-			}
-		}`,
-		op: gnmipb.UpdateResult_UPDATE,
-		textPbPath: `
-			elem: <name: "system" >
-			elem: <name: "config" >
-		`,
-		val: &gnmipb.TypedValue{
-			Value: &gnmipb.TypedValue_JsonIetfVal{
-				JsonIetfVal: []byte(`{"domain-name": "foo.bar.com", "hostname": "switch_a"}`),
+			}`,
+			op: gnmipb.UpdateResult_UPDATE,
+			textPbPath: `
+				elem: <name: "system" >
+				elem: <name: "config" >
+				elem: <name: "domain-name" >
+			`,
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_StringVal{StringVal: "foo.bar.com"},
 			},
-		},
-		wantRetCode: codes.OK,
-		wantConfig: `{
-			"system": {
-				"config": {
-					"domain-name": "foo.bar.com",
-					"hostname": "switch_a"
+			wantRetCode: codes.OK,
+			wantConfig: `{
+				"system": {
+					"config": {
+						"domain-name": "foo.bar.com",
+						"hostname": "switch_a"
+					}
 				}
-			}
-		}`,
-	}}
+			}`,
+		},
+		{
+			desc: "update subtree",
+			initConfig: `{
+				"system": {
+					"config": {
+						"hostname": "switch_a"
+					}
+				}
+			}`,
+			op: gnmipb.UpdateResult_UPDATE,
+			textPbPath: `
+				elem: <name: "system" >
+				elem: <name: "config" >
+			`,
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_JsonIetfVal{
+					JsonIetfVal: []byte(`{"domain-name": "foo.bar.com", "hostname": "switch_a"}`),
+				},
+			},
+			wantRetCode: codes.OK,
+			wantConfig: `{
+				"system": {
+					"config": {
+						"domain-name": "foo.bar.com",
+						"hostname": "switch_a"
+					}
+				}
+			}`,
+		},
+		{
+			desc:       "update empty (ygot error check)",
+			initConfig: ``,
+			op:         gnmipb.UpdateResult_UPDATE,
+			textPbPath: `
+				elem: <name: "sample" >
+				elem: <name: "empty-val" >
+			`,
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_BoolVal{
+					BoolVal: true,
+				},
+			},
+			wantRetCode: codes.OK,
+			wantConfig: `{
+				"sample": {
+					"empty-val": [null]
+				}
+			}`,
+		},
+	}
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {

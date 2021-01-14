@@ -515,11 +515,16 @@ func (m *Model) findSchemaAndDataPath(path dataAndSchemaPath, parent *yang.Entry
 // UpdateCreate is a function of StateUpdate Interface to add a new value to the path of the Model.
 func (m *Model) UpdateCreate(path string, value string) error {
 	schema := m.RootSchema()
-	err := writeValue(schema, m.GetRoot(), path, value)
+	gpath, err := xpath.ToGNMIPath(path)
+	if err != nil {
+		glog.Errorf("model.create:: %v in %s", err, path)
+		return nil
+	}
+	err = writeValue(schema, m.GetRoot(), gpath, value)
 	if err == nil {
 		if m.updatedroot != nil {
 			fakeRoot := m.updatedroot.GetRoot()
-			writeValue(schema, fakeRoot, path, value)
+			writeValue(schema, fakeRoot, gpath, value)
 			if m.ChangeNotification != nil {
 				m.ChangeNotification.ChangeCreated(path, fakeRoot)
 			}
@@ -534,11 +539,16 @@ func (m *Model) UpdateCreate(path string, value string) error {
 // UpdateReplace is a function of StateUpdate Interface to replace the value in the path of the Model.
 func (m *Model) UpdateReplace(path string, value string) error {
 	schema := m.RootSchema()
-	err := writeValue(schema, m.GetRoot(), path, value)
+	gpath, err := xpath.ToGNMIPath(path)
+	if err != nil {
+		glog.Errorf("model.create:: %v in %s", err, path)
+		return nil
+	}
+	err = writeValue(schema, m.GetRoot(), gpath, value)
 	if err == nil {
 		if m.updatedroot != nil {
 			fakeRoot := m.updatedroot.GetRoot()
-			writeValue(schema, fakeRoot, path, value)
+			writeValue(schema, fakeRoot, gpath, value)
 			if m.ChangeNotification != nil {
 				m.ChangeNotification.ChangeReplaced(path, fakeRoot)
 			}
@@ -553,7 +563,12 @@ func (m *Model) UpdateReplace(path string, value string) error {
 // UpdateDelete is a function of StateUpdate Interface to delete the value in the path of the Model.
 func (m *Model) UpdateDelete(path string) error {
 	schema := m.RootSchema()
-	err := deleteValue(schema, m.GetRoot(), path)
+	gpath, err := xpath.ToGNMIPath(path)
+	if err != nil {
+		glog.Errorf("model.create:: %v in %s", err, path)
+		return nil
+	}
+	err = deleteValue(schema, m.GetRoot(), gpath)
 	if err == nil {
 		if m.ChangeNotification != nil {
 			m.ChangeNotification.ChangeDeleted(path)
