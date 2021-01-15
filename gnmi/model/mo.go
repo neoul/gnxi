@@ -26,6 +26,10 @@ func NewMO(schema func() (*ytypes.Schema, error)) (*MO, error) {
 	if err != nil {
 		return nil, err
 	}
+	mo := (*MO)(s)
+	if err := mo.UpdateType(); err != nil {
+		return nil, err
+	}
 	return (*MO)(s), nil
 }
 
@@ -371,7 +375,7 @@ func (mo *MO) UpdateCreate(path string, value string) error {
 		glog.Errorf("model.create:: %v in %s", err, path)
 		return nil
 	}
-	err = writeValue(mo.RootSchema(), mo.Root, gpath, value)
+	err = mo.WriteStringValue(gpath, value)
 	if err != nil {
 		glog.Errorf("mo.create:: %v in %s", err, path)
 	}
@@ -385,7 +389,7 @@ func (mo *MO) UpdateReplace(path string, value string) error {
 		glog.Errorf("model.replace:: %v in %s", err, path)
 		return nil
 	}
-	err = writeValue(mo.RootSchema(), mo.Root, gpath, value)
+	err = mo.WriteStringValue(gpath, value)
 	if err != nil {
 		glog.Errorf("mo.replace:: %v in %s", err, path)
 	}
@@ -399,7 +403,7 @@ func (mo *MO) UpdateDelete(path string) error {
 		glog.Errorf("model.replace:: %v in %s", err, path)
 		return nil
 	}
-	err = deleteValue(mo.RootSchema(), mo.Root, gpath)
+	err = mo.DeleteValue(gpath)
 	if err != nil {
 		glog.Errorf("mo.delete:: %v in %s", err, path)
 	}

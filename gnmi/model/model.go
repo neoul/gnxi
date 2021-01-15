@@ -63,13 +63,13 @@ func NewModel(cn ChangeNotification, sc StateConfig, ss StateSync) (*Model, erro
 // The StateSync interface is used to ask the external system to refresh the data in specific paths.
 func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.ModelData,
 	cn ChangeNotification, sc StateConfig, ss StateSync) (*Model, error) {
-	s, err := schema()
+	mo, err := NewMO(schema)
 	if err != nil {
 		return nil, status.TaggedErrorf(codes.Internal,
 			status.TagOperationFail, "schema loading failed:: %v", err)
 	}
 	m := &Model{
-		MO:                 (*MO)(s),
+		MO:                 mo,
 		schema:             schema,
 		modelData:          modelData,
 		StateConfig:        sc,
@@ -514,17 +514,16 @@ func (m *Model) findSchemaAndDataPath(path dataAndSchemaPath, parent *yang.Entry
 
 // UpdateCreate is a function of StateUpdate Interface to add a new value to the path of the Model.
 func (m *Model) UpdateCreate(path string, value string) error {
-	schema := m.RootSchema()
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
 		glog.Errorf("model.create:: %v in %s", err, path)
 		return nil
 	}
-	err = writeValue(schema, m.GetRoot(), gpath, value)
+	err = m.WriteStringValue(gpath, value)
 	if err == nil {
 		if m.updatedroot != nil {
 			fakeRoot := m.updatedroot.GetRoot()
-			writeValue(schema, fakeRoot, gpath, value)
+			m.updatedroot.WriteStringValue(gpath, value)
 			if m.ChangeNotification != nil {
 				m.ChangeNotification.ChangeCreated(path, fakeRoot)
 			}
@@ -538,17 +537,16 @@ func (m *Model) UpdateCreate(path string, value string) error {
 
 // UpdateReplace is a function of StateUpdate Interface to replace the value in the path of the Model.
 func (m *Model) UpdateReplace(path string, value string) error {
-	schema := m.RootSchema()
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
 		glog.Errorf("model.create:: %v in %s", err, path)
 		return nil
 	}
-	err = writeValue(schema, m.GetRoot(), gpath, value)
+	err = m.WriteStringValue(gpath, value)
 	if err == nil {
 		if m.updatedroot != nil {
 			fakeRoot := m.updatedroot.GetRoot()
-			writeValue(schema, fakeRoot, gpath, value)
+			m.updatedroot.WriteStringValue(gpath, value)
 			if m.ChangeNotification != nil {
 				m.ChangeNotification.ChangeReplaced(path, fakeRoot)
 			}
@@ -562,13 +560,12 @@ func (m *Model) UpdateReplace(path string, value string) error {
 
 // UpdateDelete is a function of StateUpdate Interface to delete the value in the path of the Model.
 func (m *Model) UpdateDelete(path string) error {
-	schema := m.RootSchema()
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
 		glog.Errorf("model.create:: %v in %s", err, path)
 		return nil
 	}
-	err = deleteValue(schema, m.GetRoot(), gpath)
+	err = m.DeleteValue(gpath)
 	if err == nil {
 		if m.ChangeNotification != nil {
 			m.ChangeNotification.ChangeDeleted(path)

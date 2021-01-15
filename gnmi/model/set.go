@@ -44,11 +44,11 @@ func (m *Model) SetDone() {
 func (m *Model) SetRollback() {
 	for _, entry := range m.setRollback {
 		var err error
-		new := findValueDirectly(m, entry.gpath)
+		new := m.FindValue(entry.gpath)
 		if entry.oldval == nil {
-			err = deleteValueDirectly(m, entry.gpath)
+			err = m.DeleteValue(entry.gpath)
 		} else {
-			err = writeValueDirectly(m, entry.gpath, entry.oldval)
+			err = m.WriteValue(entry.gpath, entry.oldval)
 		}
 		if err != nil {
 			glog.Error(status.TaggedErrorf(codes.Internal, status.TagOperationFail,
@@ -108,7 +108,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 	targets, ok := m.Get(fullpath)
 	if !ok {
 		tpath := xpath.ToXPath(fullpath)
-		err = writeTypedValue(m, fullpath, typedValue)
+		err = m.WriteTypedValue(fullpath, typedValue)
 		if err != nil {
 			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
 				"replace error in %s:: %v", tpath, err)
@@ -130,7 +130,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
 				"set.replace error in %s:: %v", target.Path, err)
 		}
-		err = writeTypedValue(m, targetPath, typedValue)
+		err = m.WriteTypedValue(targetPath, typedValue)
 		if err != nil {
 			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
 				"set.replace error in %s:: %v", target.Path, err)
@@ -150,7 +150,7 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 	targets, ok := m.Get(fullpath)
 	if !ok {
 		tpath := xpath.ToXPath(fullpath)
-		err = writeTypedValue(m, fullpath, typedValue)
+		err = m.WriteTypedValue(fullpath, typedValue)
 		if err != nil {
 			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
 				"set.update error in %s:: %v", tpath, err)
@@ -167,7 +167,7 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 			return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
 				"path.converting error for %s", target.Path)
 		}
-		err = writeTypedValue(m, targetPath, typedValue)
+		err = m.WriteTypedValue(targetPath, typedValue)
 		if err != nil {
 			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
 				"set.update error in %s:: %v", target.Path, err)

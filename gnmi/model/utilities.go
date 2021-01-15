@@ -8,6 +8,7 @@ import (
 	"github.com/neoul/gnxi/utilities/status"
 	"github.com/neoul/gnxi/utilities/xpath"
 	"github.com/neoul/libydb/go/ydb"
+	"github.com/openconfig/gnmi/proto/gnmi"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/goyang/pkg/yang"
 	"github.com/openconfig/ygot/ygot"
@@ -616,91 +617,6 @@ func FindSchemaByGNMIPath(baseSchema *yang.Entry, path *gnmipb.Path) *yang.Entry
 	return findSchema(baseSchema, path)
 }
 
-// writeTypedValue - Write the TypedValue to the model instance
-func writeTypedValue(m *Model, gpath *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
-	var err error
-	schema := m.GetSchema()
-	base := m.GetRoot()
-	parent, target, err := getOrCreateNode(schema, base, gpath)
-	if err != nil {
-		return err
-	}
-	switch {
-	case target.Schema.IsDir():
-		return m.Unmarshal(typedValue.GetJsonIetfVal(), target.Data.(ygot.GoStruct))
-	}
-	switch target.Schema.Type.Kind {
-	case yang.Yempty:
-		_, err = ydb.ValChildSet(reflect.ValueOf(parent.Data),
-			target.Schema.Name, typedValue.GetBoolVal(), ydb.SearchByContent)
-		return err
-	}
-	// FIXME - need to process the json type leaf or leaflist...
-	err = ytypes.SetNode(schema, base, gpath, typedValue, &ytypes.InitMissingElements{})
-	if err != nil {
-		return fmt.Errorf("%s", status.FromError(err).Message)
-	}
-	return nil
-}
-
-func findValueDirectly(m *Model, gpath *gnmipb.Path) interface{} {
-	schema := m.GetSchema()
-	base := m.GetRoot()
-	tNode, err := ytypes.GetNode(schema, base, gpath)
-	if err != nil {
-		return nil
-	}
-	if len(tNode) <= 0 {
-		return nil
-	}
-	return tNode[0].Data
-}
-
-// writeValueDirectly - Write Go Struct or raw data
-func writeValueDirectly(m *Model, gpath *gnmipb.Path, value interface{}) error {
-	// var err error
-	schema := m.GetSchema()
-	base := m.GetRoot()
-	parent, target, err := getOrCreateNode(schema, base, gpath)
-	if err != nil {
-		return err
-	}
-	if target.Schema.IsDir() {
-		tv := ydb.GetNonIfOrPtrValueDeep(reflect.ValueOf(target.Data))
-		v := ydb.GetNonIfOrPtrValueDeep(reflect.ValueOf(value))
-		if !tv.CanSet() {
-			return fmt.Errorf("unable to set %s", target.Schema.Name)
-		}
-		tv.Set(v)
-	} else { // (schema.IsLeaf() || schema.IsLeafList())
-		if _, err = ydb.ValChildSet(reflect.ValueOf(parent.Data),
-			target.Schema.Name, value, ydb.SearchByContent); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func deleteValueDirectly(m *Model, path *gnmipb.Path) error {
-	schema := m.GetSchema()
-	base := m.GetRoot()
-	tSchema := FindSchemaByGNMIPath(schema, path)
-	if tSchema == nil {
-		return fmt.Errorf("shema for %s not found", path)
-	}
-	// The key field deletion is not allowed.
-	if pSchema := tSchema.Parent; pSchema != nil {
-		elem := path.GetElem()
-		if strings.Contains(pSchema.Key, elem[len(elem)-1].GetName()) {
-			return nil
-		}
-	}
-	if err := ytypes.DeleteNode(schema, base, path); err != nil {
-		return err
-	}
-	return nil
-}
-
 func writeLeaf(schema *yang.Entry, base ygot.GoStruct, gpath *gnmipb.Path, t reflect.Type, v string) error {
 	var typedValue *gnmipb.TypedValue
 	if t.Kind() == reflect.Ptr {
@@ -755,6 +671,70 @@ func writeLeafList(schema *yang.Entry, base interface{}, gpath *gnmipb.Path, t r
 	return nil
 }
 
+// SchemaXPath returns a schema xapth using *yang.Entry
+func SchemaXPath(schema *yang.Entry) string {
+	p := []string{}
+	for ; schema != nil && schema.Parent != nil; schema = schema.Parent {
+		p = append([]string{schema.Name}, p...)
+	}
+	return strings.Join(p, "/")
+}
+
+// SchemaGNMIPath returns a schema xapth using *yang.Entry
+func SchemaGNMIPath(schema *yang.Entry) *gnmipb.Path {
+	p := &gnmipb.Path{
+		Elem: []*gnmipb.PathElem{},
+	}
+	for ; schema != nil && schema.Parent != nil; schema = schema.Parent {
+		p.Elem = append([]*gnmi.PathElem{&gnmi.PathElem{Name: schema.Name}}, p.Elem...)
+	}
+	return p
+}
+
+// typeFind - finds a child type from the struct, map or slice value using the key.
+func typeFind(pt reflect.Type, key *string) (reflect.Type, bool) {
+	if pt == reflect.TypeOf(nil) {
+		return pt, false
+	}
+	if key == nil || *key == "" {
+		return pt, true
+	}
+
+	switch pt.Kind() {
+	case reflect.Interface:
+		return pt, false
+	case reflect.Ptr:
+		return typeFind(pt.Elem(), key)
+	case reflect.Struct:
+		for i := 0; i < pt.NumField(); i++ {
+			ft := pt.Field(i)
+			if n, ok := ft.Tag.Lookup("path"); ok && n == *key {
+				return ft.Type, true
+			}
+		}
+	case reflect.Map, reflect.Slice, reflect.Array:
+		return typeFind(pt.Elem(), key)
+	}
+	return pt, false
+}
+
+func updateType(mo *MO, curSchema *yang.Entry, curType reflect.Type) error {
+	if curSchema.Annotation == nil {
+		curSchema.Annotation = map[string]interface{}{}
+	}
+	curSchema.Annotation["type"] = curType
+	for name, schema := range curSchema.Dir {
+		if t, ok := typeFind(curType, &name); ok {
+			if err := updateType(mo, schema, t); err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("type update to schema tree failed for %s", SchemaXPath(schema))
+		}
+	}
+	return nil
+}
+
 func baseType(yangtype *yang.YangType) []reflect.Type {
 	switch yangtype.Kind {
 	case yang.Ystring:
@@ -799,129 +779,29 @@ func baseType(yangtype *yang.YangType) []reflect.Type {
 	}
 }
 
-// writeValue - Write the value to the model instance
-func writeValue(schema *yang.Entry, base interface{}, gpath *gnmipb.Path, value string) error {
-	var err error
-	var curSchema *yang.Entry
-	var curValue interface{}
-	var p *gnmipb.Path
-	curSchema = schema
-	curValue = base
-	for i := range gpath.GetElem() {
-		switch {
-		case curSchema.IsLeafList():
-			return writeLeafList(schema, base, p, reflect.TypeOf(curValue), gpath.Elem[i].Name)
-		case !curSchema.IsDir():
-			return fmt.Errorf("invalid path: %s", xpath.ToXPath(gpath))
-		}
-
-		p = &gnmipb.Path{
-			Elem: []*gnmipb.PathElem{
-				gpath.Elem[i],
-			},
-		}
-		curValue, curSchema, err = ytypes.GetOrCreateNode(curSchema, curValue, p)
-		if err != nil {
-			return fmt.Errorf("%s", status.FromError(err).Message)
-		}
-		switch {
-		case curSchema.IsDir():
-			schema = curSchema
-			base = curValue
-		case curSchema.IsLeafList():
-			// do nothing
-		default:
-			switch curSchema.Type.Kind {
-			case yang.Yempty:
-				_, err = ydb.ValChildSet(reflect.ValueOf(base),
-					curSchema.Name, value, ydb.SearchByContent)
-				return err
-			case yang.Yunion:
-				types := baseType(curSchema.Type)
-				for i := range types {
-					if types[i] == reflect.TypeOf(nil) {
-						return fmt.Errorf("invalid union type for %s", xpath.ToXPath(gpath))
-					}
-					if err = writeLeaf(schema, base.(ygot.GoStruct), p, types[i], value); err == nil {
-						break
-					}
-				}
-				return err
-			}
-			ct := reflect.TypeOf(curValue)
-			return writeLeaf(schema, base.(ygot.GoStruct), p, ct, value)
-		}
-	}
-	return nil
+// UpdateType updates the schema for the fast type searching..
+func (mo *MO) UpdateType() error {
+	curSchema := mo.GetSchema()
+	curType := mo.GetRootType()
+	return updateType(mo, curSchema, curType)
 }
 
-// deleteValue - Delete the value from the model instance
-func deleteValue(schema *yang.Entry, base ygot.GoStruct, gpath *gnmipb.Path) error {
-	tSchema := FindSchemaByGNMIPath(schema, gpath)
-	if tSchema == nil {
-		return fmt.Errorf("shema for %s not found", xpath.ToXPath(gpath))
-	}
-	// The key field deletion is not allowed.
-	if pSchema := tSchema.Parent; pSchema != nil {
-		elem := gpath.GetElem()
-		if strings.Contains(pSchema.Key, elem[len(elem)-1].GetName()) {
-			return nil
-		}
-	}
-	if err := ytypes.DeleteNode(schema, base, gpath); err != nil {
-		return err
-	}
-	return nil
-}
-
-// getOrCreateBranch gets or creates the branch (non-leaf) node in the target path and returns the branch node schema and the remained path to the target.
-func getOrCreateBranch(schema *yang.Entry, base ygot.GoStruct, gpath *gnmipb.Path) (ygot.GoStruct, *yang.Entry, *gnmipb.Path, error) {
-	var remained *gnmipb.Path
-	var tSchema *yang.Entry
-	var target interface{}
-	tSchema = schema
-	target = base
-	remained = &gnmipb.Path{
-		Elem: gpath.GetElem(),
-	}
-	for i := range gpath.GetElem() {
-		p := &gnmipb.Path{
-			Elem: []*gnmipb.PathElem{
-				gpath.Elem[i],
-			},
-		}
-		cValue, cSchema, err := ytypes.GetOrCreateNode(tSchema, target, p)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("%s", status.FromError(err).Message)
-		}
-		if b, ok := cValue.(ygot.GoStruct); ok && cSchema.IsDir() {
-			remained.Elem = gpath.Elem[i+1:]
-			schema = cSchema
-			base = b
-		}
-		tSchema = cSchema
-		target = cValue
-	}
-
-	return base, schema, remained, nil
-}
-
-// getOrCreateNode gets or creates all parent nodes and the target node in gpath and then returns
+// GetOrCreateNode gets or creates all parent nodes and the target node in gpath and then returns
 // the parent and the target nodes via ytypes.TreeNode with the error information.
-func getOrCreateNode(schema *yang.Entry, base ygot.GoStruct, gpath *gnmipb.Path) (*ytypes.TreeNode, *ytypes.TreeNode, error) {
+func (mo *MO) GetOrCreateNode(gpath *gnmipb.Path) (*ytypes.TreeNode, *ytypes.TreeNode, error) {
 	var err error
 	var index int
 	var tSchema, pSchema *yang.Entry
 	var leaf, parent interface{}
 	if len(gpath.GetElem()) == 0 {
-		return &ytypes.TreeNode{Schema: schema, Data: base, Path: &gnmipb.Path{}},
-			&ytypes.TreeNode{Schema: schema, Data: base, Path: &gnmipb.Path{}},
+		return &ytypes.TreeNode{Schema: mo.GetSchema(), Data: mo.GetRoot(), Path: &gnmipb.Path{}},
+			&ytypes.TreeNode{Schema: mo.GetSchema(), Data: mo.GetRoot(), Path: &gnmipb.Path{}},
 			nil
 	}
-	pSchema = schema
-	parent = base
-	tSchema = schema
-	leaf = base
+	pSchema = mo.GetSchema()
+	parent = mo.GetRoot()
+	tSchema = mo.GetSchema()
+	leaf = mo.GetRoot()
 	index = 0
 	for i := range gpath.GetElem() {
 		index = i
@@ -940,4 +820,140 @@ func getOrCreateNode(schema *yang.Entry, base ygot.GoStruct, gpath *gnmipb.Path)
 	return &ytypes.TreeNode{Schema: pSchema, Data: parent, Path: &gnmipb.Path{Elem: gpath.Elem[:index]}},
 		&ytypes.TreeNode{Schema: tSchema, Data: leaf, Path: &gnmipb.Path{Elem: gpath.Elem[index:]}},
 		nil
+}
+
+// WriteValue writes Go Struct or raw data directly
+func (mo *MO) WriteValue(gpath *gnmipb.Path, value interface{}) error {
+	parent, target, err := mo.GetOrCreateNode(gpath)
+	if err != nil {
+		return err
+	}
+	if target.Schema.IsDir() {
+		tv := ydb.GetNonIfOrPtrValueDeep(reflect.ValueOf(target.Data))
+		v := ydb.GetNonIfOrPtrValueDeep(reflect.ValueOf(value))
+		if !tv.CanSet() {
+			return fmt.Errorf("unable to set %s", target.Schema.Name)
+		}
+		tv.Set(v)
+	} else { // (schema.IsLeaf() || schema.IsLeafList())
+		if _, err = ydb.ValChildSet(reflect.ValueOf(parent.Data),
+			target.Schema.Name, value, ydb.SearchByContent); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// WriteTypedValue writes the TypedValue to the MO (Modeled Object)
+func (mo *MO) WriteTypedValue(gpath *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
+	parent, target, err := mo.GetOrCreateNode(gpath)
+	if err != nil {
+		return err
+	}
+	switch {
+	case target.Schema.IsDir():
+		return mo.Unmarshal(typedValue.GetJsonIetfVal(), target.Data.(ygot.GoStruct))
+	}
+	switch target.Schema.Type.Kind {
+	case yang.Yempty:
+		_, err = ydb.ValChildSet(reflect.ValueOf(parent.Data),
+			target.Schema.Name, typedValue.GetBoolVal(), ydb.SearchByContent)
+		return err
+	}
+	// FIXME - need to process the json type leaf or leaflist...
+	err = ytypes.SetNode(mo.GetSchema(), mo.GetRoot(), gpath, typedValue, &ytypes.InitMissingElements{})
+	if err != nil {
+		return fmt.Errorf("%s", status.FromError(err).Message)
+	}
+	return nil
+}
+
+// WriteStringValue writes the string value to the model instance
+func (mo *MO) WriteStringValue(gpath *gnmipb.Path, value string) error {
+	var err error
+	var curSchema *yang.Entry
+	var curValue interface{}
+	var p *gnmipb.Path
+	pschema := mo.GetSchema()
+	pvalue := mo.GetRoot().(interface{})
+	curSchema = pschema
+	curValue = pvalue
+	for i := range gpath.GetElem() {
+		switch {
+		case curSchema.IsLeafList():
+			return writeLeafList(pschema, pvalue, p, reflect.TypeOf(curValue), gpath.Elem[i].Name)
+		case !curSchema.IsDir():
+			return fmt.Errorf("invalid path: %s", xpath.ToXPath(gpath))
+		}
+		p = &gnmipb.Path{
+			Elem: []*gnmipb.PathElem{
+				gpath.Elem[i],
+			},
+		}
+		curValue, curSchema, err = ytypes.GetOrCreateNode(curSchema, curValue, p)
+		if err != nil {
+			return fmt.Errorf("%s", status.FromError(err).Message)
+		}
+		switch {
+		case curSchema.IsDir():
+			pschema = curSchema
+			pvalue = curValue
+		case curSchema.IsLeafList():
+			if value != "" {
+				return writeLeafList(pschema, pvalue, p, reflect.TypeOf(curValue), value)
+			}
+		default:
+			switch curSchema.Type.Kind {
+			case yang.Yempty:
+				_, err = ydb.ValChildSet(reflect.ValueOf(pvalue),
+					curSchema.Name, value, ydb.SearchByContent)
+				return err
+			case yang.Yunion:
+				types := baseType(curSchema.Type)
+				for i := range types {
+					if types[i] == reflect.TypeOf(nil) {
+						return fmt.Errorf("invalid union type for %s", xpath.ToXPath(gpath))
+					}
+					if err = writeLeaf(pschema, pvalue.(ygot.GoStruct), p, types[i], value); err == nil {
+						break
+					}
+				}
+				return err
+			}
+			ct := reflect.TypeOf(curValue)
+			return writeLeaf(pschema, pvalue.(ygot.GoStruct), p, ct, value)
+		}
+	}
+	return nil
+}
+
+// DeleteValue deletes the value from the modeled object
+func (mo *MO) DeleteValue(gpath *gnmipb.Path) error {
+	tSchema := FindSchemaByGNMIPath(mo.GetSchema(), gpath)
+	if tSchema == nil {
+		return fmt.Errorf("schema for %s not found", xpath.ToXPath(gpath))
+	}
+	// The key field deletion is not allowed.
+	if pSchema := tSchema.Parent; pSchema != nil {
+		elem := gpath.GetElem()
+		if strings.Contains(pSchema.Key, elem[len(elem)-1].GetName()) {
+			return nil
+		}
+	}
+	if err := ytypes.DeleteNode(mo.GetSchema(), mo.GetRoot(), gpath); err != nil {
+		return err
+	}
+	return nil
+}
+
+// FindValue returns the value in the gpath.
+func (mo *MO) FindValue(gpath *gnmipb.Path) interface{} {
+	tNode, err := ytypes.GetNode(mo.GetSchema(), mo.GetRoot(), gpath)
+	if err != nil {
+		return nil
+	}
+	if len(tNode) <= 0 {
+		return nil
+	}
+	return tNode[0].Data
 }
