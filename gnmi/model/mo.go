@@ -20,6 +20,15 @@ import (
 // MO (ModeledObject) for wrapping ygot.GoStruct and schema
 type MO ytypes.Schema
 
+// NewMO creates and returns new Modeled Object
+func NewMO(schema func() (*ytypes.Schema, error)) (*MO, error) {
+	s, err := schema()
+	if err != nil {
+		return nil, err
+	}
+	return (*MO)(s), nil
+}
+
 // RootSchema returns the YANG entry schema corresponding to the type
 // of the root within the schema.
 func (mo *MO) RootSchema() *yang.Entry {
