@@ -88,8 +88,8 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 
 // Load loads the startup state of the Model.
 //  - startup: The YAML or JSON startup data to populate the creating structure (gostruct).
-func (m *Model) Load(startup []byte, sync bool) error {
-	newMO, err := m.NewRoot(startup)
+func (m *Model) Load(startup []byte, encoding Encoding, sync bool) error {
+	newMO, err := m.NewRoot(startup, encoding)
 	if err != nil {
 		return err
 	}
@@ -581,11 +581,7 @@ func (m *Model) UpdateDelete(path string) error {
 func (m *Model) UpdateStart() error {
 	m.Lock()
 	// updatedroot is used to save the changes of the model data.
-	updatedroot, err := m.NewRoot(nil)
-	if err != nil {
-		glog.Errorf("model.start:: %v", err)
-	}
-	m.updatedroot = updatedroot
+	m.updatedroot = m.NewEmptyRoot()
 	if m.ChangeNotification != nil {
 		m.ChangeNotification.ChangeStarted(m.updatedroot.GetRoot())
 	}

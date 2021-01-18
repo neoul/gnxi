@@ -278,7 +278,7 @@ func TestFindAllNodes(t *testing.T) {
 	}
 
 	model, err := NewModel(nil, nil, nil)
-	model.Load(b, false)
+	model.Load(b, Encoding_YAML, false)
 	root := model.GetRoot().(*gostruct.Device)
 
 	type args struct {
@@ -701,7 +701,7 @@ func TestFindAllSchemaPaths(t *testing.T) {
 	}
 }
 
-func Test_writeValueDirectly(t *testing.T) {
+func Test_writeValue(t *testing.T) {
 	m, err := NewModel(nil, nil, nil)
 	if err != nil {
 		t.Errorf("%v", err)
@@ -739,6 +739,8 @@ func Test_writeValueDirectly(t *testing.T) {
 					Description: ygot.String("desciption field"),
 					Enabled:     ygot.Bool(true),
 					Name:        ygot.String("1/1"),
+					Mtu:         ygot.Uint16(1500),
+					Type:        gostruct.IETFInterfaces_InterfaceType_ethernetCsmacd,
 				},
 			},
 		},
@@ -779,6 +781,39 @@ func Test_writeValueDirectly(t *testing.T) {
 				value: gostruct.Sample_Sample_ContainerVal_EnumVal_enum2,
 			},
 		},
+
+		{
+			name: "WriteValue",
+			args: args{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
+							Name: "sample",
+						},
+					},
+				},
+				value: &gostruct.Sample_Sample{
+					ContainerVal: &gostruct.Sample_Sample_ContainerVal{
+						EnumVal:     gostruct.Sample_Sample_ContainerVal_EnumVal_enum1,
+						LeafListVal: []string{},
+					},
+					EmptyVal: gostruct.YANGEmpty(true),
+					MultipleKeyList: map[gostruct.Sample_Sample_MultipleKeyList_Key]*gostruct.Sample_Sample_MultipleKeyList{
+						gostruct.Sample_Sample_MultipleKeyList_Key{Str: "stringkey", Integer: 0}: &gostruct.Sample_Sample_MultipleKeyList{
+							Str: ygot.String("stringkey"), Integer: ygot.Uint32(0), Ok: ygot.Bool(true),
+						},
+					},
+					SingleKeyList: map[string]*gostruct.Sample_Sample_SingleKeyList{
+						"stringkey": &gostruct.Sample_Sample_SingleKeyList{
+							CountryCode: ygot.String("kr"),
+							DialCode:    ygot.Uint32(82),
+							ListKey:     ygot.String("stringkey"),
+						},
+					},
+					StrVal: ygot.String("string-value"),
+				},
+			},
+		},
 		{
 			name: "WriteValue",
 			args: args{
@@ -798,15 +833,49 @@ func Test_writeValueDirectly(t *testing.T) {
 				value: []string{"v3"},
 			},
 		},
+		{
+			name: "DeleteValue",
+			args: args{
+				path: &gnmipb.Path{
+					Elem: []*gnmipb.PathElem{
+						&gnmipb.PathElem{
+							Name: "interfaces",
+						},
+						&gnmipb.PathElem{
+							Name: "interface",
+							Key: map[string]string{
+								"name": "1/1",
+							},
+						},
+						&gnmipb.PathElem{
+							Name: "config",
+						},
+						&gnmipb.PathElem{
+							Name: "description",
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := m.WriteValue(tt.args.path, tt.args.value); (err != nil) != tt.wantErr {
-				t.Errorf("WriteValue() error = %v, wantErr %v", err, tt.wantErr)
+			switch tt.name {
+			case "WriteValue":
+				if err := m.WriteValue(tt.args.path, tt.args.value); (err != nil) != tt.wantErr {
+					t.Errorf("WriteValue() error = %v, wantErr %v", err, tt.wantErr)
+				}
+			case "DeleteValue":
+				if err := m.DeleteValue(tt.args.path); (err != nil) != tt.wantErr {
+					t.Errorf("DeleteValue() error = %v, wantErr %v", err, tt.wantErr)
+				}
 			}
+
 		})
 	}
 	j, _ := m.ExportToJSON(false)
+	t.Log(string(j))
+	j, _ = m.ExportToJSON(true)
 	t.Log(string(j))
 }
 

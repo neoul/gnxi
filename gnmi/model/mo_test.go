@@ -114,7 +114,7 @@ func TestMO_NewRoot(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := mo.NewRoot(tt.startup)
+			got, err := mo.NewRoot(tt.startup, Encoding_JSON)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MO.NewRoot() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -127,9 +127,6 @@ func TestMO_NewRoot(t *testing.T) {
 			if err != nil {
 				t.Errorf("MO.ExportToJSON() error = %v", err)
 			}
-			// if !reflect.DeepEqual(got, tt.want) {
-			// 	t.Errorf("MO.NewRoot() = %v, want %v", got.Root, tt.want)
-			// }
 			if !reflect.DeepEqual(g, w) {
 				t.Fatalf("got server config %v\nwant: %v", string(g), string(w))
 			}

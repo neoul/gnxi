@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/neoul/gnxi/gnmi/model"
 	gnmiserver "github.com/neoul/gnxi/gnmi/server"
 	"github.com/neoul/libydb/go/ydb"
 
@@ -28,7 +29,8 @@ import (
 var (
 	configFile   = pflag.StringP("config", "c", "", "Configuration file for gnmid; search gnmid.conf from $PWD, /etc and $HOME/.gnmid if not specified")
 	bindAddr     = pflag.StringP("bind-address", "b", ":57400", "Bind to address:port")
-	startup      = pflag.String("startup", "", "IETF JSON or YAML file for target startup data")
+	startup      = pflag.String("startup", "", "IETF JSON file for target startup data")
+	startupYAML  = pflag.String("startup-yaml", "", "YAML file for target startup data")
 	help         = pflag.BoolP("help", "h", false, "Help for gnmid")
 	enableSyslog = pflag.Bool("enable-syslog", false, "Enable syslog message over gNMI")
 	syncPaths    = pflag.StringSliceP("sync-path", "s", []string{}, "The paths that needs to be updated before read")
@@ -110,7 +112,16 @@ func NewServer() (*Server, error) {
 			server.datablock.Close()
 			return nil, err
 		}
-		opts = append(opts, gnmiserver.Startup(startbyte))
+		opts = append(opts, &gnmiserver.Startup{Bytes: startbyte, Encoding: model.Encoding_JSON_IETF})
+	}
+	if *startupYAML != "" {
+		var startbyte []byte
+		startbyte, err := ioutil.ReadFile(*startupYAML)
+		if err != nil {
+			server.datablock.Close()
+			return nil, err
+		}
+		opts = append(opts, &gnmiserver.Startup{Bytes: startbyte, Encoding: model.Encoding_YAML})
 	}
 	opts = append(opts, gnmiserver.Callback{
 		StateConfig: server.datablock, StateSync: server.datablock})

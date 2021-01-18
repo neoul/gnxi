@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -619,6 +620,9 @@ func FindSchemaByGNMIPath(baseSchema *yang.Entry, path *gnmipb.Path) *yang.Entry
 
 func writeLeaf(schema *yang.Entry, base ygot.GoStruct, gpath *gnmipb.Path, t reflect.Type, v string) error {
 	var typedValue *gnmipb.TypedValue
+	if t == reflect.TypeOf(nil) {
+		return fmt.Errorf("invalid type inserted for %s", xpath.ToXPath(gpath))
+	}
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
@@ -956,4 +960,95 @@ func (mo *MO) FindValue(gpath *gnmipb.Path) interface{} {
 		return nil
 	}
 	return tNode[0].Data
+}
+
+func jsonDataToString(jvalue interface{}) (string, error) {
+	var jstring string
+	switch jdata := jvalue.(type) {
+	case float64:
+		jstring = fmt.Sprint(jdata)
+	case string:
+		jstring = jdata
+	case nil:
+		jstring = ""
+	case bool:
+		jstring = fmt.Sprint(jdata)
+	case []interface{}:
+		return "", fmt.Errorf("unexpected json array")
+	case map[string]interface{}:
+		return "", fmt.Errorf("unexpected json object")
+	default:
+		return "", fmt.Errorf("unexpected json type %T", jvalue)
+	}
+	return jstring, nil
+}
+
+func unmarshalInternalJSON(keys []string, j interface{}, mo *MO, gpath *gnmipb.Path) error {
+	switch jdata := j.(type) {
+	case map[string]interface{}:
+		for key, subtree := range jdata {
+			keys := append(keys, key)
+			if err := unmarshalInternalJSON(keys, subtree, mo, gpath); err != nil {
+				return err
+			}
+		}
+	case []interface{}:
+		for i := range jdata {
+			if err := unmarshalInternalJSON(keys, jdata[i], mo, gpath); err != nil {
+				return err
+			}
+		}
+	default:
+		jstr, err := jsonDataToString(jdata)
+		if err != nil {
+			return err
+		}
+		p := &gnmipb.Path{
+			Elem: []*gnmipb.PathElem{},
+		}
+		length := len(keys)
+		schema := mo.FindSchemaByGNMIPath(gpath)
+		for i := 0; i < length; i++ {
+			schema = schema.Find(keys[i])
+			if schema == nil {
+				return fmt.Errorf("schema not found for %s", xpath.ToXPath(gpath)+"/"+strings.Join(keys[:i], "/"))
+			}
+			switch {
+			case schema.IsList():
+				pe := &gnmipb.PathElem{Name: keys[i], Key: map[string]string{}}
+				knames := strings.Split(schema.Key, " ")
+				if i+1 >= length {
+					return fmt.Errorf("unable to extract key from json bytes from %v", keys)
+				}
+				keys := strings.Split(keys[i+1], " ")
+				if len(keys) != len(knames) {
+					return fmt.Errorf("invalid key value (%v) for %s", keys, knames)
+				}
+				for i := range knames {
+					pe.Key[knames[i]] = keys[i]
+				}
+				p.Elem = append(p.Elem, pe)
+				i++
+			default:
+				p.Elem = append(p.Elem, &gnmipb.PathElem{Name: keys[i]})
+			}
+		}
+		fpath := xpath.GNMIFullPath(gpath, p)
+		if err := mo.WriteStringValue(fpath, jstr); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UnmarshalInternalJSON unmarshs internal json bytes to the target in the gpath.
+func (mo *MO) UnmarshalInternalJSON(gpath *gnmipb.Path, j []byte) error {
+	var jsonTree interface{}
+	if err := json.Unmarshal(j, &jsonTree); err != nil {
+		return err
+	}
+	if s := mo.FindSchemaByGNMIPath(gpath); s == nil {
+		return fmt.Errorf("schema not found for %s", xpath.ToXPath(gpath))
+	}
+	return unmarshalInternalJSON(nil, jsonTree, mo, gpath)
 }

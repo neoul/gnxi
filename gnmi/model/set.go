@@ -81,12 +81,7 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 		}
 		if len(targetPath.GetElem()) == 0 {
 			// root deletion
-			if mo, err := m.NewRoot(nil); err == nil {
-				m.MO = mo
-			} else {
-				return status.TaggedErrorf(codes.Internal,
-					status.TagOperationFail, "set.delete error for root:: %v", err)
-			}
+			m.MO = m.NewEmptyRoot()
 		} else {
 			if err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath); err != nil {
 				return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,

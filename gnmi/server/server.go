@@ -65,16 +65,19 @@ type Option interface {
 }
 
 // Startup is JSON or YAML bytes to be loaded at startup.
-type Startup []byte
+type Startup struct {
+	Encoding model.Encoding
+	Bytes    []byte
+}
 
 // IsOption - Startup is a Option.
-func (o Startup) IsOption() {}
+func (o *Startup) IsOption() {}
 
-func hasStartup(opts []Option) []byte {
+func hasStartup(opts []Option) *Startup {
 	for _, o := range opts {
 		switch v := o.(type) {
-		case Startup:
-			return []byte(v)
+		case *Startup:
+			return v
 		}
 	}
 	return nil
@@ -165,7 +168,7 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 	}
 	s.Model = m
 	if startup := hasStartup(opts); startup != nil {
-		if err := m.Load(startup, true); err != nil {
+		if err := m.Load(startup.Bytes, model.Encoding(startup.Encoding), true); err != nil {
 			return nil, err
 		}
 	}
@@ -177,8 +180,8 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 
 // Load loads the startup state of the Server Model.
 // startup is YAML or JSON startup data to populate the creating structure (gostruct).
-func (s *Server) Load(startup []byte) error {
-	return s.Model.Load(startup, true)
+func (s *Server) Load(startup []byte, encoding model.Encoding) error {
+	return s.Model.Load(startup, encoding, true)
 }
 
 // CheckEncoding checks whether encoding and models are supported by the server. Return error if anything is unsupported.

@@ -26,6 +26,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"github.com/neoul/gnxi/gnmi/model"
 	"github.com/neoul/gnxi/utilities/status"
 	"github.com/neoul/gnxi/utilities/test"
 	"github.com/neoul/libydb/go/ydb"
@@ -124,7 +125,7 @@ interfaces:
       "enabled": true
 `
 
-	s, err := NewServer(Startup(yamlData))
+	s, err := NewServer(&Startup{Bytes: []byte(yamlData), Encoding: model.Encoding_YAML})
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -361,7 +362,7 @@ func TestGetWithYaml(t *testing.T) {
 		glog.Exitf("error in reading config file: %v", err)
 	}
 
-	s, err := NewServer(Startup(yamlData))
+	s, err := NewServer(&Startup{Bytes: []byte(yamlData), Encoding: model.Encoding_YAML})
 	if err != nil {
 		t.Fatalf("error in creating server: %v", err)
 	}
@@ -1303,7 +1304,7 @@ func TestUpdate(t *testing.T) {
 		},
 		{
 			desc:       "update empty (ygot error check)",
-			initConfig: ``,
+			initConfig: `{}`,
 			op:         gnmipb.UpdateResult_UPDATE,
 			textPbPath: `
 				elem: <name: "sample" >
@@ -1332,7 +1333,7 @@ func TestUpdate(t *testing.T) {
 
 func runTestSet(t *testing.T, tc gnmiSetTestCase) {
 	// Create a new server with empty config
-	s, err := NewServer(Startup(tc.initConfig))
+	s, err := NewServer(&Startup{Bytes: []byte(tc.initConfig), Encoding: model.Encoding_JSON_IETF})
 	if err != nil {
 		t.Fatalf("error in creating config server: %v", err)
 	}
@@ -1361,7 +1362,7 @@ func runTestSet(t *testing.T, tc gnmiSetTestCase) {
 	}
 
 	// Check server config
-	wantServer, err := NewServer(Startup(tc.wantConfig))
+	wantServer, err := NewServer(&Startup{Bytes: []byte(tc.wantConfig), Encoding: model.Encoding_JSON_IETF})
 	if err != nil {
 		t.Fatalf("wantConfig data cannot be loaded as a config struct: %v", err)
 	}
@@ -1498,7 +1499,7 @@ func TestSubscribe(t *testing.T) {
        procid: 
       severity: ERROR
 `
-	s, err := NewServer(Startup(startup),
+	s, err := NewServer(&Startup{Bytes: []byte(startup), Encoding: model.Encoding_YAML},
 		Aliases{
 			"#1/1": "/interfaces/interface[name=1/1]",
 			"#1/2": "/interfaces/interface[name=1/2]",

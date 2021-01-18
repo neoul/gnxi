@@ -126,8 +126,11 @@ func (mo *MO) FindSchemaByGNMIPath(path *gnmipb.Path) *yang.Entry {
 // FindSchemaByRelativeGNMIPath finds the schema(*yang.Entry) using the relative path
 func (mo *MO) FindSchemaByRelativeGNMIPath(base interface{}, path *gnmipb.Path) *yang.Entry {
 	bSchema := mo.FindSchema(base)
-	if bSchema == nil || path == nil {
+	if bSchema == nil {
 		return nil
+	}
+	if path == nil {
+		return bSchema
 	}
 	findSchema := func(entry *yang.Entry, path *gnmipb.Path) *yang.Entry {
 		for _, e := range path.GetElem() {
@@ -296,8 +299,45 @@ func (mo *MO) ListAll(base interface{}, path *gnmipb.Path, opts ...FindOption) [
 	return children
 }
 
-// NewRoot returns new MO (ModeledObject)
-func (mo *MO) NewRoot(startup []byte) (*MO, error) {
+// Encoding defines the value encoding formats that are supported by the model
+type Encoding int32
+
+const (
+	Encoding_JSON Encoding = 0 // JSON encoded text.
+	// Encoding_BYTES     Encoding = 1 // Arbitrarily encoded bytes.
+	// Encoding_PROTO     Encoding = 2 // Encoded according to out-of-band agreed Protobuf.
+	// Encoding_ASCII     Encoding = 3 // ASCII text of an out-of-band agreed format.
+	Encoding_JSON_IETF Encoding = 4 // JSON encoded text as per RFC7951.
+	Encoding_YAML      Encoding = 5
+)
+
+// Enum value maps for Encoding.
+var (
+	encoding_name = map[int32]string{
+		0: "JSON",
+		// 1: "BYTES",
+		// 2: "PROTO",
+		// 3: "ASCII",
+		4: "JSON_IETF",
+		5: "YAML",
+	}
+	encoding_value = map[string]int32{
+		"JSON": 0,
+		// "BYTES":     1,
+		// "PROTO":     2,
+		// "ASCII":     3,
+		"JSON_IETF": 4,
+		"YAML":      5,
+	}
+)
+
+func (x Encoding) String() string {
+	return encoding_name[int32(x)]
+}
+
+// NewRoot returns new MO (ModeledObject).
+// Use NewEmptyRoot() instead of the function if there is not startup configuration.
+func (mo *MO) NewRoot(startup []byte, encoding Encoding) (*MO, error) {
 	vgs := reflect.New(mo.GetRootType()).Interface()
 	root := vgs.(ygot.ValidatedGoStruct)
 	newMO := &MO{
@@ -305,32 +345,50 @@ func (mo *MO) NewRoot(startup []byte) (*MO, error) {
 		SchemaTree: mo.SchemaTree,
 		Unmarshal:  mo.Unmarshal,
 	}
-	if startup != nil {
-		s := strings.TrimLeft(string(startup), "\n \t")
-		if strings.HasPrefix(s, "{") {
-			if jerr := newMO.Unmarshal(startup, newMO.GetRoot()); jerr != nil {
-				return nil, status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
-					"invalid startup data:: json: %v", jerr)
-			}
-		} else {
-			db, close := ydb.Open("_startup")
-			defer close()
-			if yerr := db.Parse(startup); yerr != nil {
-				return nil, status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
-					"invalid startup data:: yaml: %v", yerr)
-			}
-			if yerr := db.Convert(newMO); yerr != nil {
-				return nil, status.TaggedErrorf(codes.Internal, status.TagOperationFail,
-					"startup converting error:: %v", yerr)
-			}
-		}
-		// [FIXME] - error in creating gnmid: /device/interfaces: /device/interfaces/interface: list interface contains more than max allowed elements: 2 > 0
-		// if err := root.Validate(); err != nil {
-		// 	return nil, err
-		// }
-
+	if startup == nil {
+		return newMO, nil
 	}
+	switch encoding {
+	case Encoding_YAML:
+		db, close := ydb.Open("_startup")
+		defer close()
+		if err := db.Parse(startup); err != nil {
+			return nil, status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+				"invalid startup data:: yaml: %v", err)
+		}
+		if err := db.Convert(newMO); err != nil {
+			return nil, status.TaggedErrorf(codes.Internal, status.TagOperationFail,
+				"startup converting error:: %v", err)
+		}
+	case Encoding_JSON:
+		if err := newMO.UnmarshalInternalJSON(nil, startup); err != nil {
+			return nil, status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+				"invalid startup data:: internal-json: %v", err)
+		}
+	case Encoding_JSON_IETF:
+		fallthrough
+	default:
+		if err := newMO.Unmarshal(startup, newMO.GetRoot()); err != nil {
+			return nil, status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
+				"invalid startup data:: json: %v", err)
+		}
+	}
+	// [FIXME] - error in creating gnmid: /device/interfaces: /device/interfaces/interface: list interface contains more than max allowed elements: 2 > 0
+	// if err := root.Validate(); err != nil {
+	// 	return nil, err
+	// }
 	return newMO, nil
+}
+
+// NewEmptyRoot returns new MO (ModeledObject)
+func (mo *MO) NewEmptyRoot() *MO {
+	vgs := reflect.New(mo.GetRootType()).Interface()
+	root := vgs.(ygot.ValidatedGoStruct)
+	return &MO{
+		Root:       root,
+		SchemaTree: mo.SchemaTree,
+		Unmarshal:  mo.Unmarshal,
+	}
 }
 
 // ExportToJSON returns json bytes of the MO
