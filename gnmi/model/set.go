@@ -44,6 +44,9 @@ func (m *Model) SetDone() {
 func (m *Model) SetRollback() {
 	for _, entry := range m.setRollback {
 		var err error
+		if glog.V(2) {
+			glog.Infof("set.rollback(%s)", *entry.xpath)
+		}
 		new := m.FindValue(entry.gpath)
 		if entry.oldval == nil {
 			err = m.DeleteValue(entry.gpath)
@@ -52,13 +55,13 @@ func (m *Model) SetRollback() {
 		}
 		if err != nil {
 			glog.Error(status.TaggedErrorf(codes.Internal, status.TagOperationFail,
-				"rollback.delete error in %s:: %v", *entry.xpath, err))
+				"rollback.delete error(ignored*) in %s:: %v", *entry.xpath, err))
 			continue
 		}
 		// error is ignored on rollback
 		if err := m.executeStateConfig(entry.gpath, new); err != nil {
 			glog.Error(status.TaggedErrorf(codes.Internal, status.TagOperationFail,
-				"rollback.delete error in %s:: %v", *entry.xpath, err))
+				"rollback.delete error(ignored*) in %s:: %v", *entry.xpath, err))
 			continue
 		}
 	}
@@ -72,6 +75,9 @@ func (m *Model) SetCommit() error {
 // SetDelete deletes the path from root if the path exists.
 func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 	fullpath := xpath.GNMIFullPath(prefix, path)
+	if glog.V(2) {
+		glog.Infof("set.delete(%v)", xpath.ToXPath(fullpath))
+	}
 	targets, _ := m.Get(fullpath)
 	for _, target := range targets {
 		targetPath, err := xpath.ToGNMIPath(target.Path)
@@ -100,6 +106,9 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	var err error
 	fullpath := xpath.GNMIFullPath(prefix, path)
+	if glog.V(2) {
+		glog.Infof("set.replace(%v, %v)", xpath.ToXPath(fullpath), typedValue)
+	}
 	targets, ok := m.Get(fullpath)
 	if !ok {
 		tpath := xpath.ToXPath(fullpath)
@@ -142,6 +151,9 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	var err error
 	fullpath := xpath.GNMIFullPath(prefix, path)
+	if glog.V(2) {
+		glog.Infof("set.update(%v, %v)", xpath.ToXPath(fullpath), typedValue)
+	}
 	targets, ok := m.Get(fullpath)
 	if !ok {
 		tpath := xpath.ToXPath(fullpath)

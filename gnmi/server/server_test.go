@@ -479,13 +479,14 @@ func TestGetWithYaml(t *testing.T) {
 }
 
 type gnmiSetTestCase struct {
-	desc        string                        // description of test case.
-	initConfig  string                        // config before the operation.
-	op          gnmipb.UpdateResult_Operation // operation type.
-	textPbPath  string                        // text format of gnmi Path proto.
-	val         *gnmipb.TypedValue            // value for UPDATE/REPLACE operations. always nil for DELETE.
-	wantRetCode codes.Code                    // grpc return code.
-	wantConfig  string                        // config after the operation.
+	desc               string                        // description of test case.
+	initConfig         string                        // config before the operation.
+	op                 gnmipb.UpdateResult_Operation // operation type.
+	textPbPath         string                        // text format of gnmi Path proto.
+	val                *gnmipb.TypedValue            // value for UPDATE/REPLACE operations. always nil for DELETE.
+	wantRetCode        codes.Code                    // grpc return code.
+	wantConfig         string                        // config after the operation.
+	wantConfigEncoding string                        // json or ietf-json
 }
 
 func TestDelete(t *testing.T) {
@@ -1243,6 +1244,154 @@ func TestReplace(t *testing.T) {
 			wantRetCode: codes.InvalidArgument,
 			wantConfig:  `{}`,
 		},
+		{
+			desc:       "replace json val (container)",
+			initConfig: `{}`,
+			op:         gnmipb.UpdateResult_REPLACE,
+			textPbPath: `elem: <name: "sample" >`,
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_JsonVal{
+					JsonVal: []byte(`{
+						"container-val": {
+							"enum-val": "enum1",
+							"leaf-list-val": [
+								"v3"
+							]
+						},
+						"empty-val": true,
+						"multiple-key-list": {
+							"stringkey 1": {
+								"integer": 1,
+								"ok": true,
+								"str": "stringkey"
+							}
+						},
+						"single-key-list": {
+							"stringkey": {
+								"country-code": "kr",
+								"dial-code": 82,
+								"list-key": "stringkey"
+							}
+						},
+						"str-val": "string-value"
+					}`),
+				},
+			},
+			wantRetCode:        codes.OK,
+			wantConfigEncoding: "json",
+			wantConfig: `{
+				"sample": {
+					"container-val": {
+						"enum-val": "enum1",
+						"leaf-list-val": [
+							"v3"
+						]
+					},
+					"empty-val": true,
+					"multiple-key-list": {
+						"stringkey 1": {
+							"integer": 1,
+							"ok": true,
+							"str": "stringkey"
+						}
+					},
+					"single-key-list": {
+						"stringkey": {
+							"country-code": "kr",
+							"dial-code": 82,
+							"list-key": "stringkey"
+						}
+					},
+					"str-val": "string-value"
+				}
+			}`,
+		},
+		{
+			desc: "replace json val (leaf)",
+			initConfig: `{
+				"sample": {
+					"str-val": "string-value"
+				}
+			}`,
+			op: gnmipb.UpdateResult_REPLACE,
+			textPbPath: `
+				elem: <name: "sample" >
+				elem: <name: "str-val" >
+			`,
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_JsonVal{
+					JsonVal: []byte(`"j-value"`),
+				},
+			},
+			wantRetCode:        codes.OK,
+			wantConfigEncoding: "json",
+			wantConfig: `{
+				"sample": {
+					"str-val": "j-value"
+				}
+			}`,
+		},
+		{
+			desc: "replace json val (leaf-list)",
+			initConfig: `{
+				"sample": {
+					"container-val": {
+						"enum-val": "enum1",
+						"leaf-list-val": [
+							"v3"
+						]
+					}
+				}
+			}`,
+			op: gnmipb.UpdateResult_REPLACE,
+			textPbPath: `
+				elem: <name: "sample" >
+				elem: <name: "container-val" >
+				elem: <name: "leaf-list-val" >
+			`,
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_JsonVal{
+					JsonVal: []byte(`["v4"]`),
+				},
+			},
+			wantRetCode:        codes.OK,
+			wantConfigEncoding: "json",
+			wantConfig: `{
+				"sample": {
+					"container-val": {
+						"enum-val": "enum1",
+						"leaf-list-val": [
+							"v4"
+						]
+					}
+				}
+			}`,
+		},
+		{
+			desc: "replace ietf-json val (leaf)",
+			initConfig: `{
+				"sample": {
+					"str-val": "string-value"
+				}
+			}`,
+			op: gnmipb.UpdateResult_REPLACE,
+			textPbPath: `
+				elem: <name: "sample" >
+				elem: <name: "str-val" >
+			`,
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_JsonIetfVal{
+					JsonIetfVal: []byte(`"j-value"`),
+				},
+			},
+			wantRetCode:        codes.OK,
+			wantConfigEncoding: "json",
+			wantConfig: `{
+				"sample": {
+					"str-val": "j-value"
+				}
+			}`,
+		},
 	}
 
 	for _, tc := range tests {
@@ -1371,7 +1520,11 @@ func runTestSet(t *testing.T, tc gnmiSetTestCase) {
 	}
 
 	// Check server config
-	wantServer, err := NewServer(&Startup{Bytes: []byte(tc.wantConfig), Encoding: model.Encoding_JSON_IETF})
+	wantEnconding := model.Encoding_JSON_IETF
+	if strings.EqualFold(tc.wantConfigEncoding, model.Encoding_JSON.String()) {
+		wantEnconding = model.Encoding_JSON
+	}
+	wantServer, err := NewServer(&Startup{Bytes: []byte(tc.wantConfig), Encoding: wantEnconding})
 	if err != nil {
 		t.Fatalf("wantConfig data cannot be loaded as a config struct: %v", err)
 	}

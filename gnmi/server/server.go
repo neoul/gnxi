@@ -168,7 +168,7 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 	}
 	s.Model = m
 	if startup := hasStartup(opts); startup != nil {
-		if err := m.Load(startup.Bytes, model.Encoding(startup.Encoding), true); err != nil {
+		if err := m.Load(startup.Bytes, startup.Encoding, true); err != nil {
 			return nil, err
 		}
 	}

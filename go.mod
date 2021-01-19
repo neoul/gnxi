@@ -7,7 +7,7 @@ require (
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.4.3
 	github.com/kylelemons/godebug v1.1.0
-	github.com/neoul/gdump v0.0.0-20210112034318-2e6532ef9899 // indirect
+	github.com/neoul/gdump v0.0.0-20210112034318-2e6532ef9899
 	github.com/neoul/gtrie v0.0.0-20201126080325-d3e5c50c7ac5
 	github.com/neoul/libydb v0.0.0-20210113060428-ac955fcfe3af
 	github.com/openconfig/gnmi v0.0.0-20201217212801-57b8e7af2d36
