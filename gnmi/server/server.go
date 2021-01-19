@@ -56,6 +56,7 @@ type Server struct {
 	enabledAliases bool              // whether server aliases is enabled
 	iStateUpdate   *ydb.YDB          // internal StateUpdate interface
 	reqSeq         uint64
+	disabledSet    bool
 }
 
 // Option is an interface used in the gNMI Server configuration
@@ -81,6 +82,23 @@ func hasStartup(opts []Option) *Startup {
 		}
 	}
 	return nil
+}
+
+// DisableSetRPC is JSON or YAML bytes to be loaded at startup.
+type DisableSetRPC struct {
+}
+
+// IsOption - DisableSetRPC is a Option.
+func (o DisableSetRPC) IsOption() {}
+
+func hasDisableSetRPC(opts []Option) bool {
+	for _, o := range opts {
+		switch o.(type) {
+		case DisableSetRPC:
+			return true
+		}
+	}
+	return false
 }
 
 // Callback includes two callback interfaces.
@@ -167,6 +185,7 @@ func NewCustomServer(schema func() (*ytypes.Schema, error), supportedModels []*g
 		return nil, err
 	}
 	s.Model = m
+	s.disabledSet = hasDisableSetRPC(opts)
 	if startup := hasStartup(opts); startup != nil {
 		if err := m.Load(startup.Bytes, startup.Encoding, true); err != nil {
 			return nil, err
@@ -232,12 +251,16 @@ func (s *Server) getReqSequence() uint64 {
 // Capabilities returns supported encodings and supported models.
 func (s *Server) Capabilities(ctx context.Context, req *gnmipb.CapabilityRequest) (*gnmipb.CapabilityResponse, error) {
 	seq := s.getReqSequence()
-	glog.V(1).Infof("Capabilities.request[%d]::\n%s", seq, proto.MarshalTextString(req))
+	if glog.V(1) {
+		glog.Infof("Capabilities.request[%d]::\n%s", seq, proto.MarshalTextString(req))
+	}
 	resp, err := s.capabilities(ctx, req)
 	if err != nil {
 		glog.Errorf("Capabilities.response[%d]:: %v", seq, status.FromError(err))
 	} else {
-		glog.V(1).Infof("Capabilities.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
+		if glog.V(1) {
+			glog.Infof("Capabilities.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
+		}
 	}
 	return resp, err
 }
@@ -245,12 +268,16 @@ func (s *Server) Capabilities(ctx context.Context, req *gnmipb.CapabilityRequest
 // Get implements the Get RPC in gNMI spec.
 func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetResponse, error) {
 	seq := s.getReqSequence()
-	glog.V(1).Infof("Get.request[%d]::\n%s", seq, proto.MarshalTextString(req))
+	if glog.V(1) {
+		glog.Infof("Get.request[%d]::\n%s", seq, proto.MarshalTextString(req))
+	}
 	resp, err := s.get(ctx, req)
 	if err != nil {
 		glog.Errorf("Get.response[%d]:: %v", seq, status.FromError(err))
 	} else {
-		glog.V(1).Infof("Get.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
+		if glog.V(1) {
+			glog.Infof("Get.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
+		}
 	}
 	return resp, err
 }
@@ -258,12 +285,21 @@ func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 // Set implements the Set RPC in gNMI spec.
 func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetResponse, error) {
 	seq := s.getReqSequence()
-	glog.V(1).Infof("Set.request[%d]::\n%s", seq, proto.MarshalTextString(req))
+	if glog.V(1) {
+		glog.Infof("Set.request[%d]::\n%s", seq, proto.MarshalTextString(req))
+	}
+	if s.disabledSet {
+		err := status.TaggedErrorf(codes.Unimplemented, status.TagNotSupport, "set not supported")
+		glog.Errorf("Set.response[%d]:: %v", seq, status.FromError(err))
+		return nil, err
+	}
 	resp, err := s.set(ctx, req)
 	if err != nil {
 		glog.Errorf("Set.response[%d]:: %v", seq, status.FromError(err))
 	} else {
-		glog.V(1).Infof("Set.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
+		if glog.V(1) {
+			glog.Infof("Set.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
+		}
 	}
 	return resp, err
 }
@@ -286,8 +322,10 @@ func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 			case resp, ok := <-telemetrychannel:
 				if ok {
 					stream.Send(resp)
-					glog.V(1).Infof("Subscribe[%s:%d:%d].response::\n%s",
-						subses.Address, subses.Port, 0, proto.MarshalTextString(resp))
+					if glog.V(1) {
+						glog.Infof("Subscribe[%s:%d:%d].response::\n%s",
+							subses.Address, subses.Port, 0, proto.MarshalTextString(resp))
+					}
 				} else {
 					return
 				}
