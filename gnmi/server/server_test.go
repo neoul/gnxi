@@ -1012,31 +1012,33 @@ func TestReplace(t *testing.T) {
 		}
 	}`
 
-	tests := []gnmiSetTestCase{{
-		desc:       "replace root",
-		initConfig: `{}`,
-		op:         gnmipb.UpdateResult_REPLACE,
-		val: &gnmipb.TypedValue{
-			Value: &gnmipb.TypedValue_JsonIetfVal{
-				JsonIetfVal: []byte(systemConfig),
-			}},
-		wantRetCode: codes.OK,
-		wantConfig:  systemConfig,
-	}, {
-		desc:       "replace a subtree",
-		initConfig: `{}`,
-		op:         gnmipb.UpdateResult_REPLACE,
-		textPbPath: `
+	tests := []gnmiSetTestCase{
+		{
+			desc:       "replace root",
+			initConfig: `{}`,
+			op:         gnmipb.UpdateResult_REPLACE,
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_JsonIetfVal{
+					JsonIetfVal: []byte(systemConfig),
+				}},
+			wantRetCode: codes.OK,
+			wantConfig:  systemConfig,
+		},
+		{
+			desc:       "replace a subtree",
+			initConfig: `{}`,
+			op:         gnmipb.UpdateResult_REPLACE,
+			textPbPath: `
 			elem: <name: "system" >
 			elem: <name: "clock" >
 		`,
-		val: &gnmipb.TypedValue{
-			Value: &gnmipb.TypedValue_JsonIetfVal{
-				JsonIetfVal: []byte(`{"config": {"timezone-name": "US/New York"}}`),
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_JsonIetfVal{
+					JsonIetfVal: []byte(`{"config": {"timezone-name": "US/New York"}}`),
+				},
 			},
-		},
-		wantRetCode: codes.OK,
-		wantConfig: `{
+			wantRetCode: codes.OK,
+			wantConfig: `{
 			"system": {
 				"clock": {
 					"config": {
@@ -1045,23 +1047,24 @@ func TestReplace(t *testing.T) {
 				}
 			}
 		}`,
-	}, {
-		desc:       "replace a keyed list subtree",
-		initConfig: `{}`,
-		op:         gnmipb.UpdateResult_REPLACE,
-		textPbPath: `
+		},
+		{
+			desc:       "replace a keyed list subtree",
+			initConfig: `{}`,
+			op:         gnmipb.UpdateResult_REPLACE,
+			textPbPath: `
 			elem: <name: "components" >
 			elem: <
 				name: "component"
 				key: <key: "name" value: "swpri1-1-1" >
 			>`,
-		val: &gnmipb.TypedValue{
-			Value: &gnmipb.TypedValue_JsonIetfVal{
-				JsonIetfVal: []byte(`{"config": {"name": "swpri1-1-1"}}`),
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_JsonIetfVal{
+					JsonIetfVal: []byte(`{"config": {"name": "swpri1-1-1"}}`),
+				},
 			},
-		},
-		wantRetCode: codes.OK,
-		wantConfig: `{
+			wantRetCode: codes.OK,
+			wantConfig: `{
 			"components": {
 				"component": [
 					{
@@ -1073,9 +1076,10 @@ func TestReplace(t *testing.T) {
 				]
 			}
 		}`,
-	}, {
-		desc: "replace node with int type attribute in its precedent path",
-		initConfig: `{
+		},
+		{
+			desc: "replace node with int type attribute in its precedent path",
+			initConfig: `{
 			"system": {
 				"openflow": {
 					"controllers": {
@@ -1091,8 +1095,8 @@ func TestReplace(t *testing.T) {
 				}
 			}
 		}`,
-		op: gnmipb.UpdateResult_REPLACE,
-		textPbPath: `
+			op: gnmipb.UpdateResult_REPLACE,
+			textPbPath: `
 			elem: <name: "system" >
 			elem: <name: "openflow" >
 			elem: <name: "controllers" >
@@ -1107,13 +1111,13 @@ func TestReplace(t *testing.T) {
 			>
 			elem: <name: "config" >
 		`,
-		val: &gnmipb.TypedValue{
-			Value: &gnmipb.TypedValue_JsonIetfVal{
-				JsonIetfVal: []byte(`{"address": "192.0.2.10", "aux-id": 0}`),
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_JsonIetfVal{
+					JsonIetfVal: []byte(`{"address": "192.0.2.10", "aux-id": 0}`),
+				},
 			},
-		},
-		wantRetCode: codes.OK,
-		wantConfig: `{
+			wantRetCode: codes.OK,
+			wantConfig: `{
 			"system": {
 				"openflow": {
 					"controllers": {
@@ -1140,22 +1144,23 @@ func TestReplace(t *testing.T) {
 				}
 			}
 		}`,
-	}, {
-		desc:       "replace a leaf node of int type",
-		initConfig: `{}`,
-		op:         gnmipb.UpdateResult_REPLACE,
-		textPbPath: `
+		},
+		{
+			desc:       "replace a leaf node of int type",
+			initConfig: `{}`,
+			op:         gnmipb.UpdateResult_REPLACE,
+			textPbPath: `
 			elem: <name: "system" >
 			elem: <name: "openflow" >
 			elem: <name: "agent" >
 			elem: <name: "config" >
 			elem: <name: "backoff-interval" >
 		`,
-		val: &gnmipb.TypedValue{
-			Value: &gnmipb.TypedValue_UintVal{UintVal: 5},
-		},
-		wantRetCode: codes.OK,
-		wantConfig: `{
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_UintVal{UintVal: 5},
+			},
+			wantRetCode: codes.OK,
+			wantConfig: `{
 			"system": {
 				"openflow": {
 					"agent": {
@@ -1166,22 +1171,23 @@ func TestReplace(t *testing.T) {
 				}
 			}
 		}`,
-	}, {
-		desc:       "replace a leaf node of string type",
-		initConfig: `{}`,
-		op:         gnmipb.UpdateResult_REPLACE,
-		textPbPath: `
+		},
+		{
+			desc:       "replace a leaf node of string type",
+			initConfig: `{}`,
+			op:         gnmipb.UpdateResult_REPLACE,
+			textPbPath: `
 			elem: <name: "system" >
 			elem: <name: "openflow" >
 			elem: <name: "agent" >
 			elem: <name: "config" >
 			elem: <name: "datapath-id" >
 		`,
-		val: &gnmipb.TypedValue{
-			Value: &gnmipb.TypedValue_StringVal{StringVal: "00:16:3e:00:00:00:00:00"},
-		},
-		wantRetCode: codes.OK,
-		wantConfig: `{
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_StringVal{StringVal: "00:16:3e:00:00:00:00:00"},
+			},
+			wantRetCode: codes.OK,
+			wantConfig: `{
 			"system": {
 				"openflow": {
 					"agent": {
@@ -1192,22 +1198,23 @@ func TestReplace(t *testing.T) {
 				}
 			}
 		}`,
-	}, {
-		desc:       "replace a leaf node of enum type",
-		initConfig: `{}`,
-		op:         gnmipb.UpdateResult_REPLACE,
-		textPbPath: `
+		},
+		{
+			desc:       "replace a leaf node of enum type",
+			initConfig: `{}`,
+			op:         gnmipb.UpdateResult_REPLACE,
+			textPbPath: `
 			elem: <name: "system" >
 			elem: <name: "openflow" >
 			elem: <name: "agent" >
 			elem: <name: "config" >
 			elem: <name: "failure-mode" >
 		`,
-		val: &gnmipb.TypedValue{
-			Value: &gnmipb.TypedValue_StringVal{StringVal: "SECURE"},
-		},
-		wantRetCode: codes.OK,
-		wantConfig: `{
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_StringVal{StringVal: "SECURE"},
+			},
+			wantRetCode: codes.OK,
+			wantConfig: `{
 			"system": {
 				"openflow": {
 					"agent": {
@@ -1218,23 +1225,25 @@ func TestReplace(t *testing.T) {
 				}
 			}
 		}`,
-	}, {
-		desc:       "replace an non-existing leaf node",
-		initConfig: `{}`,
-		op:         gnmipb.UpdateResult_REPLACE,
-		textPbPath: `
+		},
+		{
+			desc:       "replace an non-existing leaf node",
+			initConfig: `{}`,
+			op:         gnmipb.UpdateResult_REPLACE,
+			textPbPath: `
 			elem: <name: "system" >
 			elem: <name: "openflow" >
 			elem: <name: "agent" >
 			elem: <name: "config" >
 			elem: <name: "foo-bar" >
 		`,
-		val: &gnmipb.TypedValue{
-			Value: &gnmipb.TypedValue_StringVal{StringVal: "SECURE"},
+			val: &gnmipb.TypedValue{
+				Value: &gnmipb.TypedValue_StringVal{StringVal: "SECURE"},
+			},
+			wantRetCode: codes.InvalidArgument,
+			wantConfig:  `{}`,
 		},
-		wantRetCode: codes.InvalidArgument,
-		wantConfig:  `{}`,
-	}}
+	}
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
