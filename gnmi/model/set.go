@@ -9,40 +9,71 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-type rollbackEntry struct {
-	optype gnmipb.UpdateResult_Operation
-	xpath  *string
-	gpath  *gnmipb.Path
-	oldval interface{}
+type backupEntry struct {
+	optype   gnmipb.UpdateResult_Operation
+	xpath    *string
+	gpath    *gnmipb.Path
+	oldval   interface{}
+	executed bool
 }
 
-func (m *Model) addRollbackEntry(optype gnmipb.UpdateResult_Operation,
-	xpath *string, gpath *gnmipb.Path, oldval interface{}) {
-	unit := &rollbackEntry{
+func (be *backupEntry) markExecuted() {
+	be.executed = true
+}
+
+func (m *Model) addBackupEntry(optype gnmipb.UpdateResult_Operation,
+	xpath *string, gpath *gnmipb.Path, oldval interface{}) *backupEntry {
+	entry := &backupEntry{
 		optype: optype,
 		xpath:  xpath,
 		gpath:  gpath,
 		oldval: oldval,
 	}
-	m.setRollback = append(m.setRollback, unit)
-	return
+	m.setBackup = append(m.setBackup, entry)
+	return entry
 }
 
 // SetInit initializes the Set transaction.
 func (m *Model) SetInit() error {
 	m.setSeq++
-	m.setRollback = nil
+	m.setBackup = nil
 	return nil
 }
 
 // SetDone resets the Set transaction.
 func (m *Model) SetDone() {
-	m.setRollback = nil
+	if m.setBackup == nil {
+		return
+	}
+	// ignore SetDone if there is not the StateConfig interface
+	switch m.StateConfig.(type) {
+	case *ignoringStateConfig:
+		return
+	}
+	// Revert back the new data to the old data
+	// to refresh the data by the StateUpdate interface for data sync.
+	for _, entry := range m.setBackup {
+		var err error
+		if glog.V(2) {
+			glog.Infof("set.done(%s)", *entry.xpath)
+		}
+		if entry.oldval == nil {
+			err = m.DeleteValue(entry.gpath)
+		} else {
+			err = m.WriteValue(entry.gpath, entry.oldval)
+		}
+		if err != nil {
+			glog.Error(status.TaggedErrorf(codes.Internal, status.TagOperationFail,
+				"set.done error(ignored*) in %s:: %v", *entry.xpath, err))
+			continue
+		}
+	}
+	m.setBackup = nil
 }
 
 // SetRollback reverts the original configuration.
 func (m *Model) SetRollback() {
-	for _, entry := range m.setRollback {
+	for _, entry := range m.setBackup {
 		var err error
 		if glog.V(2) {
 			glog.Infof("set.rollback(%s)", *entry.xpath)
@@ -58,13 +89,17 @@ func (m *Model) SetRollback() {
 				"rollback.delete error(ignored*) in %s:: %v", *entry.xpath, err))
 			continue
 		}
+		// skip entry if not executed
+		if !entry.executed {
+			continue
+		}
 		// error is ignored on rollback
 		if err := m.executeStateConfig(entry.gpath, new); err != nil {
 			glog.Error(status.TaggedErrorf(codes.Internal, status.TagOperationFail,
 				"rollback.delete error(ignored*) in %s:: %v", *entry.xpath, err))
-			continue
 		}
 	}
+	m.setBackup = nil
 }
 
 // SetCommit commit the changed configuration. it returns an error.
@@ -85,6 +120,7 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 			return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
 				"path.converting error for %s", target.Path)
 		}
+		e := m.addBackupEntry(gnmipb.UpdateResult_DELETE, &target.Path, targetPath, target.Value)
 		if len(targetPath.GetElem()) == 0 {
 			// root deletion
 			m.MO = m.NewEmptyRoot()
@@ -94,10 +130,10 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 					"set.delete error in %s:: %v", target.Path, err)
 			}
 		}
-		m.addRollbackEntry(gnmipb.UpdateResult_DELETE, &target.Path, targetPath, target.Value)
 		if err := m.executeStateConfig(targetPath, target.Value); err != nil {
 			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 		}
+		e.markExecuted()
 	}
 	return nil
 }
@@ -112,15 +148,16 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 	targets, ok := m.Get(fullpath)
 	if !ok {
 		tpath := xpath.ToXPath(fullpath)
+		e := m.addBackupEntry(gnmipb.UpdateResult_REPLACE, &tpath, fullpath, nil)
 		err = m.WriteTypedValue(fullpath, typedValue)
 		if err != nil {
 			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
 				"replace error in %s:: %v", tpath, err)
 		}
-		m.addRollbackEntry(gnmipb.UpdateResult_REPLACE, &tpath, fullpath, nil)
 		if err := m.executeStateConfig(fullpath, nil); err != nil {
 			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 		}
+		e.markExecuted()
 		return nil
 	}
 	for _, target := range targets {
@@ -129,6 +166,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 			return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
 				"path.converting error for %s", target.Path)
 		}
+		e := m.addBackupEntry(gnmipb.UpdateResult_REPLACE, &target.Path, targetPath, target.Value)
 		err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath)
 		if err != nil {
 			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
@@ -139,10 +177,10 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
 				"set.replace error in %s:: %v", target.Path, err)
 		}
-		m.addRollbackEntry(gnmipb.UpdateResult_REPLACE, &target.Path, targetPath, target.Value)
 		if err := m.executeStateConfig(targetPath, target.Value); err != nil {
 			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 		}
+		e.markExecuted()
 	}
 	return nil
 }
@@ -157,15 +195,16 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 	targets, ok := m.Get(fullpath)
 	if !ok {
 		tpath := xpath.ToXPath(fullpath)
+		e := m.addBackupEntry(gnmipb.UpdateResult_UPDATE, &tpath, fullpath, nil)
 		err = m.WriteTypedValue(fullpath, typedValue)
 		if err != nil {
 			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
 				"set.update error in %s:: %v", tpath, err)
 		}
-		m.addRollbackEntry(gnmipb.UpdateResult_UPDATE, &tpath, fullpath, nil)
 		if err := m.executeStateConfig(fullpath, nil); err != nil {
 			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 		}
+		e.markExecuted()
 		return nil
 	}
 	for _, target := range targets {
@@ -174,15 +213,16 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 			return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
 				"path.converting error for %s", target.Path)
 		}
+		e := m.addBackupEntry(gnmipb.UpdateResult_UPDATE, &target.Path, targetPath, target.Value)
 		err = m.WriteTypedValue(targetPath, typedValue)
 		if err != nil {
 			return status.TaggedErrorf(codes.InvalidArgument, status.TagBadData,
 				"set.update error in %s:: %v", target.Path, err)
 		}
-		m.addRollbackEntry(gnmipb.UpdateResult_UPDATE, &target.Path, targetPath, target.Value)
 		if err := m.executeStateConfig(targetPath, target.Value); err != nil {
 			return status.TaggedErrorf(codes.Internal, status.TagOperationFail, "set error:: %v", err)
 		}
+		e.markExecuted()
 	}
 	return nil
 }

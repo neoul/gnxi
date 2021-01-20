@@ -433,9 +433,14 @@ func (s *Server) get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 
 // Set implements the Set RPC in gNMI spec.
 func (s *Server) set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetResponse, error) {
-	prefix := req.GetPrefix()
 	var err error
-	result := make([]*gnmipb.UpdateResult, 0, 6)
+	prefix := req.GetPrefix()
+	result := make([]*gnmipb.UpdateResult, 0,
+		len(req.GetDelete())+len(req.GetReplace())+len(req.GetUpdate())+1)
+
+	s.Model.Lock()
+	defer s.Model.Unlock()
+
 	s.Model.SetInit()
 	for _, path := range req.GetDelete() {
 		if err != nil {
@@ -462,9 +467,6 @@ func (s *Server) set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 		}
 		err = s.Model.SetUpdate(prefix, path, u.GetVal())
 		result = append(result, buildUpdateResult(gnmipb.UpdateResult_UPDATE, path, err))
-	}
-	if err == nil {
-		err = s.Model.SetCommit()
 	}
 	if err != nil {
 		s.Model.SetRollback()
