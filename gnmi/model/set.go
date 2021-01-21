@@ -120,6 +120,12 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 			return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
 				"path.converting error for %s", target.Path)
 		}
+		if s := m.FindSchemaByGNMIPath(targetPath); s != nil {
+			if s.ReadOnly() {
+				return status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidPath,
+					"unable to set read-only data in %s", target.Path)
+			}
+		}
 		e := m.addBackupEntry(gnmipb.UpdateResult_DELETE, &target.Path, targetPath, target.Value)
 		if len(targetPath.GetElem()) == 0 {
 			// root deletion
@@ -148,6 +154,12 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 	targets, ok := m.Get(fullpath)
 	if !ok {
 		tpath := xpath.ToXPath(fullpath)
+		if s := m.FindSchemaByGNMIPath(fullpath); s != nil {
+			if s.ReadOnly() {
+				return status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidPath,
+					"unable to set read-only data in %s", tpath)
+			}
+		}
 		e := m.addBackupEntry(gnmipb.UpdateResult_REPLACE, &tpath, fullpath, nil)
 		err = m.WriteTypedValue(fullpath, typedValue)
 		if err != nil {
@@ -165,6 +177,12 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 		if err != nil {
 			return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
 				"path.converting error for %s", target.Path)
+		}
+		if s := m.FindSchemaByGNMIPath(targetPath); s != nil {
+			if s.ReadOnly() {
+				return status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidPath,
+					"unable to set read-only data in %s", target.Path)
+			}
 		}
 		e := m.addBackupEntry(gnmipb.UpdateResult_REPLACE, &target.Path, targetPath, target.Value)
 		err = ytypes.DeleteNode(m.GetSchema(), m.GetRoot(), targetPath)
@@ -195,6 +213,12 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 	targets, ok := m.Get(fullpath)
 	if !ok {
 		tpath := xpath.ToXPath(fullpath)
+		if s := m.FindSchemaByGNMIPath(fullpath); s != nil {
+			if s.ReadOnly() {
+				return status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidPath,
+					"unable to set read-only data in %s", tpath)
+			}
+		}
 		e := m.addBackupEntry(gnmipb.UpdateResult_UPDATE, &tpath, fullpath, nil)
 		err = m.WriteTypedValue(fullpath, typedValue)
 		if err != nil {
@@ -212,6 +236,12 @@ func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVal
 		if err != nil {
 			return status.TaggedErrorf(codes.Internal, status.TagInvalidPath,
 				"path.converting error for %s", target.Path)
+		}
+		if s := m.FindSchemaByGNMIPath(targetPath); s != nil {
+			if s.ReadOnly() {
+				return status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidPath,
+					"unable to set read-only data in %s", target.Path)
+			}
 		}
 		e := m.addBackupEntry(gnmipb.UpdateResult_UPDATE, &target.Path, targetPath, target.Value)
 		err = m.WriteTypedValue(targetPath, typedValue)
