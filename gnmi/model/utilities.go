@@ -918,22 +918,24 @@ func WriteStringValue(pschema *yang.Entry, pvalue interface{}, gpath *gnmipb.Pat
 				return writeLeafList(pschema, pvalue, p, reflect.TypeOf(curValue), value)
 			}
 		default:
-			switch curSchema.Type.Kind {
-			case yang.Yempty:
-				_, err = ydb.ValChildSet(reflect.ValueOf(pvalue),
-					curSchema.Name, *value, ydb.SearchByContent)
-				return err
-			case yang.Yunion:
-				types := baseType(curSchema.Type)
-				for i := range types {
-					if types[i] == reflect.TypeOf(nil) {
-						return fmt.Errorf("invalid union type for %s", xpath.ToXPath(gpath))
+			if curSchema.Type != nil {
+				switch curSchema.Type.Kind {
+				case yang.Yempty:
+					_, err = ydb.ValChildSet(reflect.ValueOf(pvalue),
+						curSchema.Name, *value, ydb.SearchByContent)
+					return err
+				case yang.Yunion:
+					types := baseType(curSchema.Type)
+					for i := range types {
+						if types[i] == reflect.TypeOf(nil) {
+							return fmt.Errorf("invalid union type for %s", xpath.ToXPath(gpath))
+						}
+						if err = writeLeaf(pschema, pvalue.(ygot.GoStruct), p, types[i], value); err == nil {
+							break
+						}
 					}
-					if err = writeLeaf(pschema, pvalue.(ygot.GoStruct), p, types[i], value); err == nil {
-						break
-					}
+					return err
 				}
-				return err
 			}
 			ct := reflect.TypeOf(curValue)
 			return writeLeaf(pschema, pvalue.(ygot.GoStruct), p, ct, value)
