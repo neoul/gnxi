@@ -54,11 +54,14 @@ func (tcb *teleCtrl) register(m *model.Model, sub *Subscription) error {
 		targetpaths, _ := m.FindAllPaths(fullpath)
 		for _, p := range targetpaths {
 			if subgroup, ok := tcb.lookup.Find(p); ok {
-				subgroup.(map[TeleID]*Subscription)[sub.ID] = sub
+				subscriber := subgroup.(map[TeleID]*Subscription)
+				subscriber[sub.ID] = sub
+				// gdump.Print(subgroup.(map[TeleID]*Subscription)[sub.ID])
 			} else {
 				tcb.lookup.Add(p, map[TeleID]*Subscription{sub.ID: sub})
 			}
-			glog.Infof("teleCtrl.sub[%d][%d].subscribe(%v)", sub.SessionID, sub.ID, p)
+
+			glog.Infof("teleCtrl.sub[%d][%d].registered(%v)", sub.SessionID, sub.ID, p)
 		}
 	}
 	return nil
@@ -72,10 +75,11 @@ func (tcb *teleCtrl) unregister(sub *Subscription) {
 		subscriber := subgroup.(map[TeleID]*Subscription)
 		_, ok := subscriber[sub.ID]
 		if ok {
-			glog.Infof("teleCtrl.sub[%d][%d].unsubscribe(%v)", sub.SessionID, sub.ID, p)
+			glog.Infof("teleCtrl.sub[%d][%d].unregistered(%v)", sub.SessionID, sub.ID, p)
 			delete(subscriber, sub.ID)
 			if len(subscriber) == 0 {
 				tcb.lookup.Remove(p)
+				fmt.Println("@!#@!#!@#!@#@!#", tcb.lookup.All(""))
 			}
 		}
 	}
@@ -96,8 +100,8 @@ func (tcb *teleCtrl) updateTeleEvent(op int, datapath, searchpath string) {
 			if sub.IsPolling {
 				continue
 			}
-			// glog.Infof("teleCtrl.%c.path(%s).sub[%d][%d]",
-			// 	op, subscribedpath, sub.SessionID, sub.ID)
+			glog.Infof("teleCtrl.%c.path(%s).sub[%d][%d]",
+				op, datapath, sub.SessionID, sub.ID)
 			event, ok := tcb.ready[sub.ID]
 			if !ok {
 				event = &teleEvent{
