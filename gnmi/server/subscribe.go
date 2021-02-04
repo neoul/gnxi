@@ -79,7 +79,6 @@ func (tcb *teleCtrl) unregister(sub *Subscription) {
 			delete(subscriber, sub.ID)
 			if len(subscriber) == 0 {
 				tcb.lookup.Remove(p)
-				fmt.Println("@!#@!#!@#!@#@!#", tcb.lookup.All(""))
 			}
 		}
 	}
