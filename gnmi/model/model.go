@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/neoul/gnxi/gnmi/model/gostruct"
 	"github.com/neoul/gnxi/utilities/status"
 	"github.com/neoul/gnxi/utilities/xpath"
@@ -159,7 +160,9 @@ func (m *Model) CheckModels(models []*gnmipb.ModelData) error {
 	for _, model := range models {
 		isSupported := false
 		for _, supportedModel := range m.modelData {
-			if reflect.DeepEqual(model, supportedModel) {
+			// bugfix - use_models does not behave as defined in gnmi specification.
+			if proto.Equal(model, supportedModel) {
+				fmt.Println("supportedModel", model.Name, supportedModel.Name)
 				isSupported = true
 				break
 			}
