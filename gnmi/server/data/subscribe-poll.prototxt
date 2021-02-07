@@ -1,0 +1,68 @@
+##@ 0 SubscribeRequest
+poll: <
+>
+
+##@ 1 SubscribeRequest
+subscribe: <
+  prefix: <
+    elem: <
+      name: "interfaces"
+    >
+    elem: <
+      name: "interface"
+      key: <
+        key: "name"
+        value: "1/1"
+      >
+    >
+  >
+  subscription: <
+    path: <
+      elem: <
+        name: "state"
+      >
+      elem: <
+        name: "counters"
+      >
+      elem: <
+        name: "in-pkts"
+      >
+    >
+  >
+  mode: POLL
+>
+
+##@ 2 SubscribeResponse
+update: <
+  prefix: <
+    elem: <
+      name: "interfaces"
+    >
+    elem: <
+      name: "interface"
+      key: <
+        key: "name"
+        value: "1/1"
+      >
+    >
+  >
+  update: <
+    path: <
+      elem: <
+        name: "state"
+      >
+      elem: <
+        name: "counters"
+      >
+      elem: <
+        name: "in-pkts"
+      >
+    >
+    val: <
+      uint_val: 100
+    >
+  >
+>
+
+##@ 3 SubscribeResponse
+sync_response: true

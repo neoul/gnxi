@@ -1693,6 +1693,11 @@ func TestSubscribe(t *testing.T) {
 			msgfile:  "data/client-aliases.prototxt",
 			waittime: time.Second * 1,
 		},
+		{
+			name:     "poll subscription",
+			msgfile:  "data/subscribe-poll.prototxt",
+			waittime: time.Second * 1,
+		},
 	}
 	// j, _ := s.ExportToJSON(true)
 	// fmt.Println(string(j))
