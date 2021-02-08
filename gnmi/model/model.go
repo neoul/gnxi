@@ -164,18 +164,17 @@ func (m *Model) CheckModels(models []*gnmipb.ModelData) error {
 			// 	isSupported = true
 			// 	break
 			// }
-			ok := false
-			if model.Name != "" && model.Name == supportedModel.Name {
-				ok = true
+			if model.Name != supportedModel.Name {
+				continue
 			}
-			if model.Version != "" && model.Version == supportedModel.Version {
-				ok = true
+			isSupported = true
+			if model.Version != "" && model.Version != supportedModel.Version {
+				isSupported = false
 			}
-			if model.Organization != "" && model.Organization == supportedModel.Organization {
-				ok = true
+			if model.Organization != "" && model.Organization != supportedModel.Organization {
+				isSupported = false
 			}
-			if ok {
-				isSupported = true
+			if isSupported {
 				break
 			}
 		}
