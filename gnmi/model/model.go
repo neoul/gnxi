@@ -287,6 +287,38 @@ func (m *Model) findAllPaths(sp pathFinder, elems []*gnmipb.PathElem) []pathFind
 	return m.findAllPaths(csp, elems[1:])
 }
 
+func validatePathSchema(entry *yang.Entry, elems []*gnmipb.PathElem) bool {
+	for i, e := range elems {
+		if e.Name == "*" || e.Name == "..." {
+			for _, centry := range entry.Dir {
+				if validatePathSchema(centry, elems[i+1:]) {
+					return true
+				}
+			}
+			if e.Name == "..." {
+				for _, centry := range entry.Dir {
+					if validatePathSchema(centry, elems[i:]) {
+						return true
+					}
+				}
+			}
+			return false
+		}
+		entry = entry.Dir[e.Name]
+		if entry == nil {
+			return false
+		}
+		if e.Key != nil {
+			for kname := range e.Key {
+				if !strings.Contains(entry.Key, kname) {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
 // ValidatePathSchema - validates all schema of the gNMI Path.
 func (m *Model) ValidatePathSchema(path *gnmipb.Path) bool {
 	t := m.GetRootType()
@@ -306,25 +338,8 @@ func (m *Model) ValidatePathSchema(path *gnmipb.Path) bool {
 			return false
 		}
 	}
-
-	elems := path.GetElem()
-	if len(elems) <= 0 {
-		return true
-	}
-	for _, e := range elems {
-		entry = entry.Dir[e.Name]
-		if entry == nil {
-			return false
-		}
-		if e.Key != nil {
-			for kname := range e.Key {
-				if !strings.Contains(entry.Key, kname) {
-					return false
-				}
-			}
-		}
-	}
-	return true
+	// Bugfix - gnmi path wildcards [*, ...] must be processed at Get and Subscribe RPCs.
+	return validatePathSchema(entry, path.GetElem())
 }
 
 // ValidateGNMIPath - validates the gNMI Paths and check the schema.
