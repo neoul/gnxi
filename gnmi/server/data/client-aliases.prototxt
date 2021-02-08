@@ -82,7 +82,6 @@ sync_response: true
 
 
 ##@ UpdateState
-
 # refresh the msg via YDB.
 messages:
  state:

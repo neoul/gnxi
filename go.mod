@@ -13,7 +13,7 @@ require (
 	github.com/openconfig/gnmi v0.0.0-20201217212801-57b8e7af2d36
 	github.com/openconfig/goyang v0.2.4
 	github.com/openconfig/ygot v0.10.0
-	github.com/sirupsen/logrus v1.7.0 // indirect
+	github.com/sirupsen/logrus v1.7.0
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/net v0.0.0-20201224014010-6772e930b67b
 	golang.org/x/sys v0.0.0-20210113181707-4bcb84eeeb78 // indirect

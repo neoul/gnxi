@@ -1,8 +1,4 @@
 ##@ 0 SubscribeRequest
-poll: <
->
-
-##@ 1 SubscribeRequest
 subscribe: <
   prefix: <
     elem: <
@@ -30,6 +26,11 @@ subscribe: <
     >
   >
   mode: POLL
+>
+
+
+##@ 1 SubscribeRequest
+poll: <
 >
 
 ##@ 2 SubscribeResponse

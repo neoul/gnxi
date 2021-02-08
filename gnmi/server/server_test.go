@@ -1701,6 +1701,8 @@ func TestSubscribe(t *testing.T) {
 	}
 	// j, _ := s.ExportToJSON(true)
 	// fmt.Println(string(j))
+	// ydb.SetLogLevel(logrus.DebugLevel)
+	// ydb.SetInternalLog(ydb.LogDebug)
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1713,7 +1715,7 @@ func TestSubscribe(t *testing.T) {
 				ID:            1,
 				Address:       "127.0.0.1",
 				Port:          uint16(11112),
-				SubList:       map[string]*Subscription{},
+				StreamSub:     map[string]*Subscription{},
 				respchan:      make(chan *gnmipb.SubscribeResponse, 256),
 				shutdown:      make(chan struct{}),
 				waitgroup:     new(sync.WaitGroup),

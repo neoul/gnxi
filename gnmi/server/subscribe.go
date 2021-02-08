@@ -96,9 +96,6 @@ func (tcb *teleCtrl) updateTeleEvent(op int, datapath, searchpath string) {
 	for _, subgroup := range tcb.lookup.FindAll(searchpath) {
 		subscribers := subgroup.(map[TeleID]*Subscription)
 		for _, sub := range subscribers {
-			if sub.IsPolling {
-				continue
-			}
 			glog.Infof("teleCtrl.%c.path(%s).sub[%d][%d]",
 				op, datapath, sub.SessionID, sub.ID)
 			event, ok := tcb.ready[sub.ID]
@@ -186,12 +183,21 @@ func (tcb *teleCtrl) ChangeCompleted(changes ygot.GoStruct) {
 	// glog.Infof("teleCtrl.ChangeCompleted")
 }
 
+// PollSubscription - for Poll mode subscription
+type PollSubscription struct {
+	ID        TeleID
+	SessionID TeleID
+	SubList   *gnmipb.SubscriptionList
+	session   *SubSession
+}
+
 // SubSession - gNMI gRPC Subscribe RPC (Telemetry) session information managed by server
 type SubSession struct {
 	ID        TeleID
 	Address   string
 	Port      uint16
-	SubList   map[string]*Subscription
+	StreamSub map[string]*Subscription
+	PollSub   []*PollSubscription
 	respchan  chan *gnmipb.SubscribeResponse
 	shutdown  chan struct{}
 	waitgroup *sync.WaitGroup
@@ -223,7 +229,7 @@ func newSubSession(ctx context.Context, s *Server) *SubSession {
 		ID:            sessID,
 		Address:       address,
 		Port:          uint16(port),
-		SubList:       map[string]*Subscription{},
+		StreamSub:     map[string]*Subscription{},
 		respchan:      make(chan *gnmipb.SubscribeResponse, 256),
 		shutdown:      make(chan struct{}),
 		waitgroup:     new(sync.WaitGroup),
@@ -233,8 +239,11 @@ func newSubSession(ctx context.Context, s *Server) *SubSession {
 }
 
 func (subses *SubSession) stopSubSession() {
-	subses.deleteDynamicSubscriptionInfo(subses)
-	for _, sub := range subses.SubList {
+	for i := range subses.PollSub {
+		subses.deletePollDynamicSubscriptionInfo(subses.PollSub[i])
+	}
+	subses.deleteStreamDynamicSubscriptionInfo(subses)
+	for _, sub := range subses.StreamSub {
 		subses.unregister(sub)
 	}
 	close(subses.shutdown)
@@ -245,25 +254,24 @@ func (subses *SubSession) stopSubSession() {
 type Subscription struct {
 	ID                TeleID
 	SessionID         TeleID
-	key               *string
+	key               string
 	Prefix            *gnmipb.Path                 `json:"prefix,omitempty"`
 	UseAliases        bool                         `json:"use_aliases,omitempty"`
-	StreamingMode     gnmipb.SubscriptionList_Mode `json:"stream_mode,omitempty"`
+	Mode              gnmipb.SubscriptionList_Mode `json:"stream_mode,omitempty"`
 	AllowAggregation  bool                         `json:"allow_aggregation,omitempty"`
 	Encoding          gnmipb.Encoding              `json:"encoding,omitempty"`
 	Paths             []*gnmipb.Path               `json:"path,omitempty"`              // The data tree path.
-	SubscriptionMode  gnmipb.SubscriptionMode      `json:"subscription_mode,omitempty"` // Subscription mode to be used.
+	StreamMode        gnmipb.SubscriptionMode      `json:"subscription_mode,omitempty"` // Subscription mode to be used.
 	SampleInterval    uint64                       `json:"sample_interval,omitempty"`   // ns between samples in SAMPLE mode.
 	SuppressRedundant bool                         `json:"suppress_redundant,omitempty"`
 	HeartbeatInterval uint64                       `json:"heartbeat_interval,omitempty"`
 
 	Configured struct {
-		SubscriptionMode  gnmipb.SubscriptionMode
+		StreamMode        gnmipb.SubscriptionMode
 		SampleInterval    uint64
 		SuppressRedundant bool
 		HeartbeatInterval uint64
 	}
-	IsPolling bool
 
 	// internal data
 	session     *SubSession
@@ -325,7 +333,7 @@ func (sub *Subscription) run(subses *SubSession) {
 				return
 			}
 			glog.Infof("sub[%d][%d].event-received", sub.SessionID, sub.ID)
-			switch sub.Configured.SubscriptionMode {
+			switch sub.Configured.StreamMode {
 			case gnmipb.SubscriptionMode_ON_CHANGE, gnmipb.SubscriptionMode_SAMPLE:
 				for _, p := range event.updatedPath {
 					duplicates := uint32(1)
@@ -343,7 +351,7 @@ func (sub *Subscription) run(subses *SubSession) {
 					}
 					sub.deletedList.Add(*p, duplicates)
 				}
-				if sub.Configured.SubscriptionMode == gnmipb.SubscriptionMode_ON_CHANGE {
+				if sub.Configured.StreamMode == gnmipb.SubscriptionMode_ON_CHANGE {
 					err := subses.telemetryUpdate(sub, event.updatedroot)
 					if err != nil {
 						glog.Errorf("sub[%d][%d].failed(%v)", sub.SessionID, sub.ID, err)
@@ -487,8 +495,7 @@ func (subses *SubSession) serverAliasesUpdate() {
 }
 
 // initTelemetryUpdate - Process and generate responses for a init update.
-func (subses *SubSession) initTelemetryUpdate(req *gnmipb.SubscribeRequest) error {
-	subscriptionList := req.GetSubscribe()
+func (subses *SubSession) initTelemetryUpdate(subscriptionList *gnmipb.SubscriptionList) error {
 	subList := subscriptionList.GetSubscription()
 	updatesOnly := subscriptionList.GetUpdatesOnly()
 	if updatesOnly {
@@ -555,7 +562,7 @@ func (subses *SubSession) telemetryUpdate(sub *Subscription, updatedroot ygot.Go
 	prefix := sub.Prefix
 	prefixAlias := subses.ToAlias(prefix, false).(*gnmipb.Path)
 	encoding := sub.Encoding
-	mode := sub.StreamingMode
+	mode := sub.Mode
 
 	// [FIXME] Are they different?
 	switch mode {
@@ -624,131 +631,130 @@ const (
 )
 
 func (subses *SubSession) addStreamSubscription(
-	prefix *gnmipb.Path, useAliases bool, streamingMode gnmipb.SubscriptionList_Mode, allowAggregation bool,
-	encoding gnmipb.Encoding, paths []*gnmipb.Path, subscriptionMode gnmipb.SubscriptionMode,
-	sampleInterval uint64, suppressRedundant bool, heartbeatInterval uint64, stateSync bool,
+	prefix *gnmipb.Path, useAliases bool, Mode gnmipb.SubscriptionList_Mode, allowAggregation bool,
+	Encoding gnmipb.Encoding, Path *gnmipb.Path, StreamMode gnmipb.SubscriptionMode,
+	SampleInterval uint64, SuppressRedundant bool, HeartbeatInterval uint64, stateSync bool,
 ) (*Subscription, error) {
+	key := fmt.Sprintf("%d-%s-%s-%s-%s-%d-%d-%t-%t-%t",
+		subses.ID, Mode, Encoding, StreamMode,
+		xpath.ToXPath(prefix), SampleInterval, HeartbeatInterval,
+		useAliases, allowAggregation, SuppressRedundant,
+	)
 
-	sub := &Subscription{
+	if subctrl, ok := subses.StreamSub[key]; ok {
+		// only updates the new path if the sub exists.
+		subctrl.mutex.Lock()
+		defer subctrl.mutex.Unlock()
+		subctrl.Paths = append(subctrl.Paths, Path)
+		if !subctrl.stateSync {
+			subctrl.stateSync = stateSync
+		}
+		if glog.V(2) {
+			glog.Infof("telemetry[%d][%d].add.path(%v)", subses.ID, subctrl.ID, Path)
+		}
+		return subctrl, nil
+	}
+	subID++
+	subctrl := &Subscription{
+		ID:                subID,
 		SessionID:         subses.ID,
 		Prefix:            prefix,
+		Paths:             []*gnmipb.Path{Path},
 		UseAliases:        useAliases,
-		StreamingMode:     streamingMode,
+		Mode:              Mode,
 		AllowAggregation:  allowAggregation,
-		Encoding:          encoding,
-		Paths:             paths,
-		SubscriptionMode:  subscriptionMode,
-		SampleInterval:    sampleInterval,
-		SuppressRedundant: suppressRedundant,
-		HeartbeatInterval: heartbeatInterval,
+		Encoding:          Encoding,
+		StreamMode:        StreamMode,
+		SampleInterval:    SampleInterval,
+		SuppressRedundant: SuppressRedundant,
+		HeartbeatInterval: HeartbeatInterval,
 		updatedList:       gtrie.New(),
 		deletedList:       gtrie.New(),
 		stateSync:         stateSync,
+		eventque:          make(chan *teleEvent, 64),
 		mutex:             &sync.Mutex{},
+		session:           subses,
+		key:               key,
 	}
-	if streamingMode == gnmipb.SubscriptionList_POLL {
-		return nil, status.TaggedErrorf(codes.InvalidArgument, status.TagMalformedMessage,
-			"streaming subscription not allowed on poll mode")
-	}
+	subses.StreamSub[key] = subctrl
+	glog.Infof("telemetry[%d][%d].new(%s)", subses.ID, subctrl.ID, subctrl.key)
+	glog.Infof("telemetry[%d][%d].add.path(%v)", subses.ID, subctrl.ID, Path)
+
 	// 3.5.1.5.2 STREAM Subscriptions Must be satisfied for telemetry update starting.
-	switch sub.SubscriptionMode {
+	switch subctrl.StreamMode {
 	case gnmipb.SubscriptionMode_TARGET_DEFINED:
 		// vendor specific mode
-		sub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_SAMPLE
-		sub.Configured.SampleInterval = defaultInterval / 10
-		sub.Configured.SuppressRedundant = true
-		sub.Configured.HeartbeatInterval = 0
+		subctrl.Configured.StreamMode = gnmipb.SubscriptionMode_SAMPLE
+		subctrl.Configured.SampleInterval = defaultInterval / 10
+		subctrl.Configured.SuppressRedundant = true
+		subctrl.Configured.HeartbeatInterval = 0
 	case gnmipb.SubscriptionMode_ON_CHANGE:
-		if sub.HeartbeatInterval < minimumInterval && sub.HeartbeatInterval != 0 {
+		if subctrl.HeartbeatInterval < minimumInterval && subctrl.HeartbeatInterval != 0 {
 			return nil, status.TaggedErrorf(codes.OutOfRange, status.TagInvalidConfig,
 				"heartbeat_interval(!= 0sec and < 1sec) is not supported")
 		}
-		if sub.SampleInterval != 0 {
+		if subctrl.SampleInterval != 0 {
 			return nil, status.TaggedErrorf(codes.InvalidArgument, status.TagInvalidConfig,
 				"sample_interval not allowed on on_change mode")
 		}
-		sub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_ON_CHANGE
-		sub.Configured.SampleInterval = 0
-		sub.Configured.SuppressRedundant = false
-		sub.Configured.HeartbeatInterval = sub.HeartbeatInterval
+		subctrl.Configured.StreamMode = gnmipb.SubscriptionMode_ON_CHANGE
+		subctrl.Configured.SampleInterval = 0
+		subctrl.Configured.SuppressRedundant = false
+		subctrl.Configured.HeartbeatInterval = subctrl.HeartbeatInterval
 	case gnmipb.SubscriptionMode_SAMPLE:
-		if sub.SampleInterval < minimumInterval && sub.SampleInterval != 0 {
+		if subctrl.SampleInterval < minimumInterval && subctrl.SampleInterval != 0 {
 			return nil, status.TaggedErrorf(codes.OutOfRange, status.TagInvalidConfig,
 				"sample_interval(!= 0sec and < 1sec) is not supported")
 		}
-		if sub.HeartbeatInterval != 0 {
-			if sub.HeartbeatInterval < minimumInterval {
+		if subctrl.HeartbeatInterval != 0 {
+			if subctrl.HeartbeatInterval < minimumInterval {
 				return nil, status.TaggedErrorf(codes.OutOfRange, status.TagInvalidConfig,
 					"heartbeat_interval(!= 0sec and < 1sec) is not supported")
 			}
-			if sub.SampleInterval > sub.HeartbeatInterval {
+			if subctrl.SampleInterval > subctrl.HeartbeatInterval {
 				return nil, status.TaggedErrorf(codes.OutOfRange, status.TagInvalidConfig,
 					"heartbeat_interval should be larger than sample_interval")
 			}
 		}
 
-		sub.Configured.SubscriptionMode = gnmipb.SubscriptionMode_SAMPLE
-		sub.Configured.SampleInterval = sub.SampleInterval
-		if sub.SampleInterval == 0 {
+		subctrl.Configured.StreamMode = gnmipb.SubscriptionMode_SAMPLE
+		subctrl.Configured.SampleInterval = subctrl.SampleInterval
+		if subctrl.SampleInterval == 0 {
 			// Set minimal sampling interval (1sec)
-			sub.Configured.SampleInterval = minimumInterval
+			subctrl.Configured.SampleInterval = minimumInterval
 		}
-		sub.Configured.SuppressRedundant = sub.SuppressRedundant
-		sub.Configured.HeartbeatInterval = sub.HeartbeatInterval
+		subctrl.Configured.SuppressRedundant = subctrl.SuppressRedundant
+		subctrl.Configured.HeartbeatInterval = subctrl.HeartbeatInterval
 	}
-	key := fmt.Sprintf("%d-%s-%s-%s-%s-%d-%d-%t-%t-%t",
-		sub.SessionID,
-		sub.StreamingMode, sub.Encoding, sub.SubscriptionMode,
-		xpath.ToXPath(sub.Prefix), sub.SampleInterval, sub.HeartbeatInterval,
-		sub.UseAliases, sub.AllowAggregation, sub.SuppressRedundant,
-	)
-	sub.key = &key
-	sub.eventque = make(chan *teleEvent, 64)
-	if t, ok := subses.SubList[key]; ok {
-		// only updates the new path if the sub exists.
-		sub = t
-		sub.mutex.Lock()
-		defer sub.mutex.Unlock()
-		sub.Paths = append(sub.Paths, paths...)
-		if !sub.stateSync {
-			sub.stateSync = stateSync
-		}
-		glog.Infof("telemetry[%d][%d].add.path(%s)", subses.ID, sub.ID, xpath.ToXPath(paths[0]))
-		return sub, nil
-	}
-	subID++
-	id := subID
-	sub.ID = id
-	sub.session = subses
-	subses.SubList[key] = sub
-	glog.Infof("telemetry[%d][%d].new(%s)", subses.ID, sub.ID, *sub.key)
-	glog.Infof("telemetry[%d][%d].add.path(%s)", subses.ID, sub.ID, xpath.ToXPath(paths[0]))
-	return sub, nil
+	return subctrl, nil
 }
 
 // addPollSubscription - Create new Subscription
-func (subses *SubSession) addPollSubscription() error {
-	sub := &Subscription{
-		StreamingMode: gnmipb.SubscriptionList_POLL,
-		Paths:         []*gnmipb.Path{},
-		IsPolling:     true,
-		session:       subses,
-	}
+func (subses *SubSession) addPollSubscription(sublist *gnmipb.SubscriptionList) (*PollSubscription, error) {
 	subID++
-	id := subID
-	key := fmt.Sprintf("%s", sub.StreamingMode)
-	sub.ID = id
-	sub.key = &key
-	subses.SubList[key] = sub
-	glog.Infof("telemetry[%d][%d].new(%s)", subses.ID, sub.ID, *sub.key)
-	return nil
+	psub := &PollSubscription{
+		ID:        subID,
+		SessionID: subses.ID,
+		SubList:   sublist,
+		session:   subses,
+	}
+	subses.PollSub = append(subses.PollSub, psub)
+	glog.Infof("telemetry[%d][%d].new(poll)", subses.ID, psub.ID)
+	return psub, nil
 }
 
 func (subses *SubSession) processSubscribeRequest(req *gnmipb.SubscribeRequest) error {
 	// SubscribeRequest for poll Subscription indication
 	pollMode := req.GetPoll()
 	if pollMode != nil {
-		return subses.addPollSubscription()
+		for _, psub := range subses.PollSub {
+			sublist := psub.SubList
+			subses.RequestStateSyncBySubscriptionList(sublist)
+			if err := subses.initTelemetryUpdate(sublist); err != nil {
+				glog.Errorf("telemetry[%d][%d].new(poll)", subses.ID, psub.ID)
+			}
+		}
+		return nil
 	}
 	// SubscribeRequest for aliases update
 	aliases := req.GetAliases()
@@ -783,46 +789,51 @@ func (subses *SubSession) processSubscribeRequest(req *gnmipb.SubscribeRequest) 
 	if err := subses.CheckEncoding(encoding); err != nil {
 		return err
 	}
-	prefix := subscriptionList.GetPrefix()
-	prefix = subses.ToPath(prefix, false).(*gnmipb.Path)
-	paths := make([]*gnmipb.Path, 0, subListLength)
-	for _, updateEntry := range subList {
-		paths = append(paths, updateEntry.Path)
-	}
-	stateSync := subses.RequestStateSync(prefix, paths)
-
-	err := subses.initTelemetryUpdate(req)
 	mode := subscriptionList.GetMode()
-	if mode == gnmipb.SubscriptionList_ONCE ||
-		mode == gnmipb.SubscriptionList_POLL ||
-		err != nil {
-		return err
-	}
+	subscriptionList.Prefix = subses.ToPath(subscriptionList.GetPrefix(), false).(*gnmipb.Path)
+	prefix := subscriptionList.GetPrefix()
 
-	allowAggregation := subscriptionList.GetAllowAggregation()
-	startingList := make([]*Subscription, 0, subListLength)
-	for _, updateEntry := range subList {
-		path := updateEntry.GetPath()
-		submod := updateEntry.GetMode()
-		SampleInterval := updateEntry.GetSampleInterval()
-		supressRedundant := updateEntry.GetSuppressRedundant()
-		heartBeatInterval := updateEntry.GetHeartbeatInterval()
-		if err := subses.ValidateGNMIPath(prefix, path); err != nil {
-			return err
-		}
-		sub, err := subses.addStreamSubscription(
-			prefix, useAliases, gnmipb.SubscriptionList_STREAM,
-			allowAggregation, encoding, []*gnmipb.Path{path}, submod,
-			SampleInterval, supressRedundant, heartBeatInterval, stateSync)
+	var stateSync bool
+	switch mode {
+	case gnmipb.SubscriptionList_ONCE:
+		stateSync = subses.RequestStateSyncBySubscriptionList(subscriptionList)
+		return subses.initTelemetryUpdate(subscriptionList)
+	case gnmipb.SubscriptionList_POLL:
+		psub, err := subses.addPollSubscription(subscriptionList)
 		if err != nil {
 			return err
 		}
-		startingList = append(startingList, sub)
-	}
-
-	subses.addDynamicSubscriptionInfo(startingList)
-	for _, sub := range startingList {
-		subses.StartTelmetryUpdate(sub)
+		return subses.addPollDynamicSubscription(psub)
+	case gnmipb.SubscriptionList_STREAM:
+		stateSync = subses.RequestStateSyncBySubscriptionList(subscriptionList)
+		if err := subses.initTelemetryUpdate(subscriptionList); err != nil {
+			return err
+		}
+		allowAggregation := subscriptionList.GetAllowAggregation()
+		startingList := make([]*Subscription, 0, subListLength)
+		for _, updateEntry := range subList {
+			path := updateEntry.GetPath()
+			submod := updateEntry.GetMode()
+			SampleInterval := updateEntry.GetSampleInterval()
+			supressRedundant := updateEntry.GetSuppressRedundant()
+			heartBeatInterval := updateEntry.GetHeartbeatInterval()
+			if err := subses.ValidateGNMIPath(prefix, path); err != nil {
+				return err
+			}
+			sub, err := subses.addStreamSubscription(
+				prefix, useAliases, mode, allowAggregation,
+				encoding, path, submod, SampleInterval,
+				supressRedundant, heartBeatInterval, stateSync)
+			if err != nil {
+				return err
+			}
+			startingList = append(startingList, sub)
+		}
+		fmt.Println("startingList", startingList)
+		subses.addStreamDynamicSubscription(startingList)
+		for _, sub := range startingList {
+			subses.StartTelmetryUpdate(sub)
+		}
 	}
 	return nil
 }

@@ -29,7 +29,7 @@ const dynamicTeleSubInfoPathFormat = `
       state:
        path: %s`
 
-func (s *Server) addDynamicSubscriptionInfo(subs []*Subscription) {
+func (s *Server) addStreamDynamicSubscription(subs []*Subscription) {
 	data := ""
 	for _, sub := range subs {
 		data += fmt.Sprintf(dynamicTeleSubInfoFormat,
@@ -54,9 +54,9 @@ func (s *Server) addDynamicSubscriptionInfo(subs []*Subscription) {
 	}
 }
 
-func (s *Server) deleteDynamicSubscriptionInfo(subses *SubSession) {
+func (s *Server) deleteStreamDynamicSubscriptionInfo(subses *SubSession) {
 	data := ""
-	for _, sub := range subses.SubList {
+	for _, sub := range subses.StreamSub {
 		data += fmt.Sprintf(`
 telemetry-system:
  subscriptions:
@@ -67,6 +67,31 @@ telemetry-system:
 	if data != "" {
 		s.iStateUpdate.Delete([]byte(data))
 	}
+}
+
+func (s *Server) addPollDynamicSubscription(pollsub *PollSubscription) error {
+	data := fmt.Sprintf(dynamicTeleSubInfoFormat,
+		pollsub.ID, pollsub.ID, pollsub.ID,
+		pollsub.session.Address,
+		pollsub.session.Port,
+		0,
+		0,
+		false,
+		"STREAM_GRPC",
+		pollsub.SubList.Encoding,
+	)
+	s.iStateUpdate.Write([]byte(data))
+	return nil
+}
+
+func (s *Server) deletePollDynamicSubscriptionInfo(pollsub *PollSubscription) {
+	data := fmt.Sprintf(`
+telemetry-system:
+ subscriptions:
+  dynamic-subscriptions:
+   dynamic-subscription[id=%d]:
+`, pollsub.ID)
+	s.iStateUpdate.Delete([]byte(data))
 }
 
 // GetInternalStateUpdate returns internal StateUpdate channel.
