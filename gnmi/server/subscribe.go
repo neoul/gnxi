@@ -685,7 +685,7 @@ func (subses *SubSession) addStreamSubscription(
 	case gnmipb.SubscriptionMode_TARGET_DEFINED:
 		// vendor specific mode
 		subctrl.Configured.StreamMode = gnmipb.SubscriptionMode_SAMPLE
-		subctrl.Configured.SampleInterval = defaultInterval / 10
+		subctrl.Configured.SampleInterval = defaultInterval
 		subctrl.Configured.SuppressRedundant = true
 		subctrl.Configured.HeartbeatInterval = 0
 	case gnmipb.SubscriptionMode_ON_CHANGE:
