@@ -156,7 +156,9 @@ func hasAliases(opts []Option) map[string]string {
 		switch a := o.(type) {
 		case Aliases:
 			for k, v := range a {
-				glog.V(11).Infof("server-aliases(%s: %s)\n", k, v)
+				if glog.V(11) {
+					glog.Infof("server-aliases(%s: %s)\n", k, v)
+				}
 			}
 			return map[string]string(a)
 		}
@@ -502,8 +504,10 @@ func (s *Server) subscribe(subses *SubSession, stream gnmipb.GNMI_SubscribeServe
 			}
 			return err
 		}
-		glog.V(11).Infof("Subscribe[%s:%d:%d].request::\n%s",
-			subses.Address, subses.Port, seq, proto.MarshalTextString(req))
+		if glog.V(11) {
+			glog.Infof("Subscribe[%s:%d:%d].request::\n%s",
+				subses.Address, subses.Port, seq, proto.MarshalTextString(req))
+		}
 		if err = subses.processSubscribeRequest(req); err != nil {
 			if glog.V(11) {
 				glog.Errorf("Subscribe[%s:%d:%d].response:: %v",

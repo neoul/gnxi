@@ -17,7 +17,9 @@ func (m *Model) initStateSync(ss StateSync) {
 				glog.Errorf("sync-path(invalid): %s", p)
 			}
 		} else {
-			glog.V(10).Infof("sync-path(added): %s", p)
+			if glog.V(10) {
+				glog.Infof("sync-path(added): %s", p)
+			}
 			m.stateSyncPath.Add(p, true)
 		}
 	}
@@ -47,7 +49,9 @@ func (m *Model) RequestStateSync(prefix *gnmipb.Path, paths []*gnmipb.Path) bool
 		}
 	}
 	for _, sp := range spaths {
-		glog.V(10).Infof("StateSync %s", sp)
+		if glog.V(10) {
+			glog.Infof("StateSync %s", sp)
+		}
 	}
 	if len(spaths) > 0 {
 		m.StateSync.UpdateSync(spaths...)
@@ -80,7 +84,9 @@ func (m *Model) RequestStateSyncBySubscriptionList(subscriptionList *gnmipb.Subs
 		}
 	}
 	for _, sp := range spaths {
-		glog.V(10).Infof("StateSync %s", sp)
+		if glog.V(10) {
+			glog.Infof("StateSync %s", sp)
+		}
 	}
 	if len(spaths) > 0 {
 		m.StateSync.UpdateSync(spaths...)

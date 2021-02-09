@@ -56,7 +56,9 @@ func (s *Server) Register(g *grpc.Server) {
 func (s *Server) Install(stream pb.CertificateManagement_InstallServer) error {
 	var resp *pb.InstallCertificateRequest
 	var err error
-	log.V(8).Info("Start Install request.")
+	if log.V(8) {
+		log.Info("Start Install request.")
+	}
 
 	if resp, err = stream.Recv(); err != nil {
 		rerr := fmt.Errorf("failed to receive InstallCertificateRequest: %v", err)
@@ -170,7 +172,9 @@ func (s *Server) Install(stream pb.CertificateManagement_InstallServer) error {
 		return rerr
 	}
 
-	log.V(8).Info("Success Install request.")
+	if log.V(8) {
+		log.Info("Success Install request.")
+	}
 	return nil
 }
 
@@ -179,7 +183,9 @@ func (s *Server) Rotate(stream pb.CertificateManagement_RotateServer) error {
 	var resp *pb.RotateCertificateRequest
 	var err error
 
-	log.V(8).Info("Start Rotate request.")
+	if log.V(8) {
+		log.Info("Start Rotate request.")
+	}
 
 	if resp, err = stream.Recv(); err != nil {
 		rerr := fmt.Errorf("failed to receive RotateCertificateRequest: %v", err)
@@ -312,7 +318,9 @@ func (s *Server) Rotate(stream pb.CertificateManagement_RotateServer) error {
 		return rerr
 	}
 	rotateAccept()
-	log.V(8).Info("Success Rotate request.")
+	if log.V(8) {
+		log.Info("Success Rotate request.")
+	}
 
 	return nil
 }
@@ -337,7 +345,9 @@ func (s *Server) GetCertificates(ctx context.Context, request *pb.GetCertificate
 		}
 		return nil, rerr
 	}
-	log.V(8).Info("Success GetCertificates.")
+	if log.V(8) {
+		log.Info("Success GetCertificates.")
+	}
 	r := []*pb.CertificateInfo{}
 	for _, ci := range certInfo {
 		r = append(r, &pb.CertificateInfo{
@@ -372,13 +382,17 @@ func (s *Server) RevokeCertificates(ctx context.Context, request *pb.RevokeCerti
 		})
 	}
 
-	log.V(8).Info("Success RevokeCertificates.")
+	if log.V(8) {
+		log.Info("Success RevokeCertificates.")
+	}
 	return &pb.RevokeCertificatesResponse{RevokedCertificateId: revoked, CertificateRevocationError: certRevErr}, nil
 }
 
 // CanGenerateCSR returns if it can generate CSRs with the given properties.
 func (s *Server) CanGenerateCSR(ctx context.Context, request *pb.CanGenerateCSRRequest) (*pb.CanGenerateCSRResponse, error) {
-	log.V(8).Info("Success CanGenerateCSR.")
+	if log.V(8) {
+		log.Info("Success CanGenerateCSR.")
+	}
 	ret := &pb.CanGenerateCSRResponse{
 		CanGenerate: request.KeyType == pb.KeyType_KT_RSA && request.CertificateType == pb.CertificateType_CT_X509 && request.KeySize >= 2048 && request.KeySize <= 4096,
 	}

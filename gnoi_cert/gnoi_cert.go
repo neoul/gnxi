@@ -167,7 +167,9 @@ func provision() {
 	if err := client.Install(ctx, *certID, uint32(*minKeySize), pkiName, *ipAddress, signer, []*x509.Certificate{caEnt.Certificate.Leaf}); err != nil {
 		log.Exit("Failed Install:", err)
 	}
-	log.V(7).Info("Install success")
+	if log.V(7) {
+		log.Info("Install success")
+	}
 }
 
 // install installs a certificate in authenticated mode.
@@ -179,7 +181,9 @@ func install() {
 	if err := client.Install(ctx, *certID, uint32(*minKeySize), pkiName, *ipAddress, signer, []*x509.Certificate{caEnt.Certificate.Leaf}); err != nil {
 		log.Exit("Failed Install:", err)
 	}
-	log.V(7).Info("Install success")
+	if log.V(7) {
+		log.Info("Install success")
+	}
 }
 
 // rotate rotates a certificate in authenticated mode.
@@ -191,7 +195,9 @@ func rotate() {
 	if err := client.Rotate(ctx, *certID, uint32(*minKeySize), pkiName, *ipAddress, signer, []*x509.Certificate{caEnt.Certificate.Leaf}, func() error { return nil }); err != nil {
 		log.Exit("Failed Rotate:", err)
 	}
-	log.V(7).Info("Rotate success")
+	if log.V(7) {
+		log.Info("Rotate success")
+	}
 }
 
 // revoke revokes a certificate in authenticated mode.
@@ -213,7 +219,9 @@ func revoke() {
 	if err != nil {
 		log.Exit("Failed RevokeCertificates:", err)
 	}
-	log.V(7).Info("RevokeCertificates:\n", pretty.Sprint(revoked))
+	if log.V(7) {
+		log.Info("RevokeCertificates:\n", pretty.Sprint(revoked))
+	}
 }
 
 // revoke checks if a target can generate certificates - authenticated mode.
@@ -225,7 +233,9 @@ func check() {
 	if err != nil {
 		log.Exit("Failed CanGenerateCSR:", err)
 	}
-	log.V(7).Info("CanGenerateCSR:\n", pretty.Sprint(resp))
+	if log.V(7) {
+		log.Info("CanGenerateCSR:\n", pretty.Sprint(resp))
+	}
 }
 
 // get fetches the installed certificates on a target - authenticated mode.
@@ -241,5 +251,7 @@ func get() {
 	pretty.DefaultFormatter[reflect.TypeOf(&x509.Certificate{})] = func(c *x509.Certificate) string {
 		return pretty.Sprint(c.Subject.CommonName)
 	}
-	log.V(7).Info("GetCertificates:\n", pretty.Sprint(resp))
+	if log.V(7) {
+		log.Info("GetCertificates:\n", pretty.Sprint(resp))
+	}
 }

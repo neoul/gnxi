@@ -47,7 +47,9 @@ func serve() {
 			log.Fatal("Failed to listen:", err)
 		}
 	}
-	log.V(6).Info("Starting gNOI server.")
+	if log.V(6) {
+		log.Info("Starting gNOI server.")
+	}
 	if err := grpcServer.Serve(listen); err != nil {
 		if log.V(6) {
 			log.Fatal("Failed to serve:", err)
@@ -62,12 +64,16 @@ func notify(certs, caCerts int) {
 	hasCredentials := certs != 0 && caCerts != 0
 	if bootstrapping != !hasCredentials {
 		if bootstrapping {
-			log.V(6).Info("Found Credentials, setting Provisioned state.")
+			if log.V(6) {
+				log.Info("Found Credentials, setting Provisioned state.")
+			}
 			grpcServer.GracefulStop()
 			grpcServer = gNOIServer.PrepareAuthenticated()
 			gNOIServer.RegCertificateManagement(grpcServer)
 		} else {
-			log.V(6).Info("No credentials, setting Bootstrapping state.")
+			if log.V(6) {
+				log.Info("No credentials, setting Bootstrapping state.")
+			}
 			if grpcServer != nil {
 				grpcServer.GracefulStop()
 			}

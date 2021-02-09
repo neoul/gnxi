@@ -120,7 +120,9 @@ func (cas *clientAliases) updateClientAliases(aliases []*gnmipb.Alias) ([]string
 			return aliasname, err
 		}
 		aliasname = append(aliasname, alias.GetAlias())
-		glog.V(11).Infof("Set Alias '%s' to '%s'", alias.GetAlias(), alias.GetPath())
+		if glog.V(11) {
+			glog.Infof("Set Alias '%s' to '%s'", alias.GetAlias(), alias.GetPath())
+		}
 	}
 	return aliasname, nil
 }

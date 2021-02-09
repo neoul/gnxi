@@ -79,8 +79,10 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 	}
 	if m.StateConfig == nil {
 		m.StateConfig = &ignoringStateConfig{}
-		glog.V(10).Infof("StateConfig interface is not installed.")
-		glog.V(10).Infof("The model starts as a read-only")
+		if glog.V(10) {
+			glog.Infof("StateConfig interface is not installed.")
+			glog.Infof("The model starts as a read-only")
+		}
 	}
 	m.initStateSync(ss)
 	return m, nil
