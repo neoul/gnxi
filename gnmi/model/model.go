@@ -79,8 +79,8 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 	}
 	if m.StateConfig == nil {
 		m.StateConfig = &ignoringStateConfig{}
-		glog.Infof("StateConfig interface is not installed.")
-		glog.Infof("The model starts as a read-only")
+		glog.V(10).Infof("StateConfig interface is not installed.")
+		glog.V(10).Infof("The model starts as a read-only")
 	}
 	m.initStateSync(ss)
 	return m, nil
@@ -545,7 +545,9 @@ func (m *Model) findSchemaAndDataPath(path dataAndSchemaPath, parent *yang.Entry
 func (m *Model) UpdateCreate(path string, value string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
-		glog.Errorf("model.create:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.create:: %v in %s", err, path)
+		}
 		return nil
 	}
 	err = m.WriteStringValue(gpath, value)
@@ -558,7 +560,9 @@ func (m *Model) UpdateCreate(path string, value string) error {
 			}
 		}
 	} else {
-		glog.Errorf("model.create:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.create:: %v in %s", err, path)
+		}
 	}
 	// ignore StateUpdate error
 	return nil
@@ -568,7 +572,9 @@ func (m *Model) UpdateCreate(path string, value string) error {
 func (m *Model) UpdateReplace(path string, value string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
-		glog.Errorf("model.create:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.create:: %v in %s", err, path)
+		}
 		return nil
 	}
 	err = m.WriteStringValue(gpath, value)
@@ -581,7 +587,9 @@ func (m *Model) UpdateReplace(path string, value string) error {
 			}
 		}
 	} else {
-		glog.Errorf("model.replace:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.replace:: %v in %s", err, path)
+		}
 	}
 	// ignore StateUpdate error
 	return nil
@@ -591,7 +599,9 @@ func (m *Model) UpdateReplace(path string, value string) error {
 func (m *Model) UpdateDelete(path string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
-		glog.Errorf("model.create:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.create:: %v in %s", err, path)
+		}
 		return nil
 	}
 	err = m.DeleteValue(gpath)
@@ -600,7 +610,9 @@ func (m *Model) UpdateDelete(path string) error {
 			m.ChangeNotification.ChangeDeleted(path)
 		}
 	} else {
-		glog.Errorf("model.delete:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.delete:: %v in %s", err, path)
+		}
 	}
 	// ignore StateUpdate error
 	return nil

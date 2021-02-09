@@ -120,7 +120,7 @@ func (cas *clientAliases) updateClientAliases(aliases []*gnmipb.Alias) ([]string
 			return aliasname, err
 		}
 		aliasname = append(aliasname, alias.GetAlias())
-		glog.Infof("Set Alias '%s' to '%s'", alias.GetAlias(), alias.GetPath())
+		glog.V(11).Infof("Set Alias '%s' to '%s'", alias.GetAlias(), alias.GetPath())
 	}
 	return aliasname, nil
 }
@@ -170,7 +170,9 @@ func (cas *clientAliases) ToPath(alias interface{}, diffFormat bool) interface{}
 		return a
 	}
 	// must not reach here!!!
-	glog.Fatalf("unknown type inserted to clientAliases.ToPath()")
+	if glog.V(11) {
+		glog.Fatalf("unknown type inserted to clientAliases.ToPath()")
+	}
 	return alias
 }
 
@@ -207,6 +209,8 @@ func (cas *clientAliases) ToAlias(path interface{}, diffFormat bool) interface{}
 		return p
 	}
 	// must not reach here!!!
-	glog.Fatalf("unknown type inserted to clientAliases.ToAlias()")
+	if glog.V(11) {
+		glog.Fatalf("unknown type inserted to clientAliases.ToAlias()")
+	}
 	return path
 }

@@ -156,7 +156,7 @@ func hasAliases(opts []Option) map[string]string {
 		switch a := o.(type) {
 		case Aliases:
 			for k, v := range a {
-				glog.Infof("server-aliases(%s: %s)\n", k, v)
+				glog.V(11).Infof("server-aliases(%s: %s)\n", k, v)
 			}
 			return map[string]string(a)
 		}
@@ -251,14 +251,16 @@ func (s *Server) getReqSequence() uint64 {
 // Capabilities returns supported encodings and supported models.
 func (s *Server) Capabilities(ctx context.Context, req *gnmipb.CapabilityRequest) (*gnmipb.CapabilityResponse, error) {
 	seq := s.getReqSequence()
-	if glog.V(1) {
+	if glog.V(11) {
 		glog.Infof("Capabilities.request[%d]::\n%s", seq, proto.MarshalTextString(req))
 	}
 	resp, err := s.capabilities(ctx, req)
 	if err != nil {
-		glog.Errorf("Capabilities.response[%d]:: %v", seq, status.FromError(err))
+		if glog.V(11) {
+			glog.Errorf("Capabilities.response[%d]:: %v", seq, status.FromError(err))
+		}
 	} else {
-		if glog.V(1) {
+		if glog.V(11) {
 			glog.Infof("Capabilities.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
 		}
 	}
@@ -268,14 +270,16 @@ func (s *Server) Capabilities(ctx context.Context, req *gnmipb.CapabilityRequest
 // Get implements the Get RPC in gNMI spec.
 func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetResponse, error) {
 	seq := s.getReqSequence()
-	if glog.V(1) {
+	if glog.V(11) {
 		glog.Infof("Get.request[%d]::\n%s", seq, proto.MarshalTextString(req))
 	}
 	resp, err := s.get(ctx, req)
 	if err != nil {
-		glog.Errorf("Get.response[%d]:: %v", seq, status.FromError(err))
+		if glog.V(11) {
+			glog.Errorf("Get.response[%d]:: %v", seq, status.FromError(err))
+		}
 	} else {
-		if glog.V(1) {
+		if glog.V(11) {
 			glog.Infof("Get.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
 		}
 	}
@@ -285,19 +289,23 @@ func (s *Server) Get(ctx context.Context, req *gnmipb.GetRequest) (*gnmipb.GetRe
 // Set implements the Set RPC in gNMI spec.
 func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetResponse, error) {
 	seq := s.getReqSequence()
-	if glog.V(1) {
+	if glog.V(11) {
 		glog.Infof("Set.request[%d]::\n%s", seq, proto.MarshalTextString(req))
 	}
 	if s.disabledSet {
 		err := status.TaggedErrorf(codes.Unimplemented, status.TagNotSupport, "set not supported")
-		glog.Errorf("Set.response[%d]:: %v", seq, status.FromError(err))
+		if glog.V(11) {
+			glog.Errorf("Set.response[%d]:: %v", seq, status.FromError(err))
+		}
 		return nil, err
 	}
 	resp, err := s.set(ctx, req)
 	if err != nil {
-		glog.Errorf("Set.response[%d]:: %v", seq, status.FromError(err))
+		if glog.V(11) {
+			glog.Errorf("Set.response[%d]:: %v", seq, status.FromError(err))
+		}
 	} else {
-		if glog.V(1) {
+		if glog.V(11) {
 			glog.Infof("Set.response[%d]::\n%s", seq, proto.MarshalTextString(resp))
 		}
 	}
@@ -322,7 +330,7 @@ func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 			case resp, ok := <-telemetrychannel:
 				if ok {
 					stream.Send(resp)
-					if glog.V(1) {
+					if glog.V(11) {
 						glog.Infof("Subscribe[%s:%d:%d].response::\n%s",
 							subses.Address, subses.Port, 0, proto.MarshalTextString(resp))
 					}
@@ -488,15 +496,19 @@ func (s *Server) subscribe(subses *SubSession, stream gnmipb.GNMI_SubscribeServe
 			if err == io.EOF {
 				return nil
 			}
-			glog.Errorf("Subscribe[%s:%d:%d].response:: %v",
-				subses.Address, subses.Port, 0, err)
+			if glog.V(11) {
+				glog.Errorf("Subscribe[%s:%d:%d].response:: %v",
+					subses.Address, subses.Port, 0, err)
+			}
 			return err
 		}
-		glog.V(1).Infof("Subscribe[%s:%d:%d].request::\n%s",
+		glog.V(11).Infof("Subscribe[%s:%d:%d].request::\n%s",
 			subses.Address, subses.Port, seq, proto.MarshalTextString(req))
 		if err = subses.processSubscribeRequest(req); err != nil {
-			glog.Errorf("Subscribe[%s:%d:%d].response:: %v",
-				subses.Address, subses.Port, seq, err)
+			if glog.V(11) {
+				glog.Errorf("Subscribe[%s:%d:%d].response:: %v",
+					subses.Address, subses.Port, seq, err)
+			}
 			return err
 		}
 	}

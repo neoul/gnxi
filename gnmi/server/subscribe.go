@@ -61,7 +61,7 @@ func (tcb *teleCtrl) register(m *model.Model, sub *Subscription) error {
 				tcb.lookup.Add(p, map[TeleID]*Subscription{sub.ID: sub})
 			}
 
-			glog.Infof("teleCtrl.sub[%d][%d].registered(%v)", sub.SessionID, sub.ID, p)
+			glog.V(11).Infof("teleCtrl.sub[%d][%d].registered(%v)", sub.SessionID, sub.ID, p)
 		}
 	}
 	return nil
@@ -75,7 +75,7 @@ func (tcb *teleCtrl) unregister(sub *Subscription) {
 		subscriber := subgroup.(map[TeleID]*Subscription)
 		_, ok := subscriber[sub.ID]
 		if ok {
-			glog.Infof("teleCtrl.sub[%d][%d].unregistered(%v)", sub.SessionID, sub.ID, p)
+			glog.V(11).Infof("teleCtrl.sub[%d][%d].unregistered(%v)", sub.SessionID, sub.ID, p)
 			delete(subscriber, sub.ID)
 			if len(subscriber) == 0 {
 				tcb.lookup.Remove(p)
@@ -89,14 +89,14 @@ func (tcb *teleCtrl) ChangeStarted(changes ygot.GoStruct) {
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
 	tcb.ready = make(map[TeleID]*teleEvent)
-	// glog.Infof("teleCtrl.ChangeStarted")
+	// glog.V(11).Infof("teleCtrl.ChangeStarted")
 }
 
 func (tcb *teleCtrl) updateTeleEvent(op int, datapath, searchpath string) {
 	for _, subgroup := range tcb.lookup.FindAll(searchpath) {
 		subscribers := subgroup.(map[TeleID]*Subscription)
 		for _, sub := range subscribers {
-			glog.Infof("teleCtrl.%c.path(%s).sub[%d][%d]",
+			glog.V(11).Infof("teleCtrl.%c.path(%s).sub[%d][%d]",
 				op, datapath, sub.SessionID, sub.ID)
 			event, ok := tcb.ready[sub.ID]
 			if !ok {
@@ -126,7 +126,7 @@ func (tcb *teleCtrl) updateTeleEvent(op int, datapath, searchpath string) {
 func (tcb *teleCtrl) ChangeCreated(datapath string, changes ygot.GoStruct) {
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
-	glog.Infof("teleCtrl.ChangeCreated.path(%s)", datapath)
+	glog.V(11).Infof("teleCtrl.ChangeCreated.path(%s)", datapath)
 	gpath, err := xpath.ToGNMIPath(datapath)
 	if err != nil {
 		return
@@ -141,7 +141,7 @@ func (tcb *teleCtrl) ChangeCreated(datapath string, changes ygot.GoStruct) {
 func (tcb *teleCtrl) ChangeReplaced(datapath string, changes ygot.GoStruct) {
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
-	glog.Infof("teleCtrl.ChangeReplaced.path(%s)", datapath)
+	glog.V(11).Infof("teleCtrl.ChangeReplaced.path(%s)", datapath)
 	gpath, err := xpath.ToGNMIPath(datapath)
 	if err != nil {
 		return
@@ -156,7 +156,7 @@ func (tcb *teleCtrl) ChangeReplaced(datapath string, changes ygot.GoStruct) {
 func (tcb *teleCtrl) ChangeDeleted(datapath string) {
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
-	glog.Infof("teleCtrl.ChangeDeleted.path(%s)", datapath)
+	glog.V(11).Infof("teleCtrl.ChangeDeleted.path(%s)", datapath)
 	gpath, err := xpath.ToGNMIPath(datapath)
 	if err != nil {
 		return
@@ -176,11 +176,11 @@ func (tcb *teleCtrl) ChangeCompleted(changes ygot.GoStruct) {
 		if sub.eventque != nil {
 			event.updatedroot = changes
 			sub.eventque <- event
-			glog.Infof("teleCtrl.send.event.to.sub[%d][%d]", sub.SessionID, sub.ID)
+			glog.V(11).Infof("teleCtrl.send.event.to.sub[%d][%d]", sub.SessionID, sub.ID)
 		}
 		delete(tcb.ready, telesubid)
 	}
-	// glog.Infof("teleCtrl.ChangeCompleted")
+	// glog.V(11).Infof("teleCtrl.ChangeCompleted")
 }
 
 // PollSubscription - for Poll mode subscription
@@ -299,7 +299,9 @@ func (sub *Subscription) run(subses *SubSession) {
 	shutdown := subses.shutdown
 	waitgroup := subses.waitgroup
 	defer func() {
-		glog.Warningf("sub[%d][%d].quit", sub.SessionID, sub.ID)
+		if glog.V(11) {
+			glog.Warningf("sub[%d][%d].quit", sub.SessionID, sub.ID)
+		}
 		sub.started = false
 		waitgroup.Done()
 	}()
@@ -320,7 +322,9 @@ func (sub *Subscription) run(subses *SubSession) {
 		heartbeatTimer.Stop() // stop
 	}
 	if samplingTimer == nil || heartbeatTimer == nil {
-		glog.Errorf("sub[%d][%d].timer-failed", sub.SessionID, sub.ID)
+		if glog.V(11) {
+			glog.Errorf("sub[%d][%d].timer-failed", sub.SessionID, sub.ID)
+		}
 		return
 	}
 	timerExpired := make(chan bool, 2)
@@ -329,10 +333,12 @@ func (sub *Subscription) run(subses *SubSession) {
 		select {
 		case event, ok := <-sub.eventque:
 			if !ok {
-				glog.Errorf("sub[%d][%d].event-queue-closed", sub.SessionID, sub.ID)
+				if glog.V(11) {
+					glog.Errorf("sub[%d][%d].event-queue-closed", sub.SessionID, sub.ID)
+				}
 				return
 			}
-			glog.Infof("sub[%d][%d].event-received", sub.SessionID, sub.ID)
+			glog.V(11).Infof("sub[%d][%d].event-received", sub.SessionID, sub.ID)
 			switch sub.Configured.StreamMode {
 			case gnmipb.SubscriptionMode_ON_CHANGE, gnmipb.SubscriptionMode_SAMPLE:
 				for _, p := range event.updatedPath {
@@ -354,7 +360,9 @@ func (sub *Subscription) run(subses *SubSession) {
 				if sub.Configured.StreamMode == gnmipb.SubscriptionMode_ON_CHANGE {
 					err := subses.telemetryUpdate(sub, event.updatedroot)
 					if err != nil {
-						glog.Errorf("sub[%d][%d].failed(%v)", sub.SessionID, sub.ID, err)
+						if glog.V(11) {
+							glog.Errorf("sub[%d][%d].failed(%v)", sub.SessionID, sub.ID, err)
+						}
 						return
 					}
 					sub.updatedList = gtrie.New()
@@ -362,7 +370,7 @@ func (sub *Subscription) run(subses *SubSession) {
 				}
 			}
 		case <-samplingTimer.C:
-			glog.Infof("sub[%d][%d].sampling-timer-expired", sub.SessionID, sub.ID)
+			glog.V(11).Infof("sub[%d][%d].sampling-timer-expired", sub.SessionID, sub.ID)
 			if sub.stateSync {
 				sub.mutex.Lock()
 				sub.session.RequestStateSync(sub.Prefix, sub.Paths)
@@ -370,7 +378,7 @@ func (sub *Subscription) run(subses *SubSession) {
 			}
 			timerExpired <- false
 		case <-heartbeatTimer.C:
-			glog.Infof("sub[%d][%d].heartbeat-timer-expired", sub.SessionID, sub.ID)
+			glog.V(11).Infof("sub[%d][%d].heartbeat-timer-expired", sub.SessionID, sub.ID)
 			timerExpired <- true
 		case sendUpdate := <-timerExpired:
 			if !sendUpdate {
@@ -382,23 +390,25 @@ func (sub *Subscription) run(subses *SubSession) {
 				}
 			}
 			if sendUpdate {
-				glog.Infof("sub[%d][%d].send.telemetry-update.to.%v",
+				glog.V(11).Infof("sub[%d][%d].send.telemetry-update.to.%v",
 					sub.SessionID, sub.ID, sub.session)
 				sub.mutex.Lock() // block to modify sub.Path
 				err := subses.telemetryUpdate(sub, nil)
 				sub.mutex.Unlock()
 				if err != nil {
-					glog.Errorf("sub[%d][%d].failed(%v)", sub.SessionID, sub.ID, err)
+					if glog.V(11) {
+						glog.Errorf("sub[%d][%d].failed(%v)", sub.SessionID, sub.ID, err)
+					}
 					return
 				}
 				sub.updatedList = gtrie.New()
 				sub.deletedList = gtrie.New()
 			}
 		case <-shutdown:
-			glog.Infof("sub[%d][%d].shutdown", subses.ID, sub.ID)
+			glog.V(11).Infof("sub[%d][%d].shutdown", subses.ID, sub.ID)
 			return
 		case <-sub.stop:
-			glog.Infof("sub[%d][%d].stopped", subses.ID, sub.ID)
+			glog.V(11).Infof("sub[%d][%d].stopped", subses.ID, sub.ID)
 			return
 		}
 	}
@@ -649,7 +659,7 @@ func (subses *SubSession) addStreamSubscription(
 		if !subctrl.stateSync {
 			subctrl.stateSync = stateSync
 		}
-		if glog.V(2) {
+		if glog.V(11) {
 			glog.Infof("telemetry[%d][%d].add.path(%v)", subses.ID, subctrl.ID, Path)
 		}
 		return subctrl, nil
@@ -677,8 +687,8 @@ func (subses *SubSession) addStreamSubscription(
 		key:               key,
 	}
 	subses.StreamSub[key] = subctrl
-	glog.Infof("telemetry[%d][%d].new(%s)", subses.ID, subctrl.ID, subctrl.key)
-	glog.Infof("telemetry[%d][%d].add.path(%v)", subses.ID, subctrl.ID, Path)
+	glog.V(11).Infof("telemetry[%d][%d].new(%s)", subses.ID, subctrl.ID, subctrl.key)
+	glog.V(11).Infof("telemetry[%d][%d].add.path(%v)", subses.ID, subctrl.ID, Path)
 
 	// 3.5.1.5.2 STREAM Subscriptions Must be satisfied for telemetry update starting.
 	switch subctrl.StreamMode {
@@ -739,7 +749,7 @@ func (subses *SubSession) addPollSubscription(sublist *gnmipb.SubscriptionList) 
 		session:   subses,
 	}
 	subses.PollSub = append(subses.PollSub, psub)
-	glog.Infof("telemetry[%d][%d].new(poll)", subses.ID, psub.ID)
+	glog.V(11).Infof("telemetry[%d][%d].new(poll)", subses.ID, psub.ID)
 	return psub, nil
 }
 
@@ -751,7 +761,9 @@ func (subses *SubSession) processSubscribeRequest(req *gnmipb.SubscribeRequest) 
 			sublist := psub.SubList
 			subses.RequestStateSyncBySubscriptionList(sublist)
 			if err := subses.initTelemetryUpdate(sublist); err != nil {
-				glog.Errorf("telemetry[%d][%d].new(poll)", subses.ID, psub.ID)
+				if glog.V(11) {
+					glog.Errorf("telemetry[%d][%d].new(poll)", subses.ID, psub.ID)
+				}
 			}
 		}
 		return nil

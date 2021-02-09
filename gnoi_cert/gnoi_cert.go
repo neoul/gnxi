@@ -167,7 +167,7 @@ func provision() {
 	if err := client.Install(ctx, *certID, uint32(*minKeySize), pkiName, *ipAddress, signer, []*x509.Certificate{caEnt.Certificate.Leaf}); err != nil {
 		log.Exit("Failed Install:", err)
 	}
-	log.Info("Install success")
+	log.V(7).Info("Install success")
 }
 
 // install installs a certificate in authenticated mode.
@@ -179,7 +179,7 @@ func install() {
 	if err := client.Install(ctx, *certID, uint32(*minKeySize), pkiName, *ipAddress, signer, []*x509.Certificate{caEnt.Certificate.Leaf}); err != nil {
 		log.Exit("Failed Install:", err)
 	}
-	log.Info("Install success")
+	log.V(7).Info("Install success")
 }
 
 // rotate rotates a certificate in authenticated mode.
@@ -191,7 +191,7 @@ func rotate() {
 	if err := client.Rotate(ctx, *certID, uint32(*minKeySize), pkiName, *ipAddress, signer, []*x509.Certificate{caEnt.Certificate.Leaf}, func() error { return nil }); err != nil {
 		log.Exit("Failed Rotate:", err)
 	}
-	log.Info("Rotate success")
+	log.V(7).Info("Rotate success")
 }
 
 // revoke revokes a certificate in authenticated mode.
@@ -213,7 +213,7 @@ func revoke() {
 	if err != nil {
 		log.Exit("Failed RevokeCertificates:", err)
 	}
-	log.Info("RevokeCertificates:\n", pretty.Sprint(revoked))
+	log.V(7).Info("RevokeCertificates:\n", pretty.Sprint(revoked))
 }
 
 // revoke checks if a target can generate certificates - authenticated mode.
@@ -225,7 +225,7 @@ func check() {
 	if err != nil {
 		log.Exit("Failed CanGenerateCSR:", err)
 	}
-	log.Info("CanGenerateCSR:\n", pretty.Sprint(resp))
+	log.V(7).Info("CanGenerateCSR:\n", pretty.Sprint(resp))
 }
 
 // get fetches the installed certificates on a target - authenticated mode.
@@ -241,5 +241,5 @@ func get() {
 	pretty.DefaultFormatter[reflect.TypeOf(&x509.Certificate{})] = func(c *x509.Certificate) string {
 		return pretty.Sprint(c.Subject.CommonName)
 	}
-	log.Info("GetCertificates:\n", pretty.Sprint(resp))
+	log.V(7).Info("GetCertificates:\n", pretty.Sprint(resp))
 }

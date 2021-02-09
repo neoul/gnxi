@@ -97,7 +97,7 @@ func (cm *Manager) notify() {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
-	log.Infof("Notifying for: %d Certificates and %d CA Certificates.", len(cm.certInfo), len(cm.caBundle))
+	log.V(8).Infof("Notifying for: %d Certificates and %d CA Certificates.", len(cm.certInfo), len(cm.caBundle))
 	for _, notifier := range cm.notifiers {
 		// This is a blocking call to allow the caller to be sure the read locks are active.
 		notifier(len(cm.certInfo), len(cm.caBundle))

@@ -54,7 +54,7 @@ func (m *Model) SetDone() {
 	// to refresh the data by the StateUpdate interface for data sync.
 	for _, entry := range m.setBackup {
 		var err error
-		if glog.V(2) {
+		if glog.V(10) {
 			glog.Infof("set.done(%s)", *entry.xpath)
 		}
 		if entry.oldval == nil {
@@ -63,8 +63,10 @@ func (m *Model) SetDone() {
 			err = m.WriteValue(entry.gpath, entry.oldval)
 		}
 		if err != nil {
-			glog.Error(status.TaggedErrorf(codes.Internal, status.TagOperationFail,
-				"set.done error(ignored*) in %s:: %v", *entry.xpath, err))
+			if glog.V(10) {
+				glog.Error(status.TaggedErrorf(codes.Internal, status.TagOperationFail,
+					"set.done error(ignored*) in %s:: %v", *entry.xpath, err))
+			}
 			continue
 		}
 	}
@@ -75,7 +77,7 @@ func (m *Model) SetDone() {
 func (m *Model) SetRollback() {
 	for _, entry := range m.setBackup {
 		var err error
-		if glog.V(2) {
+		if glog.V(10) {
 			glog.Infof("set.rollback(%s)", *entry.xpath)
 		}
 		new := m.FindValue(entry.gpath)
@@ -85,8 +87,10 @@ func (m *Model) SetRollback() {
 			err = m.WriteValue(entry.gpath, entry.oldval)
 		}
 		if err != nil {
-			glog.Error(status.TaggedErrorf(codes.Internal, status.TagOperationFail,
-				"rollback.delete error(ignored*) in %s:: %v", *entry.xpath, err))
+			if glog.V(10) {
+				glog.Error(status.TaggedErrorf(codes.Internal, status.TagOperationFail,
+					"rollback.delete error(ignored*) in %s:: %v", *entry.xpath, err))
+			}
 			continue
 		}
 		// skip entry if not executed
@@ -95,8 +99,10 @@ func (m *Model) SetRollback() {
 		}
 		// error is ignored on rollback
 		if err := m.executeStateConfig(entry.gpath, new); err != nil {
-			glog.Error(status.TaggedErrorf(codes.Internal, status.TagOperationFail,
-				"rollback.delete error(ignored*) in %s:: %v", *entry.xpath, err))
+			if glog.V(10) {
+				glog.Error(status.TaggedErrorf(codes.Internal, status.TagOperationFail,
+					"rollback.delete error(ignored*) in %s:: %v", *entry.xpath, err))
+			}
 		}
 	}
 	m.setBackup = nil
@@ -110,7 +116,7 @@ func (m *Model) SetCommit() error {
 // SetDelete deletes the path from root if the path exists.
 func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 	fullpath := xpath.GNMIFullPath(prefix, path)
-	if glog.V(2) {
+	if glog.V(10) {
 		glog.Infof("set.delete(%v)", xpath.ToXPath(fullpath))
 	}
 	targets, _ := m.Get(fullpath)
@@ -148,7 +154,7 @@ func (m *Model) SetDelete(prefix, path *gnmipb.Path) error {
 func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	var err error
 	fullpath := xpath.GNMIFullPath(prefix, path)
-	if glog.V(2) {
+	if glog.V(10) {
 		glog.Infof("set.replace(%v, %v)", xpath.ToXPath(fullpath), typedValue)
 	}
 	targets, ok := m.Get(fullpath)
@@ -207,7 +213,7 @@ func (m *Model) SetReplace(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedVa
 func (m *Model) SetUpdate(prefix, path *gnmipb.Path, typedValue *gnmipb.TypedValue) error {
 	var err error
 	fullpath := xpath.GNMIFullPath(prefix, path)
-	if glog.V(2) {
+	if glog.V(10) {
 		glog.Infof("set.update(%v, %v)", xpath.ToXPath(fullpath), typedValue)
 	}
 	targets, ok := m.Get(fullpath)

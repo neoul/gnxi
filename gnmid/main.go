@@ -160,12 +160,12 @@ func main() {
 	pb.RegisterGNMIServer(g, s)
 	reflection.Register(g)
 
-	glog.Infof("starting to listen on %s", *bindAddr)
+	glog.V(9).Infof("starting to listen on %s", *bindAddr)
 	listen, err := netsession.Listen("tcp", *bindAddr, s)
 	if err != nil {
 		glog.Exitf("failed to listen: %s", err)
 	}
-	glog.Info("starting to serve")
+	glog.V(9).Info("starting to serve")
 	if err := g.Serve(listen); err != nil {
 		glog.Exitf("failed to serve: %v", err)
 	}

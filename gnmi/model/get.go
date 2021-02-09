@@ -13,9 +13,11 @@ func (m *Model) initStateSync(ss StateSync) {
 	for _, p := range ss.UpdateSyncPath() {
 		entry := m.FindSchemaByXPath(p)
 		if entry == nil {
-			glog.Errorf("sync-path(invalid): %s", p)
+			if glog.V(10) {
+				glog.Errorf("sync-path(invalid): %s", p)
+			}
 		} else {
-			glog.Infof("sync-path(added): %s", p)
+			glog.V(10).Infof("sync-path(added): %s", p)
 			m.stateSyncPath.Add(p, true)
 		}
 	}
@@ -30,7 +32,7 @@ func (m *Model) RequestStateSync(prefix *gnmipb.Path, paths []*gnmipb.Path) bool
 	spaths := make([]string, 0, 8)
 	for _, path := range paths {
 		fullpath := xpath.GNMIFullPath(prefix, path)
-		// glog.Infof("StateSync check %s", xpath.ToXPath(fullpath))
+		// glog.V(10).Infof("StateSync check %s", xpath.ToXPath(fullpath))
 		if len(fullpath.GetElem()) > 0 {
 			schemaPaths, _ := m.FindSchemaPaths(fullpath)
 			for _, spath := range schemaPaths {
@@ -45,7 +47,7 @@ func (m *Model) RequestStateSync(prefix *gnmipb.Path, paths []*gnmipb.Path) bool
 		}
 	}
 	for _, sp := range spaths {
-		glog.Infof("StateSync %s", sp)
+		glog.V(10).Infof("StateSync %s", sp)
 	}
 	if len(spaths) > 0 {
 		m.StateSync.UpdateSync(spaths...)
@@ -63,7 +65,7 @@ func (m *Model) RequestStateSyncBySubscriptionList(subscriptionList *gnmipb.Subs
 	spaths := make([]string, 0, 8)
 	for _, sub := range subscriptionList.Subscription {
 		fullpath := xpath.GNMIFullPath(subscriptionList.Prefix, sub.Path)
-		// glog.Infof("StateSync check %s", xpath.ToXPath(fullpath))
+		// glog.V(10).Infof("StateSync check %s", xpath.ToXPath(fullpath))
 		if len(fullpath.GetElem()) > 0 {
 			schemaPaths, _ := m.FindSchemaPaths(fullpath)
 			for _, spath := range schemaPaths {
@@ -78,7 +80,7 @@ func (m *Model) RequestStateSyncBySubscriptionList(subscriptionList *gnmipb.Subs
 		}
 	}
 	for _, sp := range spaths {
-		glog.Infof("StateSync %s", sp)
+		glog.V(10).Infof("StateSync %s", sp)
 	}
 	if len(spaths) > 0 {
 		m.StateSync.UpdateSync(spaths...)
