@@ -871,7 +871,6 @@ func (subses *SubSession) processSubscribeRequest(req *gnmipb.SubscribeRequest) 
 			}
 			startingList = append(startingList, sub)
 		}
-		fmt.Println("startingList", startingList)
 		subses.addStreamDynamicSubscription(startingList)
 		for _, sub := range startingList {
 			subses.StartTelmetryUpdate(sub)
