@@ -618,7 +618,7 @@ func FindSchemaByGNMIPath(baseSchema *yang.Entry, path *gnmipb.Path) *yang.Entry
 	return findSchema(baseSchema, path)
 }
 
-func writeLeaf(schema *yang.Entry, base ygot.GoStruct, gpath *gnmipb.Path, t reflect.Type, v *string) error {
+func writeLeaf(schema *yang.Entry, base ygot.GoStruct, gpath *gnmipb.Path, t reflect.Type, v string) error {
 	var typedValue *gnmipb.TypedValue
 	if t == reflect.TypeOf(nil) {
 		return fmt.Errorf("invalid type inserted for %s", xpath.ToXPath(gpath))
@@ -626,10 +626,10 @@ func writeLeaf(schema *yang.Entry, base ygot.GoStruct, gpath *gnmipb.Path, t ref
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
-	vv, err := ytypes.StringToType(t, *v)
+	vv, err := ytypes.StringToType(t, v)
 	if err != nil {
 		var yerr error
-		vv, yerr = ydb.ValScalarNew(t, *v)
+		vv, yerr = ydb.ValScalarNew(t, v)
 		if yerr != nil {
 			return err
 		}
@@ -646,15 +646,15 @@ func writeLeaf(schema *yang.Entry, base ygot.GoStruct, gpath *gnmipb.Path, t ref
 	return err
 }
 
-func writeLeafList(schema *yang.Entry, base interface{}, gpath *gnmipb.Path, t reflect.Type, v *string) error {
+func writeLeafList(schema *yang.Entry, base interface{}, gpath *gnmipb.Path, t reflect.Type, v string) error {
 	sv, err := ydb.ValSliceNew(t)
 	if err != nil {
 		return err
 	}
-	vv, err := ytypes.StringToType(t.Elem(), *v)
+	vv, err := ytypes.StringToType(t.Elem(), v)
 	if err != nil {
 		var yerr error
-		vv, yerr = ydb.ValScalarNew(t, *v)
+		vv, yerr = ydb.ValScalarNew(t, v)
 		if yerr != nil {
 			return err
 		}
@@ -876,7 +876,7 @@ func (mo *MO) WriteTypedValue(gpath *gnmipb.Path, typedValue *gnmipb.TypedValue)
 		var rawdata interface{}
 		json.Unmarshal(typedValue.GetJsonIetfVal(), &rawdata)
 		vstring := fmt.Sprint(rawdata)
-		return WriteStringValue(parent.Schema, parent.Data, target.Path, &vstring)
+		return WriteStringValue(parent.Schema, parent.Data, target.Path, vstring)
 	}
 	err = ytypes.SetNode(mo.GetSchema(), mo.GetRoot(), gpath, typedValue, &ytypes.InitMissingElements{})
 	if err != nil {
@@ -886,7 +886,7 @@ func (mo *MO) WriteTypedValue(gpath *gnmipb.Path, typedValue *gnmipb.TypedValue)
 }
 
 // WriteStringValue writes the string value to the model instance
-func WriteStringValue(pschema *yang.Entry, pvalue interface{}, gpath *gnmipb.Path, value *string) error {
+func WriteStringValue(pschema *yang.Entry, pvalue interface{}, gpath *gnmipb.Path, value string) error {
 	var err error
 	var curSchema *yang.Entry
 	var curValue interface{}
@@ -896,7 +896,7 @@ func WriteStringValue(pschema *yang.Entry, pvalue interface{}, gpath *gnmipb.Pat
 	for i := range gpath.GetElem() {
 		switch {
 		case curSchema.IsLeafList():
-			return writeLeafList(pschema, pvalue, p, reflect.TypeOf(curValue), &gpath.Elem[i].Name)
+			return writeLeafList(pschema, pvalue, p, reflect.TypeOf(curValue), gpath.Elem[i].Name)
 		case !curSchema.IsDir():
 			return fmt.Errorf("invalid path: %s", xpath.ToXPath(gpath))
 		}
@@ -914,7 +914,7 @@ func WriteStringValue(pschema *yang.Entry, pvalue interface{}, gpath *gnmipb.Pat
 			pschema = curSchema
 			pvalue = curValue
 		case curSchema.IsLeafList():
-			if *value != "" {
+			if value != "" {
 				return writeLeafList(pschema, pvalue, p, reflect.TypeOf(curValue), value)
 			}
 		default:
@@ -922,7 +922,7 @@ func WriteStringValue(pschema *yang.Entry, pvalue interface{}, gpath *gnmipb.Pat
 				switch curSchema.Type.Kind {
 				case yang.Yempty:
 					_, err = ydb.ValChildSet(reflect.ValueOf(pvalue),
-						curSchema.Name, *value, ydb.SearchByContent)
+						curSchema.Name, value, ydb.SearchByContent)
 					return err
 				case yang.Yunion:
 					types := baseType(curSchema.Type)
@@ -946,7 +946,7 @@ func WriteStringValue(pschema *yang.Entry, pvalue interface{}, gpath *gnmipb.Pat
 
 // WriteStringValue writes the string value to the model instance
 func (mo *MO) WriteStringValue(gpath *gnmipb.Path, value string) error {
-	return WriteStringValue(mo.RootSchema(), mo.GetRoot(), gpath, &value)
+	return WriteStringValue(mo.RootSchema(), mo.GetRoot(), gpath, value)
 }
 
 // DeleteValue deletes the value from the modeled object
