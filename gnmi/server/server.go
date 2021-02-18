@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"sync"
 	"time"
 
 	"github.com/neoul/gnxi/utilities/status"
@@ -316,20 +315,18 @@ func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 
 // Subscribe implements the Subscribe RPC in gNMI spec.
 func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
-	subses := newSubSession(stream.Context(), s)
-	defer func() { subses.stopSubSession() }()
+	subses := startSubSession(stream.Context(), s)
+	defer subses.stopSubSession()
 	// run stream responsor
 	subses.waitgroup.Add(1)
 	go func(
 		stream gnmipb.GNMI_SubscribeServer,
-		telemetrychannel chan *gnmipb.SubscribeResponse,
-		shutdown chan struct{},
-		waitgroup *sync.WaitGroup,
+		subses *SubSession,
 	) {
-		defer waitgroup.Done()
+		defer subses.waitgroup.Done()
 		for {
 			select {
-			case resp, ok := <-telemetrychannel:
+			case resp, ok := <-subses.respchan:
 				if ok {
 					stream.Send(resp)
 					if glog.V(11) {
@@ -339,11 +336,11 @@ func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 				} else {
 					return
 				}
-			case <-shutdown:
+			case <-subses.shutdown:
 				return
 			}
 		}
-	}(stream, subses.respchan, subses.shutdown, subses.waitgroup)
+	}(stream, subses)
 	return s.subscribe(subses, stream)
 }
 

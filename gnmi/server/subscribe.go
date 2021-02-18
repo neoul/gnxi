@@ -228,7 +228,7 @@ func (subses *SubSession) String() string {
 	return fmt.Sprintf("%s:%d", subses.Address, subses.Port)
 }
 
-func newSubSession(ctx context.Context, s *Server) *SubSession {
+func startSubSession(ctx context.Context, s *Server) *SubSession {
 	var address string
 	var port int
 	sessID++
@@ -238,6 +238,9 @@ func newSubSession(ctx context.Context, s *Server) *SubSession {
 	if end >= 0 {
 		address = addr[:end]
 		port, _ = strconv.Atoi(addr[end+1:])
+	}
+	if glog.V(11) {
+		glog.Infof("subses[%d].stopped", sessID)
 	}
 	return &SubSession{
 		ID:            sessID,
@@ -260,8 +263,12 @@ func (subses *SubSession) stopSubSession() {
 	for _, sub := range subses.StreamSub {
 		subses.unregister(sub)
 	}
+	close(subses.respchan)
 	close(subses.shutdown)
 	subses.waitgroup.Wait()
+	if glog.V(11) {
+		glog.Infof("subses[%d].stopped", subses.ID)
+	}
 }
 
 // Subscription - Default structure for Telemetry Update Subscription
