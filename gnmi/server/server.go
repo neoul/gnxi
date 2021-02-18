@@ -316,7 +316,6 @@ func (s *Server) Set(ctx context.Context, req *gnmipb.SetRequest) (*gnmipb.SetRe
 // Subscribe implements the Subscribe RPC in gNMI spec.
 func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 	subses := startSubSession(stream.Context(), s)
-	defer subses.stopSubSession()
 	// run stream responsor
 	subses.waitgroup.Add(1)
 	go func(
@@ -341,7 +340,10 @@ func (s *Server) Subscribe(stream gnmipb.GNMI_SubscribeServer) error {
 			}
 		}
 	}(stream, subses)
-	return s.subscribe(subses, stream)
+	err := s.subscribe(subses, stream)
+	subses.stopSubSession()
+	subses = nil
+	return err
 }
 
 // Capabilities returns supported encodings and supported models.

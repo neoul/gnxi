@@ -93,3 +93,36 @@ telemetry-system:
 func (s *Server) GetInternalStateUpdate() model.StateUpdate {
 	return s.iStateUpdate
 }
+
+// type mempprof struct {
+// 	filename string
+// 	index    int
+// }
+
+// func newMempprof() *mempprof {
+// 	return &mempprof{}
+// }
+
+// func (m *mempprof) write(file string) {
+// 	if m.filename == file {
+// 		m.index++
+// 	} else {
+// 		m.filename = file
+// 		m.index = 0
+// 	}
+// 	f, err := os.Create(fmt.Sprintf("%s.%d", m.filename, m.index))
+// 	if err != nil {
+// 		log.Fatal("could not create memory profile: ", err)
+// 	}
+// 	defer f.Close() // error handling omitted for example
+// 	runtime.GC()    // get up-to-date statisticsd
+// 	if err := pprof.WriteHeapProfile(f); err != nil {
+// 		log.Fatal("could not write memory profile: ", err)
+// 	}
+// }
+
+// var memp *mempprof
+
+// func init() {
+// 	memp = newMempprof()
+// }

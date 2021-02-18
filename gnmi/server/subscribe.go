@@ -319,14 +319,14 @@ type Subscription struct {
 func (sub *Subscription) run(subses *SubSession) {
 	var samplingTimer *time.Ticker
 	var heartbeatTimer *time.Ticker
-	shutdown := subses.shutdown
-	waitgroup := subses.waitgroup
 	defer func() {
 		if glog.V(11) {
 			glog.Warningf("sub[%d][%d].quit", sub.SessionID, sub.ID)
 		}
 		sub.started = false
-		waitgroup.Done()
+		samplingTimer.Stop()
+		heartbeatTimer.Stop()
+		subses.waitgroup.Done()
 	}()
 	if sub.Configured.SampleInterval > 0 {
 		tick := time.Duration(sub.Configured.SampleInterval)
@@ -435,7 +435,7 @@ func (sub *Subscription) run(subses *SubSession) {
 				sub.updatedList = gtrie.New()
 				sub.deletedList = gtrie.New()
 			}
-		case <-shutdown:
+		case <-subses.shutdown:
 			if glog.V(11) {
 				glog.Infof("sub[%d][%d].shutdown", subses.ID, sub.ID)
 			}
