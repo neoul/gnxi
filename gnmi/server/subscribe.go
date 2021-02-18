@@ -258,10 +258,12 @@ func startSubSession(ctx context.Context, s *Server) *SubSession {
 func (subses *SubSession) stopSubSession() {
 	for i := range subses.PollSub {
 		subses.deletePollDynamicSubscriptionInfo(subses.PollSub[i])
+		subses.PollSub[i] = nil
 	}
-	subses.deleteStreamDynamicSubscriptionInfo(subses)
-	for _, sub := range subses.StreamSub {
+	for key, sub := range subses.StreamSub {
+		subses.deleteStreamDynamicSubscriptionInfo(sub)
 		subses.unregister(sub)
+		delete(subses.StreamSub, key)
 	}
 	close(subses.respchan)
 	close(subses.shutdown)

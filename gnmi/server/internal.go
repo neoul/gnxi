@@ -54,19 +54,14 @@ func (s *Server) addStreamDynamicSubscription(subs []*Subscription) {
 	}
 }
 
-func (s *Server) deleteStreamDynamicSubscriptionInfo(subses *SubSession) {
-	data := ""
-	for _, sub := range subses.StreamSub {
-		data += fmt.Sprintf(`
+func (s *Server) deleteStreamDynamicSubscriptionInfo(sub *Subscription) {
+	data := fmt.Sprintf(`
 telemetry-system:
  subscriptions:
   dynamic-subscriptions:
    dynamic-subscription[id=%d]:
 `, sub.ID)
-	}
-	if data != "" {
-		s.iStateUpdate.Delete([]byte(data))
-	}
+	s.iStateUpdate.Delete([]byte(data))
 }
 
 func (s *Server) addPollDynamicSubscription(pollsub *PollSubscription) error {
