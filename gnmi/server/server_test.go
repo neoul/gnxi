@@ -1550,7 +1550,7 @@ func clearNotificationTimestamp(r *gnmipb.SubscribeResponse) {
 }
 
 func subscribeResponseValidator(t *testing.T, subses *SubSession, wantresp chan *gnmipb.SubscribeResponse) {
-	// var ok bool
+	var ok bool
 	var got, want *gnmipb.SubscribeResponse
 	waitgroup := subses.waitgroup
 	gotresp := subses.respchan
@@ -1561,7 +1561,10 @@ func subscribeResponseValidator(t *testing.T, subses *SubSession, wantresp chan 
 		case want = <-wantresp:
 			t.Log("want-response:", want)
 			select {
-			case got = <-gotresp:
+			case got, ok = <-gotresp:
+				if !ok {
+					return
+				}
 				clearNotificationTimestamp(got)
 				t.Log("got-response:", got)
 				if !proto.Equal(got, want) {
@@ -1571,7 +1574,10 @@ func subscribeResponseValidator(t *testing.T, subses *SubSession, wantresp chan 
 				t.Errorf("different response:\ngot : %v\nwant: %v\n", nil, want)
 				return
 			}
-		case got = <-gotresp:
+		case got, ok = <-gotresp:
+			if !ok {
+				return
+			}
 			clearNotificationTimestamp(got)
 			t.Log("got-response:", got)
 			select {
@@ -1773,8 +1779,9 @@ func TestSubscribe(t *testing.T) {
 				t.Errorf("different response:\ngot : %v\nwant: %v\n", reqerr, codes.OK)
 			}
 			time.Sleep(tc.waittime)
-			subses.shutdown <- struct{}{}
-			defer func() { subses.stopSubSession() }()
+			subses.stopSubSession()
+
+			// defer func() {}()
 		})
 	}
 }

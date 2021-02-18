@@ -72,8 +72,8 @@ func (tcb *teleCtrl) register(m *model.Model, sub *Subscription) error {
 func (tcb *teleCtrl) unregister(sub *Subscription) {
 	tcb.mutex.Lock()
 	defer tcb.mutex.Unlock()
-	lookup := tcb.lookup.All("")
-	for p, subgroup := range lookup {
+	all := tcb.lookup.All("")
+	for p, subgroup := range all {
 		subscriber := subgroup.(map[TeleID]*Subscription)
 		_, ok := subscriber[sub.ID]
 		if ok {
@@ -240,7 +240,7 @@ func startSubSession(ctx context.Context, s *Server) *SubSession {
 		port, _ = strconv.Atoi(addr[end+1:])
 	}
 	if glog.V(11) {
-		glog.Infof("subses[%d].stopped", sessID)
+		glog.Infof("subses[%d].started", sessID)
 	}
 	return &SubSession{
 		ID:            sessID,
