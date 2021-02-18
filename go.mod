@@ -16,7 +16,7 @@ require (
 	github.com/openconfig/gnmi v0.0.0-20210204173831-88610ee25fee
 	github.com/openconfig/goyang v0.2.4
 	github.com/openconfig/ygot v0.10.0
-	github.com/sirupsen/logrus v1.8.0
+	github.com/sirupsen/logrus v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0 // indirect
 	golang.org/x/net v0.0.0-20210119194325-5f4716e94777
