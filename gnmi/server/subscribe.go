@@ -26,8 +26,8 @@ type TeleID uint64
 type teleEvent struct {
 	sub         *Subscription
 	updatedroot ygot.GoStruct
-	updatedPath []*string
-	deletedPath []*string
+	updatedPath []string
+	deletedPath []string
 }
 
 // gNMI Telemetry Control Block
@@ -108,19 +108,19 @@ func (tcb *teleCtrl) updateTeleEvent(op int, datapath, searchpath string) {
 			if !ok {
 				event = &teleEvent{
 					sub:         sub,
-					updatedPath: make([]*string, 0, 64),
-					deletedPath: make([]*string, 0, 64),
+					updatedPath: make([]string, 0, 64),
+					deletedPath: make([]string, 0, 64),
 				}
 				tcb.ready[sub.ID] = event
 			}
 			switch op {
 			case 'C':
-				event.updatedPath = append(event.updatedPath, &datapath)
+				event.updatedPath = append(event.updatedPath, datapath)
 			case 'R':
-				event.updatedPath = append(event.updatedPath, &datapath)
-				event.deletedPath = append(event.deletedPath, &datapath)
+				event.updatedPath = append(event.updatedPath, datapath)
+				event.deletedPath = append(event.deletedPath, datapath)
 			case 'D':
-				event.deletedPath = append(event.deletedPath, &datapath)
+				event.deletedPath = append(event.deletedPath, datapath)
 			default:
 				return
 			}
@@ -359,19 +359,19 @@ func (sub *Subscription) run(subses *SubSession) {
 			case gnmipb.SubscriptionMode_ON_CHANGE, gnmipb.SubscriptionMode_SAMPLE:
 				for _, p := range event.updatedPath {
 					duplicates := uint32(1)
-					if v, ok := sub.updatedList.Find(*p); ok {
+					if v, ok := sub.updatedList.Find(p); ok {
 						duplicates = v.(uint32)
 						duplicates++
 					}
-					sub.updatedList.Add(*p, duplicates)
+					sub.updatedList.Add(p, duplicates)
 				}
 				for _, p := range event.deletedPath {
 					duplicates := uint32(1)
-					if v, ok := sub.deletedList.Find(*p); ok {
+					if v, ok := sub.deletedList.Find(p); ok {
 						duplicates = v.(uint32)
 						duplicates++
 					}
-					sub.deletedList.Add(*p, duplicates)
+					sub.deletedList.Add(p, duplicates)
 				}
 				if sub.Configured.StreamMode == gnmipb.SubscriptionMode_ON_CHANGE {
 					err := subses.telemetryUpdate(sub, event.updatedroot)
