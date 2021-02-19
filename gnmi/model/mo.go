@@ -26,10 +26,11 @@ func NewMO(schema func() (*ytypes.Schema, error)) (*MO, error) {
 	if err != nil {
 		return nil, err
 	}
-	mo := (*MO)(s)
-	if err := mo.UpdateType(); err != nil {
-		return nil, err
-	}
+	// FIXME - Disable reflect.type assignment to check memory leak
+	// mo := (*MO)(s)
+	// if err := mo.UpdateType(); err != nil {
+	// 	return nil, err
+	// }
 	return (*MO)(s), nil
 }
 
