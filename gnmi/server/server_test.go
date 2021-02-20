@@ -1550,7 +1550,7 @@ func clearNotificationTimestamp(r *gnmipb.SubscribeResponse) {
 }
 
 func subscribeResponseValidator(t *testing.T, subses *SubSession, wantresp chan *gnmipb.SubscribeResponse) {
-	// var ok bool
+	var ok bool
 	var got, want *gnmipb.SubscribeResponse
 	waitgroup := subses.waitgroup
 	gotresp := subses.respchan
@@ -1561,7 +1561,10 @@ func subscribeResponseValidator(t *testing.T, subses *SubSession, wantresp chan 
 		case want = <-wantresp:
 			t.Log("want-response:", want)
 			select {
-			case got = <-gotresp:
+			case got, ok = <-gotresp:
+				if !ok {
+					return
+				}
 				clearNotificationTimestamp(got)
 				t.Log("got-response:", got)
 				if !proto.Equal(got, want) {
@@ -1571,7 +1574,10 @@ func subscribeResponseValidator(t *testing.T, subses *SubSession, wantresp chan 
 				t.Errorf("different response:\ngot : %v\nwant: %v\n", nil, want)
 				return
 			}
-		case got = <-gotresp:
+		case got, ok = <-gotresp:
+			if !ok {
+				return
+			}
 			clearNotificationTimestamp(got)
 			t.Log("got-response:", got)
 			select {
@@ -1693,9 +1699,16 @@ func TestSubscribe(t *testing.T) {
 			msgfile:  "data/client-aliases.prototxt",
 			waittime: time.Second * 1,
 		},
+		{
+			name:     "poll subscription",
+			msgfile:  "data/subscribe-poll.prototxt",
+			waittime: time.Second * 1,
+		},
 	}
 	// j, _ := s.ExportToJSON(true)
 	// fmt.Println(string(j))
+	// ydb.SetLogLevel(logrus.DebugLevel)
+	// ydb.SetInternalLog(ydb.LogDebug)
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1708,7 +1721,7 @@ func TestSubscribe(t *testing.T) {
 				ID:            1,
 				Address:       "127.0.0.1",
 				Port:          uint16(11112),
-				SubList:       map[string]*Subscription{},
+				StreamSub:     map[string]*Subscription{},
 				respchan:      make(chan *gnmipb.SubscribeResponse, 256),
 				shutdown:      make(chan struct{}),
 				waitgroup:     new(sync.WaitGroup),
@@ -1766,8 +1779,9 @@ func TestSubscribe(t *testing.T) {
 				t.Errorf("different response:\ngot : %v\nwant: %v\n", reqerr, codes.OK)
 			}
 			time.Sleep(tc.waittime)
-			subses.shutdown <- struct{}{}
-			defer func() { subses.stopSubSession() }()
+			subses.stopSubSession()
+
+			// defer func() {}()
 		})
 	}
 }

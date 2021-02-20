@@ -33,7 +33,9 @@ func (c NetConn) Close() error {
 	if c.session != nil {
 		c.session.Closed(c.LocalAddr(), c.RemoteAddr())
 	}
-	glog.Info("Closed conn:", c.RemoteAddr().String())
+	if glog.V(5) {
+		glog.Info("Closed conn:", c.RemoteAddr().String())
+	}
 	return c.Conn.Close()
 }
 
@@ -65,7 +67,9 @@ func (l *NetListener) Accept() (net.Conn, error) {
 	if err != nil {
 		return c, err
 	}
-	glog.Info("Accepted conn:", c.RemoteAddr().String())
+	if glog.V(5) {
+		glog.Info("Accepted conn:", c.RemoteAddr().String())
+	}
 	mutex.Lock()
 	conn := NetConn{Conn: c, session: l.session}
 	conns[conn.RemoteAddr().String()] = &conn
@@ -78,7 +82,9 @@ func (l *NetListener) Accept() (net.Conn, error) {
 
 // Close - net.Close wrapping function
 func (l *NetListener) Close() error {
-	glog.Info("Close all conns")
+	if glog.V(5) {
+		glog.Info("Close all conns")
+	}
 	mutex.Lock()
 	delete(listeners, l.Addr().String())
 	mutex.Unlock()

@@ -29,7 +29,7 @@ const dynamicTeleSubInfoPathFormat = `
       state:
        path: %s`
 
-func (s *Server) addDynamicSubscriptionInfo(subs []*Subscription) {
+func (s *Server) addStreamDynamicSubscription(subs []*Subscription) {
 	data := ""
 	for _, sub := range subs {
 		data += fmt.Sprintf(dynamicTeleSubInfoFormat,
@@ -54,22 +54,75 @@ func (s *Server) addDynamicSubscriptionInfo(subs []*Subscription) {
 	}
 }
 
-func (s *Server) deleteDynamicSubscriptionInfo(subses *SubSession) {
-	data := ""
-	for _, sub := range subses.SubList {
-		data += fmt.Sprintf(`
+func (s *Server) deleteStreamDynamicSubscriptionInfo(sub *Subscription) {
+	data := fmt.Sprintf(`
 telemetry-system:
  subscriptions:
   dynamic-subscriptions:
    dynamic-subscription[id=%d]:
 `, sub.ID)
-	}
-	if data != "" {
-		s.iStateUpdate.Delete([]byte(data))
-	}
+	s.iStateUpdate.Delete([]byte(data))
+}
+
+func (s *Server) addPollDynamicSubscription(pollsub *PollSubscription) error {
+	data := fmt.Sprintf(dynamicTeleSubInfoFormat,
+		pollsub.ID, pollsub.ID, pollsub.ID,
+		pollsub.session.Address,
+		pollsub.session.Port,
+		0,
+		0,
+		false,
+		"STREAM_GRPC",
+		pollsub.SubList.Encoding,
+	)
+	s.iStateUpdate.Write([]byte(data))
+	return nil
+}
+
+func (s *Server) deletePollDynamicSubscriptionInfo(pollsub *PollSubscription) {
+	data := fmt.Sprintf(`
+telemetry-system:
+ subscriptions:
+  dynamic-subscriptions:
+   dynamic-subscription[id=%d]:
+`, pollsub.ID)
+	s.iStateUpdate.Delete([]byte(data))
 }
 
 // GetInternalStateUpdate returns internal StateUpdate channel.
 func (s *Server) GetInternalStateUpdate() model.StateUpdate {
 	return s.iStateUpdate
 }
+
+// type mempprof struct {
+// 	filename string
+// 	index    int
+// }
+
+// func newMempprof() *mempprof {
+// 	return &mempprof{}
+// }
+
+// func (m *mempprof) write(file string) {
+// 	if m.filename == file {
+// 		m.index++
+// 	} else {
+// 		m.filename = file
+// 		m.index = 0
+// 	}
+// 	f, err := os.Create(fmt.Sprintf("%s.%d", m.filename, m.index))
+// 	if err != nil {
+// 		log.Fatal("could not create memory profile: ", err)
+// 	}
+// 	defer f.Close() // error handling omitted for example
+// 	runtime.GC()    // get up-to-date statisticsd
+// 	if err := pprof.WriteHeapProfile(f); err != nil {
+// 		log.Fatal("could not write memory profile: ", err)
+// 	}
+// }
+
+// var memp *mempprof
+
+// func init() {
+// 	memp = newMempprof()
+// }

@@ -26,10 +26,11 @@ func NewMO(schema func() (*ytypes.Schema, error)) (*MO, error) {
 	if err != nil {
 		return nil, err
 	}
-	mo := (*MO)(s)
-	if err := mo.UpdateType(); err != nil {
-		return nil, err
-	}
+	// FIXME - Disable reflect.type assignment to check memory leak
+	// mo := (*MO)(s)
+	// if err := mo.UpdateType(); err != nil {
+	// 	return nil, err
+	// }
 	return (*MO)(s), nil
 }
 
@@ -430,12 +431,16 @@ func (mo *MO) Export(rfc7951json bool) (map[string]interface{}, error) {
 func (mo *MO) UpdateCreate(path string, value string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
-		glog.Errorf("model.create:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.create:: %v in %s", err, path)
+		}
 		return nil
 	}
 	err = mo.WriteStringValue(gpath, value)
 	if err != nil {
-		glog.Errorf("mo.create:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("mo.create:: %v in %s", err, path)
+		}
 	}
 	return nil
 }
@@ -444,12 +449,16 @@ func (mo *MO) UpdateCreate(path string, value string) error {
 func (mo *MO) UpdateReplace(path string, value string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
-		glog.Errorf("model.replace:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.replace:: %v in %s", err, path)
+		}
 		return nil
 	}
 	err = mo.WriteStringValue(gpath, value)
 	if err != nil {
-		glog.Errorf("mo.replace:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("mo.replace:: %v in %s", err, path)
+		}
 	}
 	return nil
 }
@@ -458,12 +467,16 @@ func (mo *MO) UpdateReplace(path string, value string) error {
 func (mo *MO) UpdateDelete(path string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
-		glog.Errorf("model.replace:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.replace:: %v in %s", err, path)
+		}
 		return nil
 	}
 	err = mo.DeleteValue(gpath)
 	if err != nil {
-		glog.Errorf("mo.delete:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("mo.delete:: %v in %s", err, path)
+		}
 	}
 	return nil
 }

@@ -79,8 +79,10 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 	}
 	if m.StateConfig == nil {
 		m.StateConfig = &ignoringStateConfig{}
-		glog.Infof("StateConfig interface is not installed.")
-		glog.Infof("The model starts as a read-only")
+		if glog.V(10) {
+			glog.Infof("StateConfig interface is not installed.")
+			glog.Infof("The model starts as a read-only")
+		}
 	}
 	m.initStateSync(ss)
 	return m, nil
@@ -159,8 +161,22 @@ func (m *Model) CheckModels(models []*gnmipb.ModelData) error {
 	for _, model := range models {
 		isSupported := false
 		for _, supportedModel := range m.modelData {
-			if reflect.DeepEqual(model, supportedModel) {
-				isSupported = true
+			// bugfix - use_models does not behave as defined in gnmi specification.
+			// if proto.Equal(model, supportedModel) {
+			// 	isSupported = true
+			// 	break
+			// }
+			if model.Name != supportedModel.Name {
+				continue
+			}
+			isSupported = true
+			if model.Version != "" && model.Version != supportedModel.Version {
+				isSupported = false
+			}
+			if model.Organization != "" && model.Organization != supportedModel.Organization {
+				isSupported = false
+			}
+			if isSupported {
 				break
 			}
 		}
@@ -284,6 +300,38 @@ func (m *Model) findAllPaths(sp pathFinder, elems []*gnmipb.PathElem) []pathFind
 	return m.findAllPaths(csp, elems[1:])
 }
 
+func validatePathSchema(entry *yang.Entry, elems []*gnmipb.PathElem) bool {
+	for i, e := range elems {
+		if e.Name == "*" || e.Name == "..." {
+			for _, centry := range entry.Dir {
+				if validatePathSchema(centry, elems[i+1:]) {
+					return true
+				}
+			}
+			if e.Name == "..." {
+				for _, centry := range entry.Dir {
+					if validatePathSchema(centry, elems[i:]) {
+						return true
+					}
+				}
+			}
+			return false
+		}
+		entry = entry.Dir[e.Name]
+		if entry == nil {
+			return false
+		}
+		if e.Key != nil {
+			for kname := range e.Key {
+				if !strings.Contains(entry.Key, kname) {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
 // ValidatePathSchema - validates all schema of the gNMI Path.
 func (m *Model) ValidatePathSchema(path *gnmipb.Path) bool {
 	t := m.GetRootType()
@@ -303,25 +351,8 @@ func (m *Model) ValidatePathSchema(path *gnmipb.Path) bool {
 			return false
 		}
 	}
-
-	elems := path.GetElem()
-	if len(elems) <= 0 {
-		return true
-	}
-	for _, e := range elems {
-		entry = entry.Dir[e.Name]
-		if entry == nil {
-			return false
-		}
-		if e.Key != nil {
-			for kname := range e.Key {
-				if !strings.Contains(entry.Key, kname) {
-					return false
-				}
-			}
-		}
-	}
-	return true
+	// Bugfix - gnmi path wildcards [*, ...] must be processed at Get and Subscribe RPCs.
+	return validatePathSchema(entry, path.GetElem())
 }
 
 // ValidateGNMIPath - validates the gNMI Paths and check the schema.
@@ -516,7 +547,9 @@ func (m *Model) findSchemaAndDataPath(path dataAndSchemaPath, parent *yang.Entry
 func (m *Model) UpdateCreate(path string, value string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
-		glog.Errorf("model.create:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.create:: %v in %s", err, path)
+		}
 		return nil
 	}
 	err = m.WriteStringValue(gpath, value)
@@ -529,7 +562,9 @@ func (m *Model) UpdateCreate(path string, value string) error {
 			}
 		}
 	} else {
-		glog.Errorf("model.create:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.create:: %v in %s", err, path)
+		}
 	}
 	// ignore StateUpdate error
 	return nil
@@ -539,7 +574,9 @@ func (m *Model) UpdateCreate(path string, value string) error {
 func (m *Model) UpdateReplace(path string, value string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
-		glog.Errorf("model.create:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.create:: %v in %s", err, path)
+		}
 		return nil
 	}
 	err = m.WriteStringValue(gpath, value)
@@ -552,7 +589,9 @@ func (m *Model) UpdateReplace(path string, value string) error {
 			}
 		}
 	} else {
-		glog.Errorf("model.replace:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.replace:: %v in %s", err, path)
+		}
 	}
 	// ignore StateUpdate error
 	return nil
@@ -562,7 +601,9 @@ func (m *Model) UpdateReplace(path string, value string) error {
 func (m *Model) UpdateDelete(path string) error {
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
-		glog.Errorf("model.create:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.create:: %v in %s", err, path)
+		}
 		return nil
 	}
 	err = m.DeleteValue(gpath)
@@ -571,7 +612,9 @@ func (m *Model) UpdateDelete(path string) error {
 			m.ChangeNotification.ChangeDeleted(path)
 		}
 	} else {
-		glog.Errorf("model.delete:: %v in %s", err, path)
+		if glog.V(10) {
+			glog.Errorf("model.delete:: %v in %s", err, path)
+		}
 	}
 	// ignore StateUpdate error
 	return nil

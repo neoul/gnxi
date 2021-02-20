@@ -56,17 +56,23 @@ func (s *Server) Register(g *grpc.Server) {
 func (s *Server) Install(stream pb.CertificateManagement_InstallServer) error {
 	var resp *pb.InstallCertificateRequest
 	var err error
-	log.Info("Start Install request.")
+	if log.V(8) {
+		log.Info("Start Install request.")
+	}
 
 	if resp, err = stream.Recv(); err != nil {
 		rerr := fmt.Errorf("failed to receive InstallCertificateRequest: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 	genCSRRequest := resp.GetGenerateCsr()
 	if genCSRRequest == nil {
 		rerr := fmt.Errorf("expected GenerateCSRRequest, got something else")
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 
@@ -88,7 +94,9 @@ func (s *Server) Install(stream pb.CertificateManagement_InstallServer) error {
 	pemCSR, err := s.manager.GenCSR(subject)
 	if err != nil {
 		rerr := fmt.Errorf("failed to generate CSR: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 
@@ -101,25 +109,33 @@ func (s *Server) Install(stream pb.CertificateManagement_InstallServer) error {
 		},
 	}); err != nil {
 		rerr := fmt.Errorf("failed to send GenerateCSRResponse: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 
 	if resp, err = stream.Recv(); err != nil {
 		rerr := fmt.Errorf("failed to receive InstallCertificateRequest: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 	loadCertificateRequest := resp.GetLoadCertificate()
 	if loadCertificateRequest == nil {
 		rerr := fmt.Errorf("expected LoadCertificateRequest, got something else")
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 
 	if loadCertificateRequest.Certificate.Type != pb.CertificateType_CT_X509 {
 		rerr := fmt.Errorf("unexpected Certificate type: %d", loadCertificateRequest.Certificate.Type)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 
@@ -128,7 +144,9 @@ func (s *Server) Install(stream pb.CertificateManagement_InstallServer) error {
 	for _, cert := range loadCertificateRequest.CaCertificates {
 		if cert.Type != pb.CertificateType_CT_X509 {
 			rerr := fmt.Errorf("unexpected Certificate type: %d", cert.Type)
-			log.Error(rerr)
+			if log.V(8) {
+				log.Error(rerr)
+			}
 			return rerr
 		}
 		pemCACerts = append(pemCACerts, cert.Certificate)
@@ -136,7 +154,9 @@ func (s *Server) Install(stream pb.CertificateManagement_InstallServer) error {
 
 	if err := s.manager.Install(certID, pemCert, pemCACerts); err != nil {
 		rerr := fmt.Errorf("failed to load the Certificate: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 
@@ -146,11 +166,15 @@ func (s *Server) Install(stream pb.CertificateManagement_InstallServer) error {
 		},
 	}); err != nil {
 		rerr := fmt.Errorf("failed to send LoadCertificateResponse: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 
-	log.Info("Success Install request.")
+	if log.V(8) {
+		log.Info("Success Install request.")
+	}
 	return nil
 }
 
@@ -159,17 +183,23 @@ func (s *Server) Rotate(stream pb.CertificateManagement_RotateServer) error {
 	var resp *pb.RotateCertificateRequest
 	var err error
 
-	log.Info("Start Rotate request.")
+	if log.V(8) {
+		log.Info("Start Rotate request.")
+	}
 
 	if resp, err = stream.Recv(); err != nil {
 		rerr := fmt.Errorf("failed to receive RotateCertificateRequest: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 	genCSRRequest := resp.GetGenerateCsr()
 	if genCSRRequest == nil {
 		rerr := fmt.Errorf("expected GenerateCSRRequest, got something else")
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 
@@ -191,7 +221,9 @@ func (s *Server) Rotate(stream pb.CertificateManagement_RotateServer) error {
 	pemCSR, err := s.manager.GenCSR(subject)
 	if err != nil {
 		rerr := fmt.Errorf("failed to generate CSR: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 
@@ -204,25 +236,33 @@ func (s *Server) Rotate(stream pb.CertificateManagement_RotateServer) error {
 		},
 	}); err != nil {
 		rerr := fmt.Errorf("failed to send GenerateCSRResponse: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 
 	if resp, err = stream.Recv(); err != nil {
 		rerr := fmt.Errorf("failed to receive RotateCertificateRequest: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 	loadCertificateRequest := resp.GetLoadCertificate()
 	if loadCertificateRequest == nil {
 		rerr := fmt.Errorf("expected LoadCertificateRequest, got something else")
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 
 	if loadCertificateRequest.Certificate.Type != pb.CertificateType_CT_X509 {
 		rerr := fmt.Errorf("unexpected Certificate type: %d", loadCertificateRequest.Certificate.Type)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 
@@ -231,7 +271,9 @@ func (s *Server) Rotate(stream pb.CertificateManagement_RotateServer) error {
 	for _, cert := range loadCertificateRequest.CaCertificates {
 		if cert.Type != pb.CertificateType_CT_X509 {
 			rerr := fmt.Errorf("unexpected Certificate type: %d", cert.Type)
-			log.Error(rerr)
+			if log.V(8) {
+				log.Error(rerr)
+			}
 			return rerr
 		}
 		pemCACerts = append(pemCACerts, cert.Certificate)
@@ -240,7 +282,9 @@ func (s *Server) Rotate(stream pb.CertificateManagement_RotateServer) error {
 	rotateAccept, rotateBack, err := s.manager.Rotate(certID, pemCert, pemCACerts)
 	if err != nil {
 		rerr := fmt.Errorf("failed to load the Certificate: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 
@@ -250,25 +294,33 @@ func (s *Server) Rotate(stream pb.CertificateManagement_RotateServer) error {
 		},
 	}); err != nil {
 		rerr := fmt.Errorf("failed to send LoadCertificateResponse: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 
 	if resp, err = stream.Recv(); err != nil {
 		rotateBack()
 		rerr := fmt.Errorf("rolling back - failed to receive RotateCertificateRequest: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 	finalize := resp.GetFinalizeRotation()
 	if finalize == nil {
 		rotateBack()
 		rerr := fmt.Errorf("expected FinalizeRequest, got something else")
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return rerr
 	}
 	rotateAccept()
-	log.Info("Success Rotate request.")
+	if log.V(8) {
+		log.Info("Success Rotate request.")
+	}
 
 	return nil
 }
@@ -288,10 +340,14 @@ func (s *Server) GetCertificates(ctx context.Context, request *pb.GetCertificate
 	certInfo, err := s.manager.GetCertInfo()
 	if err != nil {
 		rerr := fmt.Errorf("failed GetCertificates: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return nil, rerr
 	}
-	log.Info("Success GetCertificates.")
+	if log.V(8) {
+		log.Info("Success GetCertificates.")
+	}
 	r := []*pb.CertificateInfo{}
 	for _, ci := range certInfo {
 		r = append(r, &pb.CertificateInfo{
@@ -312,7 +368,9 @@ func (s *Server) RevokeCertificates(ctx context.Context, request *pb.RevokeCerti
 	revoked, notRevoked, err := s.manager.Revoke(request.CertificateId)
 	if err != nil {
 		rerr := fmt.Errorf("failed RevokeCertificates: %v", err)
-		log.Error(rerr)
+		if log.V(8) {
+			log.Error(rerr)
+		}
 		return nil, rerr
 	}
 
@@ -324,13 +382,17 @@ func (s *Server) RevokeCertificates(ctx context.Context, request *pb.RevokeCerti
 		})
 	}
 
-	log.Info("Success RevokeCertificates.")
+	if log.V(8) {
+		log.Info("Success RevokeCertificates.")
+	}
 	return &pb.RevokeCertificatesResponse{RevokedCertificateId: revoked, CertificateRevocationError: certRevErr}, nil
 }
 
 // CanGenerateCSR returns if it can generate CSRs with the given properties.
 func (s *Server) CanGenerateCSR(ctx context.Context, request *pb.CanGenerateCSRRequest) (*pb.CanGenerateCSRResponse, error) {
-	log.Info("Success CanGenerateCSR.")
+	if log.V(8) {
+		log.Info("Success CanGenerateCSR.")
+	}
 	ret := &pb.CanGenerateCSRResponse{
 		CanGenerate: request.KeyType == pb.KeyType_KT_RSA && request.CertificateType == pb.CertificateType_CT_X509 && request.KeySize >= 2048 && request.KeySize <= 4096,
 	}

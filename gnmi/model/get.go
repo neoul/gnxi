@@ -13,9 +13,13 @@ func (m *Model) initStateSync(ss StateSync) {
 	for _, p := range ss.UpdateSyncPath() {
 		entry := m.FindSchemaByXPath(p)
 		if entry == nil {
-			glog.Errorf("sync-path(invalid): %s", p)
+			if glog.V(10) {
+				glog.Errorf("sync-path(invalid): %s", p)
+			}
 		} else {
-			glog.Infof("sync-path(added): %s", p)
+			if glog.V(10) {
+				glog.Infof("sync-path(added): %s", p)
+			}
 			m.stateSyncPath.Add(p, true)
 		}
 	}
@@ -30,7 +34,7 @@ func (m *Model) RequestStateSync(prefix *gnmipb.Path, paths []*gnmipb.Path) bool
 	spaths := make([]string, 0, 8)
 	for _, path := range paths {
 		fullpath := xpath.GNMIFullPath(prefix, path)
-		// glog.Infof("StateSync check %s", xpath.ToXPath(fullpath))
+		// glog.V(10).Infof("StateSync check %s", xpath.ToXPath(fullpath))
 		if len(fullpath.GetElem()) > 0 {
 			schemaPaths, _ := m.FindSchemaPaths(fullpath)
 			for _, spath := range schemaPaths {
@@ -45,7 +49,44 @@ func (m *Model) RequestStateSync(prefix *gnmipb.Path, paths []*gnmipb.Path) bool
 		}
 	}
 	for _, sp := range spaths {
-		glog.Infof("StateSync %s", sp)
+		if glog.V(10) {
+			glog.Infof("StateSync %s", sp)
+		}
+	}
+	if len(spaths) > 0 {
+		m.StateSync.UpdateSync(spaths...)
+		return true
+	}
+	return false
+}
+
+// RequestStateSyncBySubscriptionList requests the data sync to the system before read.
+// Do not use Model.Lock() before it.
+func (m *Model) RequestStateSyncBySubscriptionList(subscriptionList *gnmipb.SubscriptionList) bool {
+	if m.StateSync == nil {
+		return false
+	}
+	spaths := make([]string, 0, 8)
+	for _, sub := range subscriptionList.Subscription {
+		fullpath := xpath.GNMIFullPath(subscriptionList.Prefix, sub.Path)
+		// glog.V(10).Infof("StateSync check %s", xpath.ToXPath(fullpath))
+		if len(fullpath.GetElem()) > 0 {
+			schemaPaths, _ := m.FindSchemaPaths(fullpath)
+			for _, spath := range schemaPaths {
+				found := m.stateSyncPath.FindAll(spath)
+				for p := range found {
+					spaths = append(spaths, p)
+				}
+			}
+		} else {
+			requiredPath := m.stateSyncPath.PrefixSearch("/")
+			spaths = append(spaths, requiredPath...)
+		}
+	}
+	for _, sp := range spaths {
+		if glog.V(10) {
+			glog.Infof("StateSync %s", sp)
+		}
 	}
 	if len(spaths) > 0 {
 		m.StateSync.UpdateSync(spaths...)
