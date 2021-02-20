@@ -48,8 +48,6 @@ type datablock struct {
 
 // newDatablock creates a new datablock.
 func newDatablock() *datablock {
-	// ydb.SetLogLevel(logrus.DebugLevel)
-	// ydb.SetInternalLog(ydb.LogDebug)
 	db := ydb.New("gnmid")
 	if db == nil {
 		glog.Exitf("datablock creation failed")

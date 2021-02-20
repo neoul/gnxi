@@ -327,7 +327,6 @@ func SendMessage(db *ydb.YDB, logData format.LogParts) {
 // 	• tls_peer:٭string())
 
 func main() {
-	// ydb.SetLogLevel(logrus.DebugLevel)
 	done := make(chan bool)
 	ticker := time.NewTicker(time.Second * 5)
 	// reader := bufio.NewReader(os.Stdin)
