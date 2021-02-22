@@ -1070,3 +1070,23 @@ func (mo *MO) UnmarshalInternalJSON(gpath *gnmipb.Path, j []byte) error {
 	}
 	return unmarshalInternalJSON(nil, jsonTree, mo, gpath)
 }
+
+// SchemaToGNMIPath returns gNMI Path (*gnmipb.Path) of the schema (*yang.Entry)
+func SchemaToGNMIPath(entry *yang.Entry) *gnmipb.Path {
+	if entry == nil {
+		return nil
+	}
+	gpath := &gnmipb.Path{
+		Elem: []*gnmipb.PathElem{},
+	}
+	length := 0
+	for e := entry; e != nil && e.Parent != nil; e = e.Parent {
+		length++
+	}
+	gpath.Elem = make([]*gnmipb.PathElem, length)
+	for e := entry; e != nil && e.Parent != nil; e = e.Parent {
+		length--
+		gpath.Elem[length] = &gnmipb.PathElem{Name: e.Name}
+	}
+	return gpath
+}
