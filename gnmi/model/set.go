@@ -46,10 +46,10 @@ func (m *Model) SetDone() {
 		return
 	}
 	// ignore SetDone if there is not the StateConfig interface
-	switch m.StateConfig.(type) {
-	case *ignoringStateConfig:
+	if m.StateConfig == nil {
 		return
 	}
+
 	// Revert back the new data to the old data
 	// to refresh the data by the StateUpdate interface for data sync.
 	for _, entry := range m.setBackup {
@@ -274,6 +274,9 @@ func mapDataAndPath(in []*DataAndPath) map[string]*DataAndPath {
 }
 
 func (m *Model) executeStateConfig(gpath *gnmipb.Path, oldval interface{}) error {
+	if m.StateConfig == nil {
+		return nil
+	}
 	curlist := m.ListAll(oldval, nil, &AddFakePrefix{Prefix: gpath})
 	newlist := m.ListAll(m.GetRoot(), gpath)
 	cur := mapDataAndPath(curlist)
@@ -308,27 +311,5 @@ func (m *Model) executeStateConfig(gpath *gnmipb.Path, oldval interface{}) error
 	if err := m.StateConfig.UpdateEnd(); err != nil {
 		return err
 	}
-	return nil
-}
-
-type ignoringStateConfig struct{}
-
-func (sc *ignoringStateConfig) UpdateStart() error {
-	// return status.TaggedErrorf(codes.Unimplemented, status.TagNotSupport, "not implemented StateConfig interface")
-	return nil
-}
-func (sc *ignoringStateConfig) UpdateCreate(path string, value string) error {
-	return nil
-}
-func (sc *ignoringStateConfig) UpdateReplace(path string, value string) error {
-	return nil
-}
-func (sc *ignoringStateConfig) UpdateDelete(path string) error {
-	return nil
-}
-func (sc *ignoringStateConfig) UpdateEnd() error {
-	return nil
-}
-func (sc *ignoringStateConfig) UpdateSync(path ...string) error {
 	return nil
 }

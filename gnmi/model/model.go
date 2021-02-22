@@ -78,7 +78,6 @@ func NewCustomModel(schema func() (*ytypes.Schema, error), modelData []*gnmipb.M
 		stateSyncPath:      gtrie.New(),
 	}
 	if m.StateConfig == nil {
-		m.StateConfig = &ignoringStateConfig{}
 		if glog.V(10) {
 			glog.Infof("StateConfig interface is not installed.")
 			glog.Infof("The model starts as a read-only")
@@ -424,7 +423,22 @@ func (m *Model) findSchemaPath(prefix string, parent *yang.Entry, elems []*gnmip
 	return m.findSchemaPath(prefix+"/"+e.Name, entry, elems[1:])
 }
 
-func (m *Model) findDataPath(prefix string, parent *yang.Entry, elems []*gnmipb.PathElem) []string {
+// FindPaths - validates all schema of the gNMI Path.
+func (m *Model) FindPaths(path *gnmipb.Path) []string {
+	t := m.GetRootType()
+	entry := m.FindSchemaByType(t)
+	if entry == nil {
+		return nil
+	}
+	var elems []*gnmipb.PathElem
+	elems = path.GetElem()
+	if len(elems) == 0 {
+		return []string{"/"}
+	}
+	return m.findPaths("", entry, elems)
+}
+
+func (m *Model) findPaths(prefix string, parent *yang.Entry, elems []*gnmipb.PathElem) []string {
 	if len(elems) == 0 {
 		return []string{prefix}
 	}
@@ -435,17 +449,19 @@ func (m *Model) findDataPath(prefix string, parent *yang.Entry, elems []*gnmipb.
 	if e.Name == "*" {
 		founds := make([]string, 0, 8)
 		for cname, centry := range parent.Dir {
+			pp := strings.Join([]string{prefix, cname}, "/")
 			founds = append(founds,
-				m.findDataPath(prefix+"/"+cname, centry, elems[1:])...)
+				m.findPaths(pp, centry, elems[1:])...)
 		}
 		return founds
 	} else if e.Name == "..." {
 		founds := make([]string, 0, 16)
 		for cname, centry := range parent.Dir {
+			pp := strings.Join([]string{prefix, cname}, "/")
 			founds = append(founds,
-				m.findDataPath(prefix+"/"+cname, centry, elems[1:])...)
+				m.findPaths(pp, centry, elems[1:])...)
 			founds = append(founds,
-				m.findDataPath(prefix+"/"+cname, centry, elems[0:])...)
+				m.findPaths(pp, centry, elems[0:])...)
 		}
 		return founds
 	}
@@ -466,81 +482,13 @@ func (m *Model) findDataPath(prefix string, parent *yang.Entry, elems []*gnmipb.
 				if kval == "*" {
 					break
 				}
-				name = fmt.Sprintf("%s[%s=%s]", name, kname, kval)
+				name = name + "[" + kname + "=" + kval + "]"
 			} else {
 				break
 			}
 		}
 	}
-	return m.findDataPath(prefix+"/"+name, entry, elems[1:])
-}
-
-type dataAndSchemaPath struct {
-	schemaPath *string
-	dataPath   *string
-}
-
-func (m *Model) findSchemaAndDataPath(path dataAndSchemaPath, parent *yang.Entry, elems []*gnmipb.PathElem) []dataAndSchemaPath {
-	if len(elems) == 0 {
-		return []dataAndSchemaPath{path}
-	}
-	if parent.Dir == nil || len(parent.Dir) == 0 {
-		return nil
-	}
-	e := elems[0]
-	if e.Name == "*" {
-		founds := make([]dataAndSchemaPath, 0, 8)
-		for cname, centry := range parent.Dir {
-			datapath := *path.dataPath + "/" + cname
-			schemapath := *path.schemaPath + "/" + cname
-			path.dataPath = &datapath
-			path.schemaPath = &schemapath
-			founds = append(founds,
-				m.findSchemaAndDataPath(path, centry, elems[1:])...)
-		}
-		return founds
-	} else if e.Name == "..." {
-		founds := make([]dataAndSchemaPath, 0, 16)
-		for cname, centry := range parent.Dir {
-			datapath := *path.dataPath + "/" + cname
-			schemapath := *path.schemaPath + "/" + cname
-			path.dataPath = &datapath
-			path.schemaPath = &schemapath
-			founds = append(founds,
-				m.findSchemaAndDataPath(path, centry, elems[1:])...)
-			founds = append(founds,
-				m.findSchemaAndDataPath(path, centry, elems[0:])...)
-		}
-		return founds
-	}
-	name := e.Name
-	entry := parent.Dir[e.Name]
-	if entry == nil {
-		return nil
-	}
-	if e.Key != nil {
-		for kname := range e.Key {
-			if !strings.Contains(entry.Key, kname) {
-				return nil
-			}
-		}
-		knames := strings.Split(entry.Key, " ")
-		for _, kname := range knames {
-			if kval, ok := e.Key[kname]; ok {
-				if kval == "*" {
-					break
-				}
-				name = fmt.Sprintf("%s[%s=%s]", name, kname, kval)
-			} else {
-				break
-			}
-		}
-	}
-	datapath := *path.dataPath + "/" + name
-	schemapath := *path.schemaPath + "/" + e.Name
-	path.dataPath = &datapath
-	path.schemaPath = &schemapath
-	return m.findSchemaAndDataPath(path, entry, elems[1:])
+	return m.findPaths(strings.Join([]string{prefix, name}, "/"), entry, elems[1:])
 }
 
 // UpdateCreate is a function of StateUpdate Interface to add a new value to the path of the Model.

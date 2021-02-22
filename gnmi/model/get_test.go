@@ -96,6 +96,36 @@ func TestModel_RequestStateSync(t *testing.T) {
 				"/interfaces/interface/config/enabled",
 			},
 		},
+		// {
+		// 	name: "RequestStateSync 3",
+		// 	args: args{
+		// 		prefix: &gnmipb.Path{
+		// 			Elem: []*gnmipb.PathElem{
+		// 				&gnmipb.PathElem{
+		// 					Name: "interfaces",
+		// 				},
+		// 			},
+		// 		},
+		// 		paths: []*gnmipb.Path{
+		// 			&gnmipb.Path{
+		// 				Elem: []*gnmipb.PathElem{
+		// 					&gnmipb.PathElem{
+		// 						Name: "interface",
+		// 						Key: map[string]string{
+		// 							"name": "1/1",
+		// 						},
+		// 					},
+		// 					&gnmipb.PathElem{
+		// 						Name: "config",
+		// 					},
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// 	want: []string{
+		// 		"/interfaces/interface[name=1/1]/config/enabled",
+		// 	},
+		// },
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

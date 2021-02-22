@@ -131,3 +131,144 @@ func TestModel_FindSchemaPaths(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkFindPaths(b *testing.B) {
+	// b.StopTimer()
+	m, err := NewModel(nil, nil, nil)
+	if err != nil {
+		b.Errorf("%v", err)
+		return
+	}
+	path := []*gnmipb.Path{
+		&gnmipb.Path{
+			Elem: []*gnmipb.PathElem{
+				&gnmipb.PathElem{
+					Name: "interfaces",
+				},
+				&gnmipb.PathElem{
+					Name: "interface",
+					Key: map[string]string{
+						"name": "1/1",
+					},
+				},
+				&gnmipb.PathElem{
+					Name: "config",
+				},
+			},
+		},
+		&gnmipb.Path{
+			Elem: []*gnmipb.PathElem{
+				&gnmipb.PathElem{
+					Name: "interfaces",
+				},
+				&gnmipb.PathElem{
+					Name: "interface",
+					Key: map[string]string{
+						"name": "1/1",
+					},
+				},
+				&gnmipb.PathElem{
+					Name: "...",
+				},
+			},
+		},
+		&gnmipb.Path{
+			Elem: []*gnmipb.PathElem{
+				&gnmipb.PathElem{
+					Name: "interfaces",
+				},
+				&gnmipb.PathElem{
+					Name: "interface",
+					Key: map[string]string{
+						"name": "1/1",
+					},
+				},
+				&gnmipb.PathElem{
+					Name: "*",
+				},
+			},
+		},
+	}
+	// b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		ss := m.FindPaths(path[i%3])
+		if len(ss) == 0 {
+			b.Errorf("not found path %s", path[i%3])
+		}
+	}
+	// pretty.Print(m.FindPaths(path[0].Elem))
+	// pretty.Print(m.FindPaths(path[1].Elem))
+	// pretty.Print(m.FindPaths(path[2].Elem))
+	m = nil
+
+}
+
+func BenchmarkFindAllPaths(b *testing.B) {
+	// b.StopTimer()
+	m, err := NewModel(nil, nil, nil)
+	if err != nil {
+		b.Errorf("%v", err)
+		return
+	}
+	path := []*gnmipb.Path{
+		&gnmipb.Path{
+			Elem: []*gnmipb.PathElem{
+				&gnmipb.PathElem{
+					Name: "interfaces",
+				},
+				&gnmipb.PathElem{
+					Name: "interface",
+					Key: map[string]string{
+						"name": "1/1",
+					},
+				},
+				&gnmipb.PathElem{
+					Name: "config",
+				},
+			},
+		},
+		&gnmipb.Path{
+			Elem: []*gnmipb.PathElem{
+				&gnmipb.PathElem{
+					Name: "interfaces",
+				},
+				&gnmipb.PathElem{
+					Name: "interface",
+					Key: map[string]string{
+						"name": "1/1",
+					},
+				},
+				&gnmipb.PathElem{
+					Name: "...",
+				},
+			},
+		},
+		&gnmipb.Path{
+			Elem: []*gnmipb.PathElem{
+				&gnmipb.PathElem{
+					Name: "interfaces",
+				},
+				&gnmipb.PathElem{
+					Name: "interface",
+					Key: map[string]string{
+						"name": "1/1",
+					},
+				},
+				&gnmipb.PathElem{
+					Name: "*",
+				},
+			},
+		},
+	}
+	// b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		_, ok := m.FindAllPaths(path[i%3])
+		if !ok {
+			b.Errorf("not found path %s", path[i%3])
+		}
+	}
+	// pretty.Print(m.FindAllPaths(path[0]))
+	// pretty.Print(m.FindAllPaths(path[1]))
+	// pretty.Print(m.FindAllPaths(path[2]))
+	m = nil
+}
