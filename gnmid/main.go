@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
@@ -89,7 +88,7 @@ func (db *datablock) UpdateEnd() error {
 
 // UpdateSync requests the update to remote datablock instances in order to refresh the data nodes.
 func (db *datablock) UpdateSync(path ...string) error {
-	return db.EnhansedSyncTo(time.Second*3, true, path...)
+	return db.SyncTo(path...)
 }
 
 // UpdateSyncPath requests the update to remote datablock instances in order to refresh the data nodes.
