@@ -319,15 +319,7 @@ type Subscription struct {
 func (sub *Subscription) run(subses *SubSession) {
 	var samplingTimer *time.Ticker
 	var heartbeatTimer *time.Ticker
-	defer func() {
-		if glog.V(11) {
-			glog.Warningf("sub[%d][%d].quit", sub.SessionID, sub.ID)
-		}
-		sub.started = false
-		samplingTimer.Stop()
-		heartbeatTimer.Stop()
-		subses.waitgroup.Done()
-	}()
+	timerExpired := make(chan bool, 2)
 	if sub.Configured.SampleInterval > 0 {
 		tick := time.Duration(sub.Configured.SampleInterval)
 		samplingTimer = time.NewTicker(tick * time.Nanosecond)
@@ -344,14 +336,22 @@ func (sub *Subscription) run(subses *SubSession) {
 		heartbeatTimer = time.NewTicker(tick * time.Nanosecond)
 		heartbeatTimer.Stop() // stop
 	}
+	defer func() {
+		if glog.V(11) {
+			glog.Warningf("sub[%d][%d].quit", sub.SessionID, sub.ID)
+		}
+		sub.started = false
+		samplingTimer.Stop()
+		heartbeatTimer.Stop()
+		subses.waitgroup.Done()
+		close(timerExpired)
+	}()
 	if samplingTimer == nil || heartbeatTimer == nil {
 		if glog.V(11) {
 			glog.Errorf("sub[%d][%d].timer-failed", sub.SessionID, sub.ID)
 		}
 		return
 	}
-	timerExpired := make(chan bool, 2)
-	defer close(timerExpired)
 
 	for {
 		select {
