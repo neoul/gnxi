@@ -9,8 +9,6 @@ import (
 )
 
 func TestMO_NewRoot(t *testing.T) {
-	type args struct {
-	}
 	sch, err := gostruct.Schema()
 	if err != nil {
 		t.Fatalf("schema loading failed: %v", err)

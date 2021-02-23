@@ -1,9 +1,11 @@
 package model
 
 import (
+	"os"
 	"testing"
 
 	"github.com/neoul/gnxi/utilities/test"
+	"github.com/neoul/libydb/go/ydb"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
@@ -40,6 +42,21 @@ func TestModel_RequestStateSync(t *testing.T) {
 	if err != nil {
 		t.Error("failed to create a model")
 	}
+	datablock, _ := ydb.OpenWithSync("gnmi_target", m)
+	defer datablock.Close()
+
+	r, err := os.Open("data/sample.yaml")
+	defer r.Close()
+	if err != nil {
+		t.Fatalf("test data load failed: %v", err)
+	}
+	dec := datablock.NewDecoder(r)
+	dec.Decode()
+	// gdump.Print(m.Root)
+
+	// flag.Set("alsologtostderr", "true")
+	// flag.Set("v", "100")
+	// flag.Parse()
 
 	type args struct {
 		prefix *gnmipb.Path
@@ -64,9 +81,9 @@ func TestModel_RequestStateSync(t *testing.T) {
 				},
 			},
 			want: []string{
-				"/interfaces/interface/state/counters",
-				"/interfaces/interface/state/enabled",
-				"/interfaces/interface/config/enabled",
+				"/interfaces/interface[name=eth0]/config/enabled",
+				"/interfaces/interface[name=eth1]/config/enabled",
+				"/interfaces/interface[name=eth0]/state/counters",
 			},
 		},
 		{
@@ -93,7 +110,8 @@ func TestModel_RequestStateSync(t *testing.T) {
 				},
 			},
 			want: []string{
-				"/interfaces/interface/config/enabled",
+				"/interfaces/interface[name=eth0]/config/enabled",
+				"/interfaces/interface[name=eth1]/config/enabled",
 			},
 		},
 		// {

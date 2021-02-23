@@ -92,31 +92,72 @@ func (mo *MO) FindSchemaByXPath(path string) *yang.Entry {
 
 // FindSchemaByRelativeXPath finds *yang.Entry by XPath string from base(ygot.GoStruct)
 func (mo *MO) FindSchemaByRelativeXPath(base interface{}, path string) *yang.Entry {
-	bSchema := mo.FindSchema(base)
-	if bSchema == nil {
+	entry := mo.FindSchema(base)
+	if entry == nil {
 		return nil
 	}
-	findSchemaByXPath := func(entry *yang.Entry, path string) *yang.Entry {
-		slicedPath, err := xpath.ParseStringPath(path)
-		if err != nil {
-			return nil
-		}
-		for _, elem := range slicedPath {
-			switch v := elem.(type) {
-			case string:
-				entry = entry.Dir[v]
+	length := len(path)
+	if length <= 0 {
+		return entry
+	}
+	begin := 0
+	// end marks the end of a key-value pair.
+	end := 0
+	// insideBrackets is true when at least one '[' has been found.
+	// It is false when a closing ']' has been found.
+	insideBrackets := 0
+
+	switch path[end] {
+	case '/':
+		begin = 1
+	case '[', ']':
+		return nil
+	}
+	end++
+
+	for end < length {
+		switch path[end] {
+		case '/':
+			if insideBrackets <= 0 {
+				// search entry
+				if begin < end {
+					entry = entry.Dir[path[begin:end]]
+					if entry == nil {
+						return nil
+					}
+					begin = end + 1
+				} else {
+					begin++
+				}
+			}
+			end++
+		case '[':
+			if path[end-1] != '\\' {
+				insideBrackets++
+				entry = entry.Dir[path[begin:end]]
 				if entry == nil {
 					return nil
 				}
-			case map[string]string:
-				// skip keys
-			default:
-				return nil
+				begin = end + 1
 			}
+			end++
+		case ']':
+			if path[end-1] != '\\' {
+				insideBrackets--
+				begin = end + 1
+			}
+			end++
+		default:
+			end++
 		}
-		return entry
 	}
-	return findSchemaByXPath(bSchema, path)
+	if begin < end {
+		entry = entry.Dir[path[begin:end]]
+		if entry == nil {
+			return nil
+		}
+	}
+	return entry
 }
 
 // FindSchemaByGNMIPath finds the schema(*yang.Entry) using the gNMI Path
