@@ -675,15 +675,6 @@ func writeLeafList(schema *yang.Entry, base interface{}, gpath *gnmipb.Path, t r
 	return nil
 }
 
-// SchemaXPath returns a schema xapth using *yang.Entry
-func SchemaXPath(schema *yang.Entry) string {
-	p := []string{}
-	for ; schema != nil && schema.Parent != nil; schema = schema.Parent {
-		p = append([]string{schema.Name}, p...)
-	}
-	return strings.Join(p, "/")
-}
-
 // SchemaGNMIPath returns a schema xapth using *yang.Entry
 func SchemaGNMIPath(schema *yang.Entry) *gnmipb.Path {
 	p := &gnmipb.Path{
@@ -733,7 +724,7 @@ func updateType(mo *MO, curSchema *yang.Entry, curType reflect.Type) error {
 				return err
 			}
 		} else {
-			return fmt.Errorf("type update to schema tree failed for %s", SchemaXPath(schema))
+			return fmt.Errorf("type update to schema tree failed for %s", SchemaToXPath(schema))
 		}
 	}
 	return nil
@@ -1089,4 +1080,22 @@ func SchemaToGNMIPath(entry *yang.Entry) *gnmipb.Path {
 		gpath.Elem[length] = &gnmipb.PathElem{Name: e.Name}
 	}
 	return gpath
+}
+
+// SchemaToXPath returns XPath of the schema (*yang.Entry)
+func SchemaToXPath(entry *yang.Entry) string {
+	if entry == nil {
+		return ""
+	}
+	length := 0
+	for e := entry; e != nil && e.Parent != nil; e = e.Parent {
+		length++
+	}
+	p := make([]string, length+1)
+	for e := entry; e != nil && e.Parent != nil; e = e.Parent {
+		p[length] = e.Name
+		length--
+	}
+	p[0] = ""
+	return strings.Join(p, "/")
 }

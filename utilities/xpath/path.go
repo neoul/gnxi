@@ -154,7 +154,11 @@ func IsSchemaPath(path *gnmipb.Path) bool {
 	if path != nil {
 		for _, e := range path.Elem {
 			if e.Key != nil && len(e.Key) > 0 {
-				isSchemaPath = false
+				for _, v := range e.Key {
+					if v != "*" {
+						isSchemaPath = false
+					}
+				}
 			}
 		}
 	}

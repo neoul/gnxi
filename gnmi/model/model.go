@@ -35,7 +35,7 @@ type Model struct {
 	modelData []*gnmipb.ModelData            // Supported models used for gNMI Capabilities RPC
 
 	sync.RWMutex        // The lock for the access of the Model
-	stateSyncSchema     map[*yang.Entry]map[string]bool
+	stateSyncPath       map[*yang.Entry]*stateSyncCtrl
 	stateSyncSchemaPath *gtrie.Trie
 	updatedroot         *MO // A fake data instance to represent the changed data.
 	setBackup           []*backupEntry
@@ -506,7 +506,7 @@ func (m *Model) UpdateCreate(path string, value string) error {
 		}
 		return nil
 	}
-	m.addStateSync(entry, path)
+	m.addStateSyncPath(entry, path)
 
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
@@ -575,7 +575,7 @@ func (m *Model) UpdateDelete(path string) error {
 		}
 		return nil
 	}
-	m.delStateSync(entry, path)
+	m.deleteStateSyncPath(entry, path)
 
 	gpath, err := xpath.ToGNMIPath(path)
 	if err != nil {
