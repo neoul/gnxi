@@ -351,6 +351,7 @@ func (sub *Subscription) run(subses *SubSession) {
 		return
 	}
 	timerExpired := make(chan bool, 2)
+	defer close(timerExpired)
 
 	for {
 		select {
